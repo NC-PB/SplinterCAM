@@ -148,7 +148,10 @@ def test_arrays_are_contiguous_read_only_copies(ctx: Context) -> None:
 @pytest.mark.req("REQ-G2D-192")
 def test_arc_row_with_p1_off_its_circle_is_arc_inconsistent(ctx: Context) -> None:
     rows, _, _ = _valid()
-    rows[2, 2:4] = rows[1, 0:2] = [-2e-6, 0.0]  # P1 2e-6 mm outside the circle, the loop still closed
+    rows[2, 2:4] = rows[1, 0:2] = [
+        -2e-6,
+        0.0,
+    ]  # P1 2e-6 mm outside the circle, the loop still closed
     _rejected(ctx, rows, "ARC_INCONSISTENT")
 
 
