@@ -86,11 +86,11 @@ def cleanup(points, ctx) -> Result[NDArray[np.int64]]: ...                    # 
 | REQ-G2D-010 | WHEN the arguments are shifted cyclically, THE `orient2d` predicate SHALL return the same sign. | property: note test 3 | Released |
 | REQ-G2D-011 | THE `incircle` predicate SHALL return the exact sign of the incircle determinant: +1 when d lies inside the circle through a, b, c given CCW, −1 outside, 0 cocircular, the opposite for CW. | note test 4 | Released |
 | REQ-G2D-013 | THE geometry2d kernel SHALL call the initialisation routine of `predicates.c` once when the kernel module loads. | note test 1 as the first call in a fresh interpreter; review | Released |
-| REQ-G2D-014 | THE build SHALL compile `predicates.c` and the geometry2d kernel without floating-point contraction, fast-math or reassociation: `-ffp-contract=off` on GCC and Clang, `/fp:precise` on MSVC (D-097). | note test 7 in every build; review of `CMakeLists.txt` | Released |
+| REQ-G2D-014 | THE build SHALL compile `predicates.c` and the geometry2d kernel without floating-point contraction, fast-math or reassociation: `-ffp-contract=off` and `-fno-fast-math` on GCC and Clang, `/fp:precise` on MSVC from Visual Studio 2022 (17.0), which no longer contracts under it (D-097). | note test 7 in every build; review of `CMakeLists.txt` | Released |
 | REQ-G2D-015 | THE geometry2d kernel SHALL do its exact arithmetic in IEEE 754 binary64, round to nearest even, without extended-precision intermediates. | note test 7 | Released |
 | REQ-G2D-016 | THE kernel's `two_sum` and `two_product` SHALL return a pair (x, y) with x + y equal to a + b, or a·b, exactly. | property: note test 7 | Released |
 | REQ-G2D-017 | THE continuous integration SHALL run the build guard (note test 7) in every configuration that builds the kernel. | review of `check.yml` and `sanitize.yml` | Released |
-| REQ-G2D-018 | THE geometry2d module SHALL make the same decisions for the same input doubles on macOS, Windows and Linux: predicate signs, point locations, kept vertices and diagnostic codes and severities (D-055, tier 1). | cross-platform CI: tests 1, 2, 5, 6, 12 (test 23) | Released |
+| REQ-G2D-018 | THE geometry2d module SHALL make the same decisions for the same input doubles on macOS, Windows and Linux: predicate signs, point locations, kept vertices and diagnostic codes and severities (D-055, tier 1). | cross-platform CI: tests 1, 2, 5 and 6 (test 23), and test 12 (ours) | Released |
 | REQ-G2D-231 | THE geometry2d module SHALL return bit-identical results (arrays, curves, diagnostics and their order) for the same input and `Context` on one platform under the pinned build profile (D-055, tier 2; Peter, 2026-10-02). | tests 3, 4, 8, 9, 12, 17 and 18 run twice, compared byte for byte | Released |
 | REQ-G2D-232 | THE geometry2d module SHALL return outputs with equal counts on macOS, Windows and Linux, their geometry within 0.001 mm of each other (D-055, tier 3; Peter, 2026-10-02). | cross-platform CI on the tests of REQ-G2D-231 | Released |
 | REQ-G2D-020 | WHEN `cleanup` takes sign decisions, THE function SHALL first merge vertices within eps_len and then apply the exact predicates to the merged vertices (D-097). | test 12 | Released |
@@ -99,7 +99,7 @@ def cleanup(points, ctx) -> Result[NDArray[np.int64]]: ...                    # 
 | REQ-G2D-023 | THE geometry2d kernel SHALL decide the sign of (q_y − c_y)² − \|p0 − c\|² exactly, so point in region compares q_y with c_y ± r without computing it. | test 6; property against exact rationals | Released |
 | REQ-G2D-024 | THE predicates SHALL take arrays of points and return one sign per row, with no Python loop per point. | review; a batch gives the signs of single rows | Released |
 
-Release 1 kernels are single-threaded (Peter, 2026-10-02). Our reading of D-055 (ours): tolerance comparisons of constructed values, such as the arc angle check and the flattening count, run in the kernel with the platform's libm, so they are identical per platform and can differ across platforms only where a value lies within a rounding unit of its limit.
+Release 1 kernels are single-threaded (Peter, 2026-10-02). Decisions and counts that need an angle (the arc angle check, the flattening count, the sweep of an arc) use our own arctangent, built from IEEE 754 basic operations in the kernel (`angle.cpp`), so they are the same on every platform (D-055, tier 1; ours). Constructed points (flattened vertices, centres) use the platform's libm and may differ in the last bit across platforms (tier 3).
 
 ### Tolerances and curves ([research 01, Tolerances][tol] and [Curves][curves])
 
@@ -107,7 +107,7 @@ Release 1 kernels are single-threaded (Peter, 2026-10-02). Our reading of D-055 
 | --- | --- | --- | --- |
 | REQ-G2D-003 | WHERE a requirement says a distance or angle lies within d, THE geometry2d module SHALL test value ≤ d, as `nearly_equal` does. | values exactly at eps_len count as within | Released |
 | REQ-G2D-025 | THE geometry2d module SHALL read eps_len and eps_ang from `ctx.tolerances` on every call and hold no tolerance as a literal (D-049, REQ-FND-005). | a set with a larger `length_eps_mm` changes the outcome | Released |
-| REQ-G2D-027 | THE `are_parallel` function SHALL report directions a and b as parallel exactly when \|a × b\|² ≤ sin²(eps_ang)·\|a\|²·\|b\|²; opposite directions and a zero vector count as parallel (ours). | test 22 | Released |
+| REQ-G2D-027 | THE `are_parallel` function SHALL report directions a and b as parallel exactly when \|a × b\|² ≤ sin²(eps_ang)·\|a\|²·\|b\|²; opposite directions and a zero vector count as parallel (ours); sin(eps_ang) is the double eps_ang itself for every eps_ang below 2^−26, so no libm call decides it (ours). | test 22 | Released |
 | REQ-G2D-035 | THE geometry2d module SHALL provide the tagged curve type `Curve` with the variants `Line` and `Arc` (D-057). | a match over the variants is exhaustive under pyright strict | Released |
 | REQ-G2D-037 | THE `Arc` SHALL store P_0, P_1 and C exactly as given and a signed sweep φ in radians, positive CCW. | stored values equal the inputs bit for bit | Released |
 | REQ-G2D-038 | THE geometry2d module SHALL take an arc's radius as r = \|P_0 − C\| in every computation. | test 2; an arc with P_1 just off the circle | Released |
@@ -121,7 +121,7 @@ Release 1 kernels are single-threaded (Peter, 2026-10-02). Our reading of D-055 
 | REQ-G2D-047 | WHEN an arc has r ≤ eps_len and P_0 ≠ P_1, THE `make_arc` function SHALL return the line P_0P_1. | new test | Released |
 | REQ-G2D-048 | WHEN an arc has r ≤ eps_len and P_0 = P_1, THE `make_arc` function SHALL return no curve. | new test | Released |
 | REQ-G2D-049 | WHEN an arc has \|P_1 − P_0\| ≤ eps_len, \|φ\| > π and (2π − \|φ\|)·r ≤ eps_len, THE `make_arc` function SHALL return a full circle with P_1 = P_0 and φ = ±2π in the sense of the given φ. | new test | Released |
-| REQ-G2D-050 | WHEN a bulge b ≠ 0 on a chord of length c > 0 is converted, THE `arc_from_bulge` function SHALL return the arc of research 01, Curves, with the given P_0 and P_1; IF c = 0, THEN it SHALL return `CURVE_INVALID` (ours). | test 8 | Released |
+| REQ-G2D-050 | WHEN a bulge b ≠ 0 on a chord of length c > 0 is converted, THE `arc_from_bulge` function SHALL return the arc of research 01, Curves, with the given P_0 and P_1; IF a value is not finite, or c = 0 with b ≠ 0 (checked first, ours), THEN it SHALL return `CURVE_INVALID`. | test 8 | Released |
 | REQ-G2D-051 | WHEN the bulge is 0, or its sagitta c·\|b\|/2 is at most eps_len (ours), THE `arc_from_bulge` function SHALL return the line P_0P_1. | b = 0, −0.0 and 10^−9 on a 1 mm chord | Released |
 | REQ-G2D-052 | WHEN an arc that is not a full circle is exported, THE `bulges_from_arc` function SHALL return b = tan(φ/4). | the arcs of test 8 give back their bulges | Released |
 | REQ-G2D-053 | WHEN a full circle is exported, THE `bulges_from_arc` function SHALL return two arcs split at the angle φ/2 (ours), the second starting bit for bit where the first ends. | the circle of test 6 | Released |
@@ -134,9 +134,9 @@ Release 1 kernels are single-threaded (Peter, 2026-10-02). Our reading of D-055 
 | REQ-G2D-189 | WHEN the sweep of a row is 0 or −0.0, THE geometry2d module SHALL treat the row as a line. | test 20 | Released |
 | REQ-G2D-190 | IF a line row has a cx or cy that is not NaN, THEN `curve_rows` SHALL reject the rows with `CURVE_INVALID` (error). | test 20 | Released |
 | REQ-G2D-191 | IF an arc row has a non-finite cx or cy, or \|sweep\| > 2π, THEN `curve_rows` SHALL reject the rows with `CURVE_INVALID` (error). | test 20 | Released |
-| REQ-G2D-192 | IF an arc row breaks REQ-G2D-042 or 043, THEN `curve_rows` SHALL reject the rows with `ARC_INCONSISTENT` (error) (Peter, 2026-10-02). | test 20 | Released |
+| REQ-G2D-192 | IF an arc row breaks REQ-G2D-042 or 043, THEN `curve_rows` SHALL reject the rows with `ARC_INCONSISTENT` (error) (Peter, 2026-10-02). | test 20, adapted: research 01 gives `CURVE_INVALID` | Released |
 | REQ-G2D-193 | IF any other value of a row is NaN or infinite, THEN `curve_rows` SHALL reject the rows with `CURVE_INVALID` (error). | test 20 | Released |
-| REQ-G2D-194 | IF a row does not start where the previous row of its loop ends, or the last row of a loop does not end where its first starts, compared as doubles (ours), THEN `curve_rows` SHALL reject the rows with `CURVE_INVALID` (error). | test 20 | Released |
+| REQ-G2D-194 | IF a row does not start where the previous row of its loop ends, or the last row of a loop does not end where its first starts, compared bit for bit, THEN `curve_rows` SHALL reject the rows with `CURVE_INVALID` (error). | test 20 | Released |
 | REQ-G2D-196 | THE `curve_rows` function SHALL accept a loop of one row (a full circle) and of two rows. | test 20 | Released |
 | REQ-G2D-197 | IF the rows, IDs or `row_starts` have the wrong shape or dtype, or `row_starts` does not start at 0 and ascend strictly (ours), THEN `curve_rows` SHALL reject them with `CURVE_INVALID` (error). | test 20 | Released |
 | REQ-G2D-201 | THE geometry2d module SHALL hand every array to its kernel as a C-contiguous copy and keep the arrays it returns read-only. | a strided view gives the result of its copy; results not writeable | Released |
@@ -188,7 +188,7 @@ Release 1 kernels are single-threaded (Peter, 2026-10-02). Our reading of D-055 
 | REQ-G2D-134 | THE `point_in_region` function SHALL classify each query point against the given loops as exactly one of IN, OUT and ON. | tests 5 and 6; note test 6 | Released |
 | REQ-G2D-135 | THE exact layer (`point_in_region_exact`) SHALL compute the winding number over all loops by the ray rules of research 01, Point in region: arcs split at π/2 and 3π/2 by exact signs, half-open height ranges, ±1 per crossing edge. | tests 5 and 6 | Released |
 | REQ-G2D-139 | THE exact layer SHALL decide whether a straight edge passes right of q by orient2d alone, and an arc piece by the arc predicate and the sign of q_x − c_x. | tests 5 and 6; note test 6 | Released |
-| REQ-G2D-143 | WHEN q lies on an edge (orient2d 0 within the edge's box, or the arc predicate 0 on the arc itself), THE exact layer SHALL classify q as ON. | tests 5 and 6; note test 6 | Released |
+| REQ-G2D-143 | WHEN q lies on an edge (orient2d 0 within the edge's box, or the arc predicate 0 and q on the arc itself: an end point, any point of a full circle, or a point on the arc's side of the chord P_0P_1, right of it for φ > 0 and left for φ < 0), THE exact layer SHALL classify q as ON. | tests 5 and 6; note test 6 | Released |
 | REQ-G2D-145 | THE exact layer SHALL NOT classify q as ON from a zero of a helper test elsewhere (a chord line, the rest of an arc's circle). | test 5 | Released |
 | REQ-G2D-148 | IF q lies within eps_len of the boundary, by the distances of REQ-G2D-091 to 096, THEN THE `point_in_region` function SHALL classify q as ON. | test 5; note test 6 | Released |
 | REQ-G2D-149 | WHEN q is not ON, THE `point_in_region` function SHALL classify q as IN where the winding number is not 0 and OUT where it is 0. | tests 5 and 6 | Released |
@@ -213,7 +213,7 @@ Release 1 kernels are single-threaded (Peter, 2026-10-02). Our reading of D-055 
 
 ## Tolerance budget
 
-The budget is foundation's (REQ-FND-009). Slice 1 spends none of it: `flatten` takes its t from the caller, who passes t_flat for an operation and 0.001 mm for stock sizing (research 01, Flattening). It reads eps_len and eps_ang from `ctx.tolerances`. One declared parameter, the largest flattening step π/2 rad (research 01, Parameters), is an entry of foundation's `tolerance_defaults.toml`, passed to the kernel as a plain value; numeric guards (10^6 vertices, 3355 mm) are named constants with their source (REQ-G2D-230).
+The budget is foundation's (REQ-FND-009). Slice 1 spends none of it: `flatten` takes its t from the caller, who passes t_flat for an operation and 0.001 mm for stock sizing (research 01, Flattening). It reads eps_len and eps_ang from `ctx.tolerances`. One declared parameter, the largest flattening step π/2 rad (research 01, Parameters), becomes an entry of foundation's `tolerance_defaults.toml` (a foundation SPEC change of plan 0003, step 4), passed to the kernel as a plain value; numeric guards (10^6 vertices, 3355 mm) are named constants with their source (REQ-G2D-230).
 
 | ID | Requirement (EARS) | Verified by | Status |
 | --- | --- | --- | --- |
@@ -228,6 +228,7 @@ The budget is foundation's (REQ-FND-009). Slice 1 spends none of it: `flatten` t
 | Arc with r ≤ eps_len; nearly closed arc; bulge with sagitta ≤ eps_len | the line, nothing, or a full circle | none |
 | Loop with \|A\| ≤ eps_len·L | no area | `LOOP_DEGENERATE` (warning) |
 | Zero-width spike | vertex dropped | `CLEANUP_SPIKE` (info), one per spike |
+| `cleanup` keeps fewer than 3 vertices | those indices; the area test reports the loop | none (ours) |
 | Collinear points, P_2 within eps_len of P_1P_3, or P_1 = P_3, in `circle_through` | `None` | none |
 | t not positive and finite; `signed_area` given more than one loop | programming error | `ValueError` (ours) |
 
@@ -246,7 +247,7 @@ The budget is foundation's (REQ-FND-009). Slice 1 spends none of it: `flatten` t
 
 - Unit: research 01's tests 1 to 6, 8, 9, 12, 17 to 20 and 22, and the Shewchuk note's test ideas; new tests where the table says so.
 - Property: exact rationals (`fractions`) as the oracle for every predicate, the area sign and cleanup's area; random arcs and bulges; flattening bounds on random arcs.
-- Differential and cross-platform: the build guard (note test 7) and tests 1, 2, 5, 6 and 12 on the three systems in CI (test 23).
+- Differential and cross-platform: the build guard (note test 7) and tests 1, 2, 5 and 6 (test 23) and test 12 on the three systems in CI.
 
 ## Size estimate
 
