@@ -155,6 +155,11 @@ class ToleranceSet:
         )
 
     @property
+    def grid_unit_mm(self) -> float:
+        """u in mm, the step of the offset kernel's integer grid (REQ-FND-001; D-058, D-132)."""
+        return _GRID_UNIT_MM
+
+    @property
     def topology_tol_mm(self) -> float:
         """t_topo = 2u in mm: features closer than this count as touching in the float stages
         (REQ-FND-009; research 01, resolution chain)."""

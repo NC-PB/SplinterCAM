@@ -10,7 +10,7 @@ from fractions import Fraction
 
 import pytest
 
-from splintercam.foundation import BUDGET_PARTS, ToleranceSet
+from splintercam.foundation import BUDGET_PARTS, TOLERANCE_DEFAULTS, ToleranceSet
 
 type _Shares = tuple[tuple[str, float], ...]
 
@@ -253,3 +253,11 @@ def test_tolerance_set_survives_deepcopy() -> None:
     assert copied == original
     assert hash(copied) == hash(original)
     assert copied.stage_shares == original.stage_shares
+
+
+@pytest.mark.req("REQ-FND-001")
+@pytest.mark.parametrize("tol_mm", [0.01, 0.05, 1.0])
+def test_grid_unit_is_the_declared_parameter_whatever_tol(tol_mm: float) -> None:
+    built = ToleranceSet.for_operation(tol_mm)
+    assert built.value is not None
+    assert built.value.grid_unit_mm == TOLERANCE_DEFAULTS["grid_unit_mm"].default == 0.0001

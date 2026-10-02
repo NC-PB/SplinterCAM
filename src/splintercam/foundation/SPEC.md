@@ -39,6 +39,8 @@ class ToleranceSet:
     @property
     def flatten_tol_mm(self) -> float: ...             # t_flat (REQ-FND-009)
     @property
+    def grid_unit_mm(self) -> float: ...               # u (REQ-FND-001)
+    @property
     def topology_tol_mm(self) -> float: ...            # t_topo (REQ-FND-009)
     @classmethod
     def for_operation(cls, tol_mm: float) -> Result[ToleranceSet]: ...   # REQ-FND-009
@@ -96,7 +98,7 @@ class Context:
 
 | ID | Requirement (EARS) | Verified by | Status |
 | --- | --- | --- | --- |
-| REQ-FND-001 | THE `ToleranceSet` SHALL provide the length epsilon, the angle epsilon, the chord tolerance and, for each budget part (geometry, fit, control, reserve), its share of the chord tolerance. | unit: `tests/foundation/unit/test_tolerance_set.py` | Reviewed (D-056; plan 0001, step 2). Changed 2026-10-02: the stage names are the four budget parts |
+| REQ-FND-001 | THE `ToleranceSet` SHALL provide the length epsilon, the angle epsilon, the chord tolerance, the grid unit u and, for each budget part (geometry, fit, control, reserve), its share of the chord tolerance. | unit: `tests/foundation/unit/test_tolerance_set.py` | Reviewed (D-056; plan 0001, step 2). Changed 2026-10-02: the stage names are the four budget parts; the grid unit (Peter, plan 0003) |
 | REQ-FND-002 | IF a `ToleranceSet` is created with a tolerance that is not positive and finite, with a missing or unknown budget part, or with shares that are negative or sum to more than 1, with a part given twice, with a chord tolerance below the floor of its own fit share f (8u / (f + 0.05) for f ≥ 0.15, otherwise 6u / f, evaluated in double as tol_min is; no tol for f = 0), or with t_flat ≤ 0, THEN the constructor SHALL raise `ValueError`. | property and unit: `tests/foundation/property/test_tolerance_set_construction.py`, `property/test_tolerance_budget.py`, `unit/test_tolerance_set.py` | Reviewed (D-056; plan 0001, step 2). Changed 2026-10-02: missing, unknown or repeated parts, the floor and t_flat > 0 (Peter, step 5) |
 | REQ-FND-003 | THE `nearly_equal` function SHALL return true exactly when \|a − b\| ≤ tol for finite inputs, and false when an input is NaN; for infinite inputs the same expression applies, so `nearly_equal(inf, inf, tol)` is false. | property and unit: `tests/foundation/property/test_nearly_equal.py` | Released for plan 0001 of the stack test app |
 | REQ-FND-004 | THE `Result` type SHALL hold an optional value and an ordered tuple of diagnostics; `ok` SHALL be true only when a value is present and no diagnostic has severity `ERROR`. | unit and property: `tests/foundation/unit/test_result.py` | Released for plan 0001 of the stack test app |
@@ -157,3 +159,4 @@ Budget 250 NLOC (Peter, 2026-10-02), counted without comments and docstrings as 
 - 2026-09-26: REQ-FND-001 to REQ-FND-006 implemented in the stack test app (its plan 0001, step 2a).
 - 2026-10-02: plan 0001, step 2: REQ-FND-001 and 002 changed and REQ-FND-008 and 009 added from Project Spike's draft (D-029, D-049, D-056, D-146, D-149), all four `Reviewed`; `stage_shares` holds (part, share) pairs; `for_operation`, `flatten_tol_mm`, `topology_tol_mm`, `DeclaredParameter` and `TOLERANCE_DEFAULTS` added; the defaults file replaces the placeholders; `TOL_BELOW_MINIMUM` is foundation's first diagnostic.
 - 2026-10-02: plan 0001, step 5, Peter's answers: the choices of step 2 confirmed (base shares with the grid cost in `stage_tol_mm`, `for_operation` without a `Context`, t_flat and t_topo as properties, a repeated part as a REQ-FND-002 error, the TOML file read with `tomllib` as foundation's one read); REQ-FND-002 adds the floor of the set's own shares; REQ-FND-008 a broken entry naming its key; REQ-FND-009's reserve is written by the NCX writer (`ROUND_LIMIT`); REQ-FND-010 `TOL_ABOVE_MAXIMUM`. Then the floor's open question answered: 8u / (f + 0.05) for f ≥ 0.15, otherwise 6u / f, and t_flat > 0, so the invariants hold for every accepted set.
+- 2026-10-02: plan 0003, step 2: `grid_unit_mm` on `ToleranceSet` (REQ-FND-001), so computations read u from their `Context` (Peter).
