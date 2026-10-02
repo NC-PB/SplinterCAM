@@ -6,8 +6,9 @@ Infrastructure only: no requirement covers the tools, so these tests carry no `r
 
 from pathlib import Path
 
-import modules
 import pytest
+
+import modules
 from cmd_size_check import file_findings, function_findings, module_findings, nloc
 
 
