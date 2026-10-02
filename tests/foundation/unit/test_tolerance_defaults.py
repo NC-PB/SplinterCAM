@@ -88,6 +88,16 @@ def test_for_operation_takes_epsilons_and_shares_from_the_defaults() -> None:
         '{ default = 2.0, unit = "mm", range = [0.0, 1.0], source = "x" }',  # outside its range
         '{ default = 1.0, unit = "mm", range = [0.0, 2.0] }',  # no source
         '{ default = "one", unit = "mm", range = [0.0, 2.0], source = "x" }',  # not a number
+        '{ default = 1.0, unit = "mm", range = [0.0, 2.0], source = "x", note = "y" }',  # extra key
+        '{ default = 1.0, unit = "", range = [0.0, 2.0], source = "x" }',  # empty unit
+        '{ default = 1.0, unit = "mm", range = [0.0, 2.0], source = "" }',  # empty source
+        '{ default = "0.5", unit = "mm", range = [0.0, 2.0], source = "x" }',  # a quoted number
+        '{ default = true, unit = "mm", range = [0.0, 2.0], source = "x" }',  # a boolean
+        '{ default = 1.0, unit = 5, range = [0.0, 2.0], source = "x" }',  # unit not a string
+        '{ default = 1.0, unit = " ", range = [0.0, 2.0], source = "x" }',  # blank unit
+        '{ default = 1.0, unit = "mm", range = ["0", "2"], source = "x" }',  # quoted range
+        '{ default = 1.0, unit = "mm", range = [0.0], source = "x" }',  # one range end
+        '{ default = 1.0, unit = "mm", range = 2.0, source = "x" }',  # range not a list
         "5",  # not a table
     ],
 )

@@ -93,6 +93,8 @@ def _exact_grid_cost_mm(tol_mm: float) -> Fraction:
         # The fit band is negative before the clamp, though tol lies above the floor of
         # REQ-FND-002 for this fit share, 0.01 mm.
         (0.011, 0.1, 0.03),
+        # Fit share 0: the band is clamped to 0; tol lies above this share's floor, 0.016 mm.
+        (0.02, 0.1, 0.0),
     ],
 )
 def test_geometry_fit_and_flatten_tol_follow_the_sets_own_shares(

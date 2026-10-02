@@ -32,15 +32,31 @@ class DeclaredParameter:
     source: str
 
 
+def _number(value: object) -> float:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise TypeError(f"{value!r} is not a number")
+    return float(value)
+
+
+def _text(value: object) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise TypeError(f"{value!r} is not a non-empty string")
+    return value
+
+
 def _parameter(entry: dict[str, Any]) -> DeclaredParameter:
     if frozenset(entry) != _KEYS:
         raise ValueError(f"needs exactly the keys {sorted(_KEYS)}")
-    low, high = (float(bound) for bound in entry["range"])
+    match entry["range"]:
+        case [low_bound, high_bound]:
+            low, high = _number(low_bound), _number(high_bound)
+        case _:
+            raise TypeError("range is not a list [min, max]")
     parameter = DeclaredParameter(
-        float(entry["default"]), str(entry["unit"]), (low, high), str(entry["source"])
+        _number(entry["default"]), _text(entry["unit"]), (low, high), _text(entry["source"])
     )
-    if not (low <= parameter.default <= high and parameter.unit and parameter.source):
-        raise ValueError("default outside its range, or no unit or source")
+    if not low <= parameter.default <= high:
+        raise ValueError("default outside its range")
     return parameter
 
 

@@ -152,18 +152,21 @@ def test_a_budget_part_given_twice_is_rejected(shares: _Shares) -> None:
 @given(
     length_eps=_VALID_TOLERANCE,
     angle_eps=_VALID_TOLERANCE,
-    chord_tol=_finite_floats(min_value=0.02, max_value=sys.float_info.max),  # above the floor
+    data=st.data(),
     values=st.tuples(*(_finite_floats(min_value=0.0, max_value=0.25) for _ in BUDGET_PARTS)),
     order=st.permutations(range(len(BUDGET_PARTS))),
 )
 def test_valid_tolerance_sets_are_accepted(
     length_eps: float,
     angle_eps: float,
-    chord_tol: float,
+    data: st.DataObject,
     values: tuple[float, ...],
     order: list[int],
 ) -> None:
     expected = _shares(*values)
+    # From one per cent above the floor of the drawn fit share upward (REQ-FND-002).
+    floor = float(_exact_floor_mm(values[1]) * Fraction(101, 100))
+    chord_tol = data.draw(_finite_floats(min_value=floor, max_value=sys.float_info.max))
     tolerances = _build(
         tuple(expected[i] for i in order),
         chord_tol_mm=chord_tol,
@@ -234,3 +237,32 @@ def test_a_chord_tolerance_below_the_floor_of_its_own_shares_is_rejected(fit_sha
     with pytest.raises(ValueError, match="chord_tol_mm"):
         _build(shares, chord_tol_mm=float(floor * Fraction(99, 100)))
     assert _build(shares, chord_tol_mm=float(floor * Fraction(101, 100))).chord_tol_mm > 0
+
+
+@pytest.mark.req("REQ-FND-002")
+@given(
+    fit_share=st.floats(min_value=0.0, max_value=0.4),
+    below=st.booleans(),
+    distance=st.fractions(min_value=Fraction(1, 100), max_value=10),
+)
+def test_the_floor_of_any_fit_share_separates_rejected_from_accepted(
+    fit_share: float, below: bool, distance: Fraction
+) -> None:
+    shares = _shares(0.1, fit_share, 0.25, 0.1)  # sum at most 0.85: only the floor is tested
+    floor = _exact_floor_mm(fit_share)
+    if below:
+        with pytest.raises(ValueError, match="chord_tol_mm"):
+            _build(shares, chord_tol_mm=float(floor / (1 + distance)))
+    else:
+        chord_tol = float(floor * (1 + distance))
+        assert _build(shares, chord_tol_mm=chord_tol).chord_tol_mm == chord_tol
+
+
+@pytest.mark.req("REQ-FND-002")
+def test_the_constructor_refuses_the_double_just_below_the_floor_of_the_default_shares() -> None:
+    # for_operation refuses below tol_min first, so the constructor's own edge is checked here:
+    # the floor at fit share 0.3 is the double nearest 2/875 mm (research 01, test 15).
+    floor = float(Fraction(2, 875))
+    with pytest.raises(ValueError, match="chord_tol_mm"):
+        _build(_RESEARCH_SHARES, chord_tol_mm=math.nextafter(floor, 0.0))
+    assert _build(_RESEARCH_SHARES, chord_tol_mm=floor).chord_tol_mm == floor

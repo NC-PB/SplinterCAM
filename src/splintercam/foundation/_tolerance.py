@@ -76,7 +76,7 @@ class ToleranceSet:
 
     Build an operation's set with `for_operation`, which takes the defaults (REQ-FND-008).
 
-    Implements: REQ-FND-001, REQ-FND-002, REQ-FND-007, REQ-FND-009.
+    Implements: REQ-FND-001, REQ-FND-002, REQ-FND-007, REQ-FND-009, REQ-FND-010.
     """
 
     chord_tol_mm: float
@@ -155,7 +155,8 @@ class ToleranceSet:
 
         Below tol_min = 8u/0.35 = 2/875 mm the fit band would be negative: the result has no
         value and the error `TOL_BELOW_MINIMUM`, whose message names tol_min rounded up to
-        0.1 nm, 0.0022858 mm (D-146, D-149). A non-finite `tol_mm` is a programming error,
+        0.1 nm, 0.0022858 mm (D-146, D-149). Above 1 mm the error is `TOL_ABOVE_MAXIMUM`, most
+        likely a wrong unit (REQ-FND-010). A non-finite `tol_mm` is a programming error,
         `ValueError`. Takes no `Context`: the `Context` holds the set this builds.
         """
         if not math.isfinite(tol_mm):
