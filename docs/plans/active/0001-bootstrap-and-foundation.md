@@ -43,7 +43,7 @@
 | `architecture/modules.yaml` | `budget: 360` for foundation (the SPEC's size estimate; no headroom) and a comment on the key |
 | `.claude/settings.json` | allow `Bash(tools/size-check *)` |
 
-- `tools/check`: PASS (9 of 14 steps; the new step `size-check` passes with 1 report).
+- `tools/check`: PASS (9 of 14 steps; the new step `size-check` passes with 1 report). CI on [pull request 3](https://github.com/NC-PB/SplinterCAM/pull/3), commit 288fab6: `check.yml` green on ubuntu-24.04 (46 s), macos-15 (47 s) and windows-2025 (134 s); `sanitize.yml` green (54 s).
 - Reviews: `simplifier` (no must-fix, about 4 lines of nice-to-have), `test-auditor` (PASS), a correctness reviewer (one must-fix: a file size-check could not parse stopped `tools/check` without its summary line; fixed with tests). Each finding was checked by a second agent.
 - Size: `tools/` +188 −10 (estimate about 150), tests +107 (estimate about 80), docs +12 −5, the patch 104 lines.
 - Questions for Peter: (1) Does NLOC count docstrings? size-check counts them (foundation 360); lizard, named in `docs/dev/12` section 4, does not (196). (2) The change limit of section 3 (200 and 400 lines of non-test code against the base branch, with your label) was not in this step; when, and how is the label read? (3) Nothing reports C++ functions of 61 to 80 lines: clang-tidy can only fail. Should size-check report them, or should section 3 drop that soft limit? (4) ruff's `ARG` (`docs/dev/04`) is left out of the patch, because section 4 places it with the second module.
