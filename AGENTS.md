@@ -8,7 +8,7 @@ Status: early start of release 1 (D-156): `foundation` first, then the topic 01 
 
 ## Start here
 
-- Current work: `docs/plans/active/0001-bootstrap-and-foundation.md`. Continue at the first unchecked step.
+- Current work: `docs/plans/active/0003-geometry2d-slice-1.md` (geometry2d, slice 1). Continue at the first unchecked step; plan 0002 waits on Peter.
 - Work one plan step at a time. At the end of each step, tick it, write a progress-log entry in the plan, run `tools/check`, and open one pull request per step. The plan says where to stop for the user's review.
 - Decisions (D-nnn) and sources (SRC-nnn) are registered in Project Spike until the handover; `docs/spike/` holds dated snapshots. Never edit them. If a decision seems wrong or missing, stop and write the question in the progress log.
 

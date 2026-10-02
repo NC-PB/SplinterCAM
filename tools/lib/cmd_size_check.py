@@ -4,7 +4,7 @@
 Soft limits are reported, hard limits fail:
 - file (Python or C++): over 400 lines reported, over 800 fails; generated files are excepted;
 - Python function: over 60 lines reported; its hard limits and those of C++ functions are ruff's
-  and clang-tidy's, in tools/lint, once docs/plans/active/0001-protected-changes.patch is applied;
+  and clang-tidy's, in tools/lint (docs/plans/completed/0001-protected-changes.patch, applied);
 - module: the NLOC of src/splintercam/<module>/ against its `budget` in architecture/modules.yaml,
   reported over the budget, failing over the budget + 20 %; a module with code but no budget is
   reported;
