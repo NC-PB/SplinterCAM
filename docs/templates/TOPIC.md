@@ -48,7 +48,7 @@ For strategies (clean room, D-144): every element of the method with its public 
 
 ## Open items
 
-Readiness **L0**, needed for release **1**. Levels are defined in Project Spike's `AGENTS.md`, section Readiness levels (Project Spike).
+Readiness **L0**, needed for release **1**. Levels are defined in `AGENTS.md`, section Readiness levels (Project Spike).
 
 ### Registered questions and assumptions
 
