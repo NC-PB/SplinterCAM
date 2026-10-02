@@ -33,8 +33,12 @@ def test_context_has_exactly_the_six_specified_fields() -> None:
 
 @pytest.mark.req("REQ-FND-005")
 def test_context_stores_the_exact_objects_passed_in() -> None:
+    # Finishing tol, eps_len, eps_ang and D-056's shares (research 01, Tolerances).
     tolerances = ToleranceSet(
-        length_eps_mm=1e-6, angle_eps_rad=1e-9, chord_tol_mm=0.01, stage_shares={"offset": 0.3}
+        chord_tol_mm=0.01,
+        length_eps_mm=1e-6,
+        angle_eps_rad=1e-9,
+        stage_shares=(("geometry", 0.1), ("fit", 0.3), ("control", 0.5), ("reserve", 0.1)),
     )
     cancel = CancellationToken()
     logger = logging.getLogger("splintercam.tests.identity")

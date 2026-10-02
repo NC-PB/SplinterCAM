@@ -1,15 +1,44 @@
 # SPDX-License-Identifier: Apache-2.0
 """Property tests for ToleranceSet construction: invalid inputs always rejected (REQ-FND-002)."""
 
-import fractions
 import math
 import sys
+from fractions import Fraction
 
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from splintercam.foundation import ToleranceSet
+from splintercam.foundation import BUDGET_PARTS, ToleranceSet
+
+type _Shares = tuple[tuple[str, float], ...]
+
+# Test inputs: eps_len, eps_ang and tol at finishing (research 01, Tolerances), and the shares of
+# D-056 in BUDGET_PARTS order, whose exact sum is 1 (0.1 + 0.3 + 0.5 + 0.1 as doubles).
+_LENGTH_EPS_MM = 1e-6
+_ANGLE_EPS_RAD = 1e-9
+_CHORD_TOL_MM = 0.01
+_RESEARCH_SHARES: _Shares = (("geometry", 0.1), ("fit", 0.3), ("control", 0.5), ("reserve", 0.1))
+
+
+def _build(
+    stage_shares: _Shares,
+    *,
+    chord_tol_mm: float = _CHORD_TOL_MM,
+    length_eps_mm: float = _LENGTH_EPS_MM,
+    angle_eps_rad: float = _ANGLE_EPS_RAD,
+) -> ToleranceSet:
+    return ToleranceSet(
+        chord_tol_mm=chord_tol_mm,
+        length_eps_mm=length_eps_mm,
+        angle_eps_rad=angle_eps_rad,
+        stage_shares=stage_shares,
+    )
+
+
+def _shares(*values: float) -> _Shares:
+    """Pair four share values with BUDGET_PARTS, in that order."""
+    return tuple(zip(BUDGET_PARTS, values, strict=True))
 
 
 def _finite_floats(
@@ -30,54 +59,95 @@ _NEGATIVE_OR_NON_FINITE_SHARE = st.one_of(
     _finite_floats(max_value=-5e-324),
     st.sampled_from([math.nan, math.inf, -math.inf]),
 )
+_VALID_TOLERANCE = _finite_floats(min_value=5e-324, max_value=sys.float_info.max)
+_PART = st.sampled_from(BUDGET_PARTS)
+_UNKNOWN_PART = st.text(max_size=12).filter(lambda name: name not in BUDGET_PARTS)
 
 
 @pytest.mark.req("REQ-FND-002")
 @given(bad=_NON_FINITE_OR_NON_POSITIVE_TOLERANCE)
 def test_non_positive_or_non_finite_length_eps_is_rejected(bad: float) -> None:
     with pytest.raises(ValueError, match="length_eps_mm"):
-        ToleranceSet(length_eps_mm=bad, angle_eps_rad=1e-9, chord_tol_mm=0.01, stage_shares={})
+        _build(_RESEARCH_SHARES, length_eps_mm=bad)
 
 
 @pytest.mark.req("REQ-FND-002")
 @given(bad=_NON_FINITE_OR_NON_POSITIVE_TOLERANCE)
 def test_non_positive_or_non_finite_angle_eps_is_rejected(bad: float) -> None:
     with pytest.raises(ValueError, match="angle_eps_rad"):
-        ToleranceSet(length_eps_mm=1e-6, angle_eps_rad=bad, chord_tol_mm=0.01, stage_shares={})
+        _build(_RESEARCH_SHARES, angle_eps_rad=bad)
 
 
 @pytest.mark.req("REQ-FND-002")
 @given(bad=_NON_FINITE_OR_NON_POSITIVE_TOLERANCE)
 def test_non_positive_or_non_finite_chord_tol_is_rejected(bad: float) -> None:
     with pytest.raises(ValueError, match="chord_tol_mm"):
-        ToleranceSet(length_eps_mm=1e-6, angle_eps_rad=1e-9, chord_tol_mm=bad, stage_shares={})
+        _build(_RESEARCH_SHARES, chord_tol_mm=bad)
 
 
 @pytest.mark.req("REQ-FND-002")
-@given(bad_share=_NEGATIVE_OR_NON_FINITE_SHARE)
-def test_negative_nan_or_infinite_share_is_rejected(bad_share: float) -> None:
+@given(part=_PART, bad_share=_NEGATIVE_OR_NON_FINITE_SHARE)
+def test_negative_nan_or_infinite_share_is_rejected(part: str, bad_share: float) -> None:
+    shares = tuple((name, bad_share if name == part else 0.0) for name in BUDGET_PARTS)
     with pytest.raises(ValueError, match="stage_shares"):
-        ToleranceSet(
-            length_eps_mm=1e-6,
-            angle_eps_rad=1e-9,
-            chord_tol_mm=0.01,
-            stage_shares={"offset": bad_share},
-        )
+        _build(shares)
 
 
 @pytest.mark.req("REQ-FND-002")
-@given(extra=_finite_floats(min_value=1e-9, max_value=1.0))
-def test_shares_summing_to_more_than_one_are_rejected(extra: float) -> None:
+@given(
+    full_part=_PART,
+    extra_part=_PART,
+    extra=_finite_floats(min_value=1e-9, max_value=1.0),
+)
+def test_shares_summing_to_more_than_one_are_rejected(
+    full_part: str, extra_part: str, extra: float
+) -> None:
+    values = dict.fromkeys(BUDGET_PARTS, 0.0)
+    values[full_part] = 1.0
+    values[extra_part] += extra
+    shares = tuple(values.items())
     with pytest.raises(ValueError, match="sum to at most 1"):
-        ToleranceSet(
-            length_eps_mm=1e-6,
-            angle_eps_rad=1e-9,
-            chord_tol_mm=0.01,
-            stage_shares={"offset": 1.0, "fitting": extra},
-        )
+        _build(shares)
 
 
-_VALID_TOLERANCE = _finite_floats(min_value=5e-324, max_value=sys.float_info.max)
+@pytest.mark.req("REQ-FND-002")
+@given(present=st.lists(_PART, unique=True, max_size=len(BUDGET_PARTS) - 1))
+def test_a_missing_budget_part_is_rejected(present: list[str]) -> None:
+    research = dict(_RESEARCH_SHARES)
+    shares = tuple((part, research[part]) for part in present)
+    with pytest.raises(ValueError, match="stage_shares"):
+        _build(shares)
+
+
+@pytest.mark.req("REQ-FND-002")
+@given(unknown=_UNKNOWN_PART, replaced=st.one_of(st.none(), _PART), position=st.integers(0, 4))
+def test_an_unknown_budget_part_is_rejected(
+    unknown: str, replaced: str | None, position: int
+) -> None:
+    # The unknown part is either added to the four (replaced is None) or takes the place of one;
+    # its share is 0, so the shares alone would be valid.
+    shares = [pair for pair in _RESEARCH_SHARES if pair[0] != replaced]
+    shares.insert(min(position, len(shares)), (unknown, 0.0))
+    with pytest.raises(ValueError, match="stage_shares"):
+        _build(tuple(shares))
+
+
+@st.composite
+def _shares_with_a_duplicated_part(draw: st.DrawFn) -> _Shares:
+    """The four parts with one given twice: in place of another part, or as a fifth pair."""
+    duplicated = draw(_PART)
+    replaced = draw(st.one_of(st.none(), _PART.filter(lambda part: part != duplicated)))
+    shares = [pair for pair in _RESEARCH_SHARES if pair[0] != replaced]
+    # Share 0 for the second copy, so the shares alone would be valid in either case.
+    shares.insert(draw(st.integers(0, len(shares))), (duplicated, 0.0))
+    return tuple(draw(st.permutations(shares)))
+
+
+@pytest.mark.req("REQ-FND-002")
+@given(shares=_shares_with_a_duplicated_part())
+def test_a_budget_part_given_twice_is_rejected(shares: _Shares) -> None:
+    with pytest.raises(ValueError, match="stage_shares"):
+        _build(shares)
 
 
 @pytest.mark.req("REQ-FND-002")
@@ -85,67 +155,107 @@ _VALID_TOLERANCE = _finite_floats(min_value=5e-324, max_value=sys.float_info.max
     length_eps=_VALID_TOLERANCE,
     angle_eps=_VALID_TOLERANCE,
     chord_tol=_VALID_TOLERANCE,
-    share_a=_finite_floats(min_value=0.0, max_value=0.5),
-    share_b=_finite_floats(min_value=0.0, max_value=0.5),
+    values=st.tuples(*(_finite_floats(min_value=0.0, max_value=0.25) for _ in BUDGET_PARTS)),
+    order=st.permutations(range(len(BUDGET_PARTS))),
 )
 def test_valid_tolerance_sets_are_accepted(
-    length_eps: float, angle_eps: float, chord_tol: float, share_a: float, share_b: float
+    length_eps: float,
+    angle_eps: float,
+    chord_tol: float,
+    values: tuple[float, ...],
+    order: list[int],
 ) -> None:
-    tolerances = ToleranceSet(
+    expected = _shares(*values)
+    tolerances = _build(
+        tuple(expected[i] for i in order),
+        chord_tol_mm=chord_tol,
         length_eps_mm=length_eps,
         angle_eps_rad=angle_eps,
-        chord_tol_mm=chord_tol,
-        stage_shares={"a": share_a, "b": share_b},
     )
     assert tolerances.length_eps_mm == length_eps
     assert tolerances.angle_eps_rad == angle_eps
     assert tolerances.chord_tol_mm == chord_tol
-    assert dict(tolerances.stage_shares) == {"a": share_a, "b": share_b}
+    assert tolerances.stage_shares == expected
+
+
+@pytest.mark.req("REQ-FND-007")
+@given(
+    values=st.tuples(*(_finite_floats(min_value=0.0, max_value=0.25) for _ in BUDGET_PARTS)),
+    first_order=st.permutations(range(len(BUDGET_PARTS))),
+    second_order=st.permutations(range(len(BUDGET_PARTS))),
+)
+def test_equality_and_hash_do_not_depend_on_input_order(
+    values: tuple[float, ...], first_order: list[int], second_order: list[int]
+) -> None:
+    pairs = _shares(*values)
+    first = _build(tuple(pairs[i] for i in first_order))
+    second = _build(tuple(pairs[i] for i in second_order))
+    assert first == second
+    assert hash(first) == hash(second)
 
 
 @pytest.mark.req("REQ-FND-002")
 @given(
-    shares=st.lists(
-        st.floats(min_value=0.0, max_value=1.0, allow_nan=False), min_size=1, max_size=6
-    )
+    values=st.tuples(*(st.floats(min_value=0.0, max_value=1.0) for _ in BUDGET_PARTS)),
+    order=st.permutations(range(len(BUDGET_PARTS))),
 )
-def test_share_acceptance_matches_the_exact_fraction_sum(shares: list[float]) -> None:
-    stage_shares = {f"stage{i}": share for i, share in enumerate(shares)}
-    exact_total = sum(fractions.Fraction(share) for share in shares)
-    if exact_total > 1:
+def test_share_acceptance_matches_the_exact_fraction_sum(
+    values: tuple[float, ...], order: list[int]
+) -> None:
+    pairs = _shares(*values)
+    shares = tuple(pairs[i] for i in order)
+    if sum(Fraction(value) for value in values) > 1:
         with pytest.raises(ValueError, match="sum to at most 1"):
-            ToleranceSet(
-                length_eps_mm=1e-6, angle_eps_rad=1e-9, chord_tol_mm=0.01, stage_shares=stage_shares
-            )
+            _build(shares)
     else:
-        tolerances = ToleranceSet(
-            length_eps_mm=1e-6, angle_eps_rad=1e-9, chord_tol_mm=0.01, stage_shares=stage_shares
-        )
-        assert dict(tolerances.stage_shares) == stage_shares
+        assert _build(shares).stage_shares == pairs
+
+
+@pytest.mark.req("REQ-FND-002")
+@given(
+    first_three=st.tuples(*(st.floats(min_value=0.0, max_value=1 / 3) for _ in range(3))),
+    steps=st.integers(-3, 3),
+    last=_PART,
+)
+def test_share_acceptance_next_to_a_sum_of_one_matches_the_exact_fraction_sum(
+    first_three: tuple[float, float, float], steps: int, last: str
+) -> None:
+    # The last share is the double rest 1 - a - b - c moved by a few doubles, so the exact sum
+    # lands at, just below or just over 1, where a double sum would round.
+    rest = 1.0 - first_three[0] - first_three[1] - first_three[2]
+    for _ in range(abs(steps)):
+        rest = math.nextafter(rest, math.inf if steps > 0 else -math.inf)
+    rest = max(rest, 0.0)
+    others = iter(first_three)
+    values = {part: rest if part == last else next(others) for part in BUDGET_PARTS}
+    shares = tuple(values.items())
+    if sum(Fraction(value) for value in values.values()) > 1:
+        with pytest.raises(ValueError, match="sum to at most 1"):
+            _build(shares)
+    else:
+        assert _build(shares).stage_shares == shares
 
 
 @pytest.mark.req("REQ-FND-002")
 @pytest.mark.parametrize(
-    ("shares", "should_be_accepted"),
+    ("values", "should_be_accepted"),
     [
-        ({"a": 1.0}, True),
-        ({"a": 0.5, "b": 0.5}, True),
-        ({"a": 0.25, "b": 0.25, "c": 0.5}, True),
-        ({"a": 1.0, "b": 1e-17}, False),
-        ({"a": 1.0, "b": 5e-324}, False),
-        ({"a": 0.5, "b": math.nextafter(0.5, 1.0)}, False),
+        ((1.0, 0.0, 0.0, 0.0), True),
+        ((0.5, 0.5, 0.0, 0.0), True),
+        ((0.25, 0.25, 0.5, 0.0), True),
+        ((0.1, 0.3, 0.5, 0.1), True),  # D-056's shares: exactly 1 as doubles
+        ((1.0, 1e-17, 0.0, 0.0), False),
+        ((1.0, 5e-324, 0.0, 0.0), False),
+        ((0.5, math.nextafter(0.5, 1.0), 0.0, 0.0), False),
+        ((0.1, 0.3, 0.5, math.nextafter(0.1, 1.0)), False),
     ],
 )
 def test_shares_summing_to_exactly_or_just_over_one(
-    shares: dict[str, float], should_be_accepted: bool
+    values: tuple[float, float, float, float], should_be_accepted: bool
 ) -> None:
+    shares = _shares(*values)
     if should_be_accepted:
-        tolerances = ToleranceSet(
-            length_eps_mm=1e-6, angle_eps_rad=1e-9, chord_tol_mm=0.01, stage_shares=shares
-        )
-        assert dict(tolerances.stage_shares) == shares
+        assert _build(shares).stage_shares == shares
     else:
         with pytest.raises(ValueError, match="sum to at most 1"):
-            ToleranceSet(
-                length_eps_mm=1e-6, angle_eps_rad=1e-9, chord_tol_mm=0.01, stage_shares=shares
-            )
+            _build(shares)
