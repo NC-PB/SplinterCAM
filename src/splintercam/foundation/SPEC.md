@@ -8,7 +8,7 @@
 | Layer | 0 |
 | Depends on | Python standard library and NumPy only |
 | Research | [01](../../../docs/research/01-foundations.md), section Tolerances. RESEARCH 18 (Project Spike) is being rewritten from public sources; until then this spec takes only general software practice from it: result values with diagnostics, a cancellation flag, no global state |
-| Decisions | D-028 (units), D-029 (default tolerances), D-049 (no values buried in code), D-055 (determinism), D-056 (tolerance budget), D-146 (budget floors), D-149 (rounding allowance), D-097 (exact predicates in the float stages); text in [docs/spike/decisions-snapshot.md](../../../docs/spike/decisions-snapshot.md) |
+| Decisions | D-028 (units), D-029 (default tolerances), D-049 (no values buried in code), D-055 (determinism), D-056 (tolerance budget), D-058 (arc tolerance), D-093 (import arc deviation), D-132 (grid, rounding margin, arc tolerance floor), D-146 (budget floors), D-149 (rounding allowance), D-097 (exact predicates in the float stages); text in [docs/spike/decisions-snapshot.md](../../../docs/spike/decisions-snapshot.md) |
 | Owner | Peter Burgener |
 
 ## Purpose
@@ -104,7 +104,7 @@ class Context:
 | REQ-FND-006 | WHEN `cancel()` is called, THE `CancellationToken` SHALL report it through `is_cancelled` and set its one-element `flag` array to 1, so kernels can poll it without calling Python. | unit: `tests/foundation/unit/test_cancellation_token.py`; a kernel polling the flag: pending, with the first kernel | Released for plan 0001 of the stack test app |
 | REQ-FND-007 | THE foundation value types SHALL be immutable, and hashable when their contents are; only `CancellationToken` changes state. | unit: `tests/foundation/unit/test_tolerance_set.py`, `test_result.py`, `test_context.py` | Released (Peter, 2026-09-27) |
 | REQ-FND-008 | THE default tolerance values SHALL be read from a documented defaults file where each value is a declared parameter with unit, default, range and source, and SHALL be: chord tolerance 0.05 mm for roughing and 0.01 mm for finishing operations (D-029); length epsilon 1e-6 mm; angle epsilon 1e-9 rad (Q-034 answer, logged as D-056); shares geometry 0.1, fit 0.3, control 0.5, reserve 0.1 (D-056), as the base of REQ-FND-009. No module SHALL hold these numbers as literals (D-049). | unit: `tests/foundation/unit/test_tolerance_defaults.py`; architecture check pending (`tools/arch-check`) | Reviewed (D-029, D-049, D-056; plan 0001, step 2) |
-| REQ-FND-009 | THE function that builds an operation's `ToleranceSet` SHALL compute the budget parts from tol and the grid unit u: geometry = 0.1·tol + 6u + max(0, 2u − 0.05·tol); reserve = 0.1·tol, written into the NCX as the operation's rounding allowance (D-149); control = 0.5·tol; fit = the rest, clamped at 0; t_flat = 0.05·tol − 0.0001 mm − 3·eps_len; t_topo = 2u. WHEN tol is below tol_min = 8u/0.35 = 2/875 mm ≈ 0.00228571 mm, computed once, it SHALL return no set and the diagnostic `TOL_BELOW_MINIMUM` naming tol_min rounded up to 0.1 nm (0.0022858 mm) (D-146, D-149; research 01, Tolerances). | unit (research 01, tests 14 and 15): `tests/foundation/unit/test_tolerance_budget.py`; property: `tests/foundation/property/test_tolerance_budget.py` | Reviewed (D-146, D-149; plan 0001, step 2) |
+| REQ-FND-009 | THE function that builds an operation's `ToleranceSet` SHALL compute the budget parts from tol and the grid unit u: geometry = 0.1·tol + 6u + max(0, 2u − 0.05·tol); reserve = 0.1·tol, written into the NCX as the operation's rounding allowance (D-149); control = 0.5·tol; fit = the rest, clamped at 0; t_flat = 0.05·tol − 0.0001 mm − 3·eps_len; t_topo = 2u. WHEN tol is below tol_min = 8u/0.35 = 2/875 mm ≈ 0.00228571 mm, computed once, it SHALL return no set and the diagnostic `TOL_BELOW_MINIMUM` naming tol_min rounded up to 0.1 nm (0.0022858 mm) (D-146, D-149; research 01, Tolerances). | unit (research 01, tests 14 and 15): `tests/foundation/unit/test_tolerance_budget.py`, `test_tolerance_set.py`; property: `tests/foundation/property/test_tolerance_budget.py` | Reviewed (D-146, D-149; plan 0001, step 2) |
 
 ## Invariants
 
@@ -152,7 +152,11 @@ None.
   - `for_operation(tol_mm)` takes no `Context`, which holds the set it builds. t_flat and t_topo are properties.
   - The defaults file is TOML, read with the standard library's `tomllib`. So foundation reads one file of its own, a change to "no I/O" in Purpose and Scope.
   - A part given twice counts as REQ-FND-002's missing or unknown part.
-- The error paths of the defaults file's reader (a missing key, a default outside its range) have no test: they would need a broken file.
+- Found by the step 2 reviews, for Peter to decide:
+  - The `ToleranceSet` constructor accepts a chord tolerance below tol_min and shares whose fit band cannot cover the grid cost; only `for_operation` refuses. Either REQ-FND-002 rejects such sets too, or `for_operation` is the only way to build an operation's set.
+  - REQ-FND-009 says the reserve is written into the NCX as the rounding allowance. Foundation provides the value; the writing belongs to the module that writes the NCX, and has no owner or test yet.
+  - The defaults file gives tol the range [0.0022858, 1.0], the named minimum, while `for_operation` accepts from tol_min = 2/875 ≈ 0.00228571 mm.
+  - The reader's failure modes (a missing key, a default outside its range) have no requirement and no test; a broken entry of another type raises `TypeError`.
 
 ## Change log
 

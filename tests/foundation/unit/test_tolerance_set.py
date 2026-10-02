@@ -3,8 +3,10 @@
 
 import copy
 import dataclasses
+import math
 import pickle
 import typing
+from fractions import Fraction
 
 import pytest
 
@@ -73,6 +75,53 @@ def test_control_and_reserve_stage_tol_follow_non_default_shares() -> None:
     # Exact for the reason above.
     assert tolerances.stage_tol_mm("control") == 0.25 * 0.02
     assert tolerances.stage_tol_mm("reserve") == 0.125 * 0.02
+
+
+def _exact_grid_cost_mm(tol_mm: float) -> Fraction:
+    # What D-146 moves from the fit band to geometry, as exact decimals (research 01, Tolerances):
+    # 6u + max(0, 2u - 0.05·tol), with u = 0.0001 mm.
+    u = Fraction("0.0001")
+    return 6 * u + max(Fraction(0), 2 * u - Fraction("0.05") * Fraction(tol_mm))
+
+
+@pytest.mark.req("REQ-FND-009")
+@pytest.mark.parametrize(
+    ("chord_tol_mm", "geometry_share", "fit_share"),
+    [
+        (0.01, 0.2, 0.4),  # 0.05·tol >= 2u: no floor term
+        (0.003, 0.2, 0.4),  # 0.05·tol < 2u: the floor term applies
+        (0.01, 0.1, 0.03),  # the fit band is negative before the clamp
+        (0.01, 0.1, 0.0),
+    ],
+)
+def test_geometry_fit_and_flatten_tol_follow_the_sets_own_shares(
+    chord_tol_mm: float, geometry_share: float, fit_share: float
+) -> None:
+    shares: _Shares = (
+        ("geometry", geometry_share),
+        ("fit", fit_share),
+        ("control", 0.25),
+        ("reserve", 0.125),
+    )
+    tolerances = _tolerance_set(chord_tol_mm=chord_tol_mm, stage_shares=shares)
+    tol = Fraction(chord_tol_mm)
+    cost = _exact_grid_cost_mm(chord_tol_mm)
+    expected = {
+        "geometry": Fraction(geometry_share) * tol + cost,
+        "fit": max(Fraction(0), Fraction(fit_share) * tol - cost),
+        # t_flat: geometry's share less the arc tolerance share 0.05, less 0.0001 mm and 3·eps_len.
+        "flatten": (Fraction(geometry_share) - Fraction("0.05")) * tol
+        - Fraction("0.0001")
+        - 3 * Fraction(_LENGTH_EPS_MM),
+    }
+    actual = {
+        "geometry": tolerances.stage_tol_mm("geometry"),
+        "fit": tolerances.stage_tol_mm("fit"),
+        "flatten": tolerances.flatten_tol_mm,
+    }
+    # A few correctly rounded double operations on values below tol: within one ulp of tol.
+    for name, value in expected.items():
+        assert abs(Fraction(actual[name]) - value) <= Fraction(math.ulp(chord_tol_mm)), name
 
 
 @pytest.mark.req("REQ-FND-001")

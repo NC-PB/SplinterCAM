@@ -83,8 +83,8 @@ class ToleranceSet:
 
         shares = dict(self.stage_shares)
         if len(shares) != len(self.stage_shares) or set(shares) != set(BUDGET_PARTS):
-            parts = [part for part, _ in self.stage_shares]
-            raise ValueError(f"stage_shares must name each of {BUDGET_PARTS} once, got {parts}")
+            message = f"stage_shares must name each of {BUDGET_PARTS} once, got {self.stage_shares}"
+            raise ValueError(message)
         for part, share in shares.items():
             if not math.isfinite(share) or share < 0.0:
                 raise ValueError(f"stage_shares[{part!r}] must be finite and >= 0, got {share!r}")
