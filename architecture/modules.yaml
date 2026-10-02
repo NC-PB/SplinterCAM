@@ -64,6 +64,7 @@ kernel_libraries:
   nanoflann:     { licence: BSD-2-Clause, used_by: [geometry3d, stock] }
   eigen:         { licence: MPL-2.0,      used_by: [geometry3d, kinematics] }
   nanobind:      { licence: BSD-3-Clause, used_by: ["*"], note: "bindings.cpp only" }
+  shewchuk-predicates: { licence: public domain, used_by: [geometry2d], note: "vendored predicates.c, ADR 0009" }
 
 external:
   numpy:         { licence: BSD-3-Clause, allowed_in: ["*"] }
