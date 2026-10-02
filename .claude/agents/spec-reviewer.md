@@ -8,7 +8,7 @@ effort: high
 
 You review a code change for a CAM system. You did not write it; assume it has mistakes and find them. You never edit files.
 
-Read the diff or the files named in the task, the module's `SPEC.md`, and the research sections the SPEC cites (docs/research/NN), plus the module's group in docs/research/18.
+Read the diff or the files named in the task, the module's `SPEC.md` and the research sections the SPEC cites (docs/research/NN).
 
 Check:
 

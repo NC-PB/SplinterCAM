@@ -4,7 +4,7 @@ new file mode 100644
 +++ b/.github/workflows/change-size.yml
 @@ -0,0 +1,35 @@
 +# SPDX-License-Identifier: Apache-2.0
-+# The per-PR change limit of docs/dev/12, section 3 (plan 0002): non-test lines changed against
++# The per-PR change limit of docs/dev/12, section 3 (plan 0002): non-test lines added against
 +# the base branch, over 200 reported, over 400 failing unless the PR has the label large-change.
 +name: change-size
 +

@@ -32,9 +32,14 @@ _MARGIN_AND_FLOOR_MM = (
 
 
 def _tol_min_mm(fit_share: float) -> float:
-    # The fit band, (fit share + 0.05)·tol - (6 + 2)·u below tol = 2u/0.05, is 0 at this tol
-    # (research 01, Tolerances; the floor of REQ-FND-002, Peter 2026-10-02).
-    return _MARGIN_AND_FLOOR_MM / (fit_share + _ARC_TOL_SHARE)
+    # The smallest tol whose fit band is 0 or more (the floor of REQ-FND-002, Peter 2026-10-02;
+    # research 01, Tolerances): 8u / (fit share + 0.05) while the arc tolerance floor term
+    # applies, for a fit share of 0.15 or more, else 6u / fit share. The larger of the two is
+    # that same value, so the share 0.15 needs no constant of its own.
+    if fit_share == 0.0:
+        return math.inf
+    with_floor_term = _MARGIN_AND_FLOOR_MM / (fit_share + _ARC_TOL_SHARE)
+    return max(with_floor_term, _ROUNDING_MARGIN_MM / fit_share)
 
 
 # tol_min = 8u/0.35, computed once: the double nearest 2/875 mm (research 01, Tolerances).
@@ -72,7 +77,8 @@ class ToleranceSet:
     Preconditions (REQ-FND-002), checked in `__post_init__` and reported as `ValueError`:
     the three tolerances are finite and > 0; `stage_shares` names each budget part exactly once;
     each share is finite and >= 0; the shares sum to at most 1, compared exactly as fractions,
-    since this check defines the budget that tolerances are drawn from.
+    since this check defines the budget that tolerances are drawn from; tol is at least the floor
+    of the fit share, so the fit band is not negative and the parts sum to at most tol; t_flat > 0.
 
     Build an operation's set with `for_operation`, which takes the defaults (REQ-FND-008).
 
@@ -106,6 +112,12 @@ class ToleranceSet:
                 f"chord_tol_mm must be >= {floor_mm!r} for these shares, got {self.chord_tol_mm!r}"
             )
             raise ValueError(message)
+        if not self.flatten_tol_mm > 0.0:
+            message = (
+                f"flatten tolerance t_flat must be > 0, got {self.flatten_tol_mm!r} mm; raise "
+                "chord_tol_mm or the geometry share, or lower length_eps_mm"
+            )
+            raise ValueError(message)
         # Frozen dataclass: __setattr__ is disabled outside __init__/__post_init__.
         object.__setattr__(self, "stage_shares", tuple((p, shares[p]) for p in BUDGET_PARTS))
 
@@ -134,7 +146,7 @@ class ToleranceSet:
     def flatten_tol_mm(self) -> float:
         """t_flat in mm: what geometry leaves for flattening besides the offset's arc tolerance,
         arcs recognised at import and snapping, (0.1 - 0.05)·tol - 0.0001 mm - 3·eps_len
-        (REQ-FND-009; research 01, Tolerances). Positive for every tol from tol_min up."""
+        (REQ-FND-009; research 01, Tolerances). Positive: the constructor refuses other sets."""
         flatten_share = dict(self.stage_shares)["geometry"] - _ARC_TOL_SHARE
         return (
             flatten_share * self.chord_tol_mm

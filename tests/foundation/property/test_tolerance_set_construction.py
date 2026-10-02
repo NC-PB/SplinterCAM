@@ -17,8 +17,8 @@ type _Shares = tuple[tuple[str, float], ...]
 # D-056 in BUDGET_PARTS order, whose exact sum is 1 (0.1 + 0.3 + 0.5 + 0.1 as doubles).
 _LENGTH_EPS_MM = 1e-6
 _ANGLE_EPS_RAD = 1e-9
-# 1 mm lies above the floor of REQ-FND-002 for every fit share, (6 + 2)·u / (fit share + 0.05)
-# <= 8u / 0.05 = 0.016 mm, so these tests see only the rule they check.
+# 1 mm: the share tests below see the floor and t_flat of REQ-FND-002 only for a fit share under
+# 0.0006 or a geometry share under about 0.0501; `_build_or_none` tells those refusals apart.
 _CHORD_TOL_MM = 1.0
 _RESEARCH_SHARES: _Shares = (("geometry", 0.1), ("fit", 0.3), ("control", 0.5), ("reserve", 0.1))
 
@@ -36,6 +36,16 @@ def _build(
         angle_eps_rad=angle_eps_rad,
         stage_shares=stage_shares,
     )
+
+
+def _build_or_none(stage_shares: _Shares) -> ToleranceSet | None:
+    """The set, or None when the floor or t_flat of REQ-FND-002 refuses it, not its shares."""
+    try:
+        return _build(stage_shares)
+    except ValueError as error:
+        if "t_flat" in str(error) or "chord_tol_mm must be >=" in str(error):
+            return None
+        raise
 
 
 def _shares(*values: float) -> _Shares:
@@ -150,10 +160,16 @@ def test_a_budget_part_given_twice_is_rejected(shares: _Shares) -> None:
 
 @pytest.mark.req("REQ-FND-002")
 @given(
-    length_eps=_VALID_TOLERANCE,
+    length_eps=_finite_floats(min_value=5e-324, max_value=1e-3),
     angle_eps=_VALID_TOLERANCE,
     data=st.data(),
-    values=st.tuples(*(_finite_floats(min_value=0.0, max_value=0.25) for _ in BUDGET_PARTS)),
+    # A geometry share above 0.05 and a fit share above 0: otherwise no tol is valid.
+    values=st.tuples(
+        _finite_floats(min_value=0.06, max_value=0.25),
+        _finite_floats(min_value=0.01, max_value=0.25),
+        _finite_floats(min_value=0.0, max_value=0.25),
+        _finite_floats(min_value=0.0, max_value=0.25),
+    ),
     order=st.permutations(range(len(BUDGET_PARTS))),
 )
 def test_valid_tolerance_sets_are_accepted(
@@ -164,8 +180,10 @@ def test_valid_tolerance_sets_are_accepted(
     order: list[int],
 ) -> None:
     expected = _shares(*values)
-    # From one per cent above the floor of the drawn fit share upward (REQ-FND-002).
-    floor = float(_exact_floor_mm(values[1]) * Fraction(101, 100))
+    # From one per cent above the floor of the drawn fit share and the tol where t_flat is 0
+    # upward (REQ-FND-002).
+    lowest = max(_exact_floor_mm(values[1]), _exact_zero_flatten_tol_mm(values[0], length_eps))
+    floor = float(lowest * Fraction(101, 100))
     chord_tol = data.draw(_finite_floats(min_value=floor, max_value=sys.float_info.max))
     tolerances = _build(
         tuple(expected[i] for i in order),
@@ -193,14 +211,15 @@ def test_share_acceptance_matches_the_exact_fraction_sum(
         with pytest.raises(ValueError, match="sum to at most 1"):
             _build(shares)
     else:
-        assert _build(shares).stage_shares == pairs
+        built = _build_or_none(shares)
+        assert built is None or built.stage_shares == pairs
 
 
 @pytest.mark.req("REQ-FND-002")
 @pytest.mark.parametrize(
     ("values", "should_be_accepted"),
     [
-        ((1.0, 0.0, 0.0, 0.0), True),
+        ((1.0, 0.0, 0.0, 0.0), None),  # accepted shares, but fit share 0: refused by the floor
         ((0.5, 0.5, 0.0, 0.0), True),
         ((0.25, 0.25, 0.5, 0.0), True),
         ((0.1, 0.3, 0.5, 0.1), True),  # D-056's shares: exactly 1 as doubles
@@ -211,26 +230,41 @@ def test_share_acceptance_matches_the_exact_fraction_sum(
     ],
 )
 def test_shares_summing_to_exactly_or_just_over_one(
-    values: tuple[float, float, float, float], should_be_accepted: bool
+    values: tuple[float, float, float, float], should_be_accepted: bool | None
 ) -> None:
     shares = _shares(*values)
-    if should_be_accepted:
+    if should_be_accepted is None:
+        assert _build_or_none(shares) is None
+    elif should_be_accepted:
         assert _build(shares).stage_shares == shares
     else:
         with pytest.raises(ValueError, match="sum to at most 1"):
             _build(shares)
 
 
+_U = Fraction("0.0001")  # the grid unit u (research 01, Tolerances)
+
+
 def _exact_floor_mm(fit_share: float) -> Fraction:
-    # REQ-FND-002 (Peter, 2026-10-02): tol_min of the own shares, (6 + 2)·u / (fit share + 0.05),
-    # with u = 0.0001 mm (research 01, Tolerances), in exact rationals.
-    return 8 * Fraction("0.0001") / (Fraction(fit_share) + Fraction("0.05"))
+    # REQ-FND-002 (Peter, 2026-10-02), in exact rationals: 8u / (fit share + 0.05) for a fit
+    # share of 0.15 or more, else 6u / fit share. Fit share > 0.
+    fit = Fraction(fit_share)
+    return 8 * _U / (fit + Fraction("0.05")) if fit >= Fraction("0.15") else 6 * _U / fit
+
+
+def _exact_zero_flatten_tol_mm(geometry_share: float, length_eps_mm: float) -> Fraction:
+    # The tol where t_flat = (geometry share - 0.05)·tol - 0.0001 mm - 3·eps_len is 0
+    # (REQ-FND-009); geometry share > 0.05.
+    allowance = Fraction("0.0001") + 3 * Fraction(length_eps_mm)
+    return allowance / (Fraction(geometry_share) - Fraction("0.05"))
 
 
 @pytest.mark.req("REQ-FND-002")
-@pytest.mark.parametrize("fit_share", [0.0, 0.03, 0.1, 0.3, 0.4])
+@pytest.mark.parametrize("fit_share", [0.03, 0.1, 0.15, 0.3, 0.4])
 def test_a_chord_tolerance_below_the_floor_of_its_own_shares_is_rejected(fit_share: float) -> None:
-    shares = _shares(0.1, fit_share, 0.25, 0.1)  # sum at most 0.85: only the floor is tested
+    # Geometry share 0.2: t_flat > 0 from 0.000687 mm, below every floor here (at most 0.02 mm);
+    # the shares sum to at most 0.95. Only the floor is tested.
+    shares = _shares(0.2, fit_share, 0.25, 0.1)
     floor = _exact_floor_mm(fit_share)
     # One per cent either side: the floor itself is a double computed once, so its exact bits
     # are checked through for_operation at the default shares (research 01, test 15).
@@ -241,14 +275,14 @@ def test_a_chord_tolerance_below_the_floor_of_its_own_shares_is_rejected(fit_sha
 
 @pytest.mark.req("REQ-FND-002")
 @given(
-    fit_share=st.floats(min_value=0.0, max_value=0.4),
+    fit_share=st.floats(min_value=0.001, max_value=0.4),
     below=st.booleans(),
     distance=st.fractions(min_value=Fraction(1, 100), max_value=10),
 )
 def test_the_floor_of_any_fit_share_separates_rejected_from_accepted(
     fit_share: float, below: bool, distance: Fraction
 ) -> None:
-    shares = _shares(0.1, fit_share, 0.25, 0.1)  # sum at most 0.85: only the floor is tested
+    shares = _shares(0.2, fit_share, 0.25, 0.1)  # as above: only the floor is tested
     floor = _exact_floor_mm(fit_share)
     if below:
         with pytest.raises(ValueError, match="chord_tol_mm"):
@@ -266,3 +300,11 @@ def test_the_constructor_refuses_the_double_just_below_the_floor_of_the_default_
     with pytest.raises(ValueError, match="chord_tol_mm"):
         _build(_RESEARCH_SHARES, chord_tol_mm=math.nextafter(floor, 0.0))
     assert _build(_RESEARCH_SHARES, chord_tol_mm=floor).chord_tol_mm == floor
+
+
+@pytest.mark.req("REQ-FND-002")
+@given(chord_tol=_VALID_TOLERANCE)
+def test_a_fit_share_of_0_is_rejected_at_any_tolerance(chord_tol: float) -> None:
+    # 6u / 0: no tol leaves the fit band at 0 or above (Peter, 2026-10-02).
+    with pytest.raises(ValueError, match="chord_tol_mm"):
+        _build(_shares(0.2, 0.0, 0.5, 0.1), chord_tol_mm=chord_tol)

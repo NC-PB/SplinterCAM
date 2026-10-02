@@ -97,7 +97,7 @@ class Context:
 | ID | Requirement (EARS) | Verified by | Status |
 | --- | --- | --- | --- |
 | REQ-FND-001 | THE `ToleranceSet` SHALL provide the length epsilon, the angle epsilon, the chord tolerance and, for each budget part (geometry, fit, control, reserve), its share of the chord tolerance. | unit: `tests/foundation/unit/test_tolerance_set.py` | Reviewed (D-056; plan 0001, step 2). Changed 2026-10-02: the stage names are the four budget parts |
-| REQ-FND-002 | IF a `ToleranceSet` is created with a tolerance that is not positive and finite, with a missing or unknown budget part, or with shares that are negative or sum to more than 1, with a part given twice, or with a chord tolerance below the tol_min of its own shares, (6 + 2)·u / (fit share + 0.05), THEN the constructor SHALL raise `ValueError`. | property and unit: `tests/foundation/property/test_tolerance_set_construction.py` | Reviewed (D-056; plan 0001, step 2). Changed 2026-10-02: missing, unknown or repeated parts and the floor (Peter, step 5) |
+| REQ-FND-002 | IF a `ToleranceSet` is created with a tolerance that is not positive and finite, with a missing or unknown budget part, or with shares that are negative or sum to more than 1, with a part given twice, with a chord tolerance below the floor of its own fit share f (8u / (f + 0.05) for f ≥ 0.15, otherwise 6u / f; no tol for f = 0), or with t_flat ≤ 0, THEN the constructor SHALL raise `ValueError`. | property and unit: `tests/foundation/property/test_tolerance_set_construction.py` | Reviewed (D-056; plan 0001, step 2). Changed 2026-10-02: missing, unknown or repeated parts, the floor and t_flat > 0 (Peter, step 5) |
 | REQ-FND-003 | THE `nearly_equal` function SHALL return true exactly when \|a − b\| ≤ tol for finite inputs, and false when an input is NaN; for infinite inputs the same expression applies, so `nearly_equal(inf, inf, tol)` is false. | property and unit: `tests/foundation/property/test_nearly_equal.py` | Released for plan 0001 of the stack test app |
 | REQ-FND-004 | THE `Result` type SHALL hold an optional value and an ordered tuple of diagnostics; `ok` SHALL be true only when a value is present and no diagnostic has severity `ERROR`. | unit and property: `tests/foundation/unit/test_result.py` | Released for plan 0001 of the stack test app |
 | REQ-FND-005 | THE `Context` SHALL carry the tolerance set, the cancellation token, the progress callback, the logger, the debug sink and the random seed; no module SHALL read any of these from global state. | unit: `tests/foundation/unit/test_context.py`; architecture check pending (`tools/arch-check`) | Released for plan 0001 of the stack test app |
@@ -109,7 +109,7 @@ class Context:
 
 ## Invariants
 
-Value types are immutable, and hashable when their contents are (a `Result` holding a NumPy array is not); `Result.ok` is consistent with its diagnostics; a cancelled token never becomes uncancelled through its API (code that reaches the flag's owning array can defeat that; accepted by Peter, 2026-09-27); the budget shares sum to at most 1; for the sets `for_operation` builds, for every tol from tol_min up, the four budget parts are not negative and sum to tol within two units in the last place of tol (rounding), and t_flat is positive.
+Value types are immutable, and hashable when their contents are (a `Result` holding a NumPy array is not); `Result.ok` is consistent with its diagnostics; a cancelled token never becomes uncancelled through its API (code that reaches the flag's owning array can defeat that; accepted by Peter, 2026-09-27); the budget shares sum to at most 1; for every set the constructor accepts, the four budget parts are not negative and sum to at most tol within two units in the last place of tol (rounding), and t_flat is positive; for the sets of `for_operation`, from tol_min up, they sum to tol.
 
 ## Tolerance budget
 
@@ -129,7 +129,7 @@ D-055, three tiers: topology and decisions identical on every platform; output b
 | --- | --- | --- |
 | `for_operation` with tol below tol_min | no set | `TOL_BELOW_MINIMUM` (error), naming 0.0022858 mm |
 | `for_operation` with tol above 1 mm | no set | `TOL_ABOVE_MAXIMUM` (error) |
-| Invalid construction of a `ToleranceSet` (REQ-FND-002, including a chord tolerance below the tol_min of its own shares), `for_operation` with a non-finite tol, `stage_tol_mm` with a stage that is not a budget part | programming error | `ValueError` |
+| Invalid construction of a `ToleranceSet` (REQ-FND-002, including a chord tolerance below the floor of its own fit share and t_flat ≤ 0), `for_operation` with a non-finite tol, `stage_tol_mm` with a stage that is not a budget part | programming error | `ValueError` |
 | A broken defaults file entry | programming error at import | `ValueError` naming the entry's key |
 
 ## Algorithms
@@ -139,7 +139,7 @@ None.
 ## Test plan
 
 - Unit: construction, `stage_tol_mm` for each budget part, `Result.ok`, cancellation flag, defaults read from the defaults file with units, ranges and sources, research 01 tests 14 and 15, `TOL_ABOVE_MAXIMUM` above 1 mm, a broken defaults file failing with the entry's key.
-- Property: `nearly_equal` against the definition, including NaN and infinities; invalid tolerance sets always rejected, including missing, unknown or repeated budget parts and a chord tolerance below the floor of its own shares; the parts sum to tol for every tol from tol_min to 1 mm; every tol below tol_min refused with `TOL_BELOW_MINIMUM`.
+- Property: `nearly_equal` against the definition, including NaN and infinities; invalid tolerance sets always rejected, including missing, unknown or repeated budget parts a chord tolerance below the floor of its own fit share, t_flat ≤ 0; the parts of any accepted set never sum to more than tol; the parts sum to tol for every tol from tol_min to 1 mm; every tol below tol_min refused with `TOL_BELOW_MINIMUM`.
 
 ## Size estimate
 
@@ -147,11 +147,6 @@ Budget 250 NLOC (Peter, 2026-10-02), counted without comments and docstrings as 
 
 ## Open questions
 
-- Peter's floor of REQ-FND-002 holds the invariants only for the sets `for_operation` builds (default shares and eps_len); the constructor accepts other sets that break them:
-  - The floor is the zero of the fit band only while the floor term applies at it, that is for a fit share at or above 0.15. Below that the band is negative before the clamp from the floor up to 6u / fit share (shares (0.1, 0.03, 0.25, 0.1) at tol = 0.011 mm, `test_tolerance_set.py`).
-  - After that clamp the parts can sum to more than tol: shares (0.42, 0.03, 0.45, 0.1) at tol = 0.011 mm give 0.00522 + 0 + 0.00495 + 0.0011 = 0.01127 mm.
-  - t_flat = (geometry share − 0.05)·tol − 0.0001 mm − 3·eps_len is negative at any tol for a geometry share of 0.05 or less, and for some tol above the floor for a geometry share below about 0.095 at fit share 0.3 (geometry 0.08 at tol = 0.003 mm: −1.3e-5 mm); the constructor does not limit eps_len either.
-  - The exact alternative: floor = 8u / (fit share + 0.05) for a fit share at or above 0.15, else 6u / fit share; and a constructor check that t_flat > 0. Or are only the default shares meant to matter?
 - Whether `Point2` and `Vector2` are needed at all, or arrays suffice everywhere.
 
 ## Change log
@@ -161,4 +156,4 @@ Budget 250 NLOC (Peter, 2026-10-02), counted without comments and docstrings as 
 - 2026-09-27: review fixes (pickling, exact share sum, `bool` results, read-only flag owner, `Result` keeps a tuple); "Verified by" now names the test files, the `req` markers name the tests.
 - 2026-09-26: REQ-FND-001 to REQ-FND-006 implemented in the stack test app (its plan 0001, step 2a).
 - 2026-10-02: plan 0001, step 2: REQ-FND-001 and 002 changed and REQ-FND-008 and 009 added from Project Spike's draft (D-029, D-049, D-056, D-146, D-149), all four `Reviewed`; `stage_shares` holds (part, share) pairs; `for_operation`, `flatten_tol_mm`, `topology_tol_mm`, `DeclaredParameter` and `TOLERANCE_DEFAULTS` added; the defaults file replaces the placeholders; `TOL_BELOW_MINIMUM` is foundation's first diagnostic.
-- 2026-10-02: plan 0001, step 5, Peter's answers: the choices of step 2 confirmed (base shares with the grid cost in `stage_tol_mm`, `for_operation` without a `Context`, t_flat and t_topo as properties, a repeated part as a REQ-FND-002 error, the TOML file read with `tomllib` as foundation's one read); REQ-FND-002 adds the floor of the set's own shares; REQ-FND-008 a broken entry naming its key; REQ-FND-009's reserve is written by the NCX writer (`ROUND_LIMIT`); REQ-FND-010 `TOL_ABOVE_MAXIMUM`.
+- 2026-10-02: plan 0001, step 5, Peter's answers: the choices of step 2 confirmed (base shares with the grid cost in `stage_tol_mm`, `for_operation` without a `Context`, t_flat and t_topo as properties, a repeated part as a REQ-FND-002 error, the TOML file read with `tomllib` as foundation's one read); REQ-FND-002 adds the floor of the set's own shares; REQ-FND-008 a broken entry naming its key; REQ-FND-009's reserve is written by the NCX writer (`ROUND_LIMIT`); REQ-FND-010 `TOL_ABOVE_MAXIMUM`. Then the floor's open question answered: 8u / (f + 0.05) for f ≥ 0.15, otherwise 6u / f, and t_flat > 0, so the invariants hold for every accepted set.
