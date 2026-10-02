@@ -42,6 +42,12 @@ def _axes_in_sweep(arc: Arc) -> list[int]:
     if start == end:  # both ends in one octant: the sweep is tiny or nearly a full turn
         return [0, 1, 2, 3] if abs(arc.sweep_rad) > math.pi else []
     reach = (end - start) % 8
+    # REQ-G2D-043 lets P1 lie up to eps_len / r past either side of where the sweep ends, so its
+    # octant can contradict the sweep near 0 and near a full turn: the sweep governs (ours).
+    if abs(arc.sweep_rad) < math.pi / 2 and reach >= 4:
+        return []
+    if abs(arc.sweep_rad) > 3 * math.pi / 2 and reach <= 4:
+        return [0, 1, 2, 3]
     passed = [axis for axis in range(4) if (2 * axis - start) % 8 <= reach]
     # Back from the mirrored frame: the axis at angle a is the one at -a.
     return sorted((4 - axis) % 4 for axis in passed) if mirrored else passed

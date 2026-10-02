@@ -44,6 +44,8 @@ def flatten(curve: Curve, t_mm: float, side: AirSide | None, ctx: Context) -> ND
             row = np.array([[*curve.p0, *curve.p1, *curve.centre, curve.sweep_rad]])
             kernel = _kernels.geometry2d
             steps = kernel.arc_steps(row, t_mm, inscribed, _MAX_STEP_RAD)
+            if steps < 0:
+                raise ValueError(f"t_mm {t_mm!r} needs more steps than an int holds for {curve}")
             points = np.empty((steps + (1 if inscribed else 2), 2), dtype=np.float64)
             kernel.flatten_arc(row, steps, inscribed, points)
     points.flags.writeable = False

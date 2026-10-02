@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace splintercam::geometry2d {
 namespace {
@@ -39,8 +40,11 @@ int arc_steps(const CurveRow& arc, double t_mm, bool inscribed, double max_step_
     const double bound =
         std::min(step_within(std::sqrt(ax * ax + ay * ay), t_mm, inscribed), max_step_rad);
     const double sweep = std::abs(arc.sweep);
-    auto steps = static_cast<int>(std::ceil(sweep / bound));
-    steps = std::max(steps, 1);
+    const double quotient = std::ceil(sweep / bound);
+    if (!(quotient < std::numeric_limits<int>::max())) { // also catches inf and NaN
+        return -1;
+    }
+    auto steps = std::max(static_cast<int>(quotient), 1);
     if (sweep / steps > bound) { // rounding made the step too large (REQ-G2D-106)
         ++steps;
     }

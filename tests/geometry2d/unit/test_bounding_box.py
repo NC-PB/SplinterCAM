@@ -70,3 +70,25 @@ def test_full_circle_box_has_all_four_axis_points(ctx: Context, sweep: float) ->
     assert bounding_box(Arc((6.0, 2.0), (6.0, 2.0), (1.0, 2.0), sweep), ctx) == Box(
         -4.0, -3.0, 6.0, 7.0
     )
+
+
+@pytest.mark.req("REQ-G2D-214")
+def test_tiny_arc_whose_p1_lies_just_behind_p0_has_only_its_end_points(ctx: Context) -> None:
+    # Valid by REQ-G2D-043: P1 lies 1e-9 rad behind P0 while the sweep is +1e-9. The sweep
+    # governs, not the octants of the end points.
+    arc = Arc((10.0, 0.0), (10.0, -1e-8), (0.0, 0.0), 1e-9)
+    assert bounding_box(arc, ctx) == Box(10.0, -1e-8, 10.0, 0.0)
+
+
+@pytest.mark.req("REQ-G2D-214")
+def test_nearly_full_arc_whose_p1_lies_just_past_p0_has_all_axis_points(ctx: Context) -> None:
+    arc = Arc((10.0, 0.0), (10.0, 1e-8), (0.0, 0.0), -(math.tau - 1e-9))  # CW, nearly closed
+    assert bounding_box(arc, ctx) == Box(-10.0, -10.0, 10.0, 10.0)
+
+
+@pytest.mark.req("REQ-G2D-214")
+def test_cw_arc_ending_on_an_axis(ctx: Context) -> None:
+    # CW from (2, 2) (angle 0 about (1, 2)) to (1, 1) (angle -pi/2): no other axis point.
+    assert bounding_box(Arc((2.0, 2.0), (1.0, 1.0), (1.0, 2.0), -math.pi / 2), ctx) == Box(
+        1.0, 1.0, 2.0, 2.0
+    )

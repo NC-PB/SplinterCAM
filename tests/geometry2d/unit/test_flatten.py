@@ -53,6 +53,7 @@ def test_steps_are_spread_evenly(ctx: Context) -> None:
     angles = np.unwrap(np.arctan2(points[:, 1], points[:, 0]))
     steps = np.diff(angles)
     n = len(steps)
+    assert n == math.ceil(1.5 * math.pi / (4 * math.asin(math.sqrt(T / (2 * R)))))  # 167
     assert np.allclose(steps, -1.5 * math.pi / n, rtol=0.0, atol=1e-12)
 
 
@@ -117,3 +118,18 @@ def test_tolerance_must_be_positive_and_finite(ctx: Context, t: float) -> None:
 def test_flattening_is_bit_identical_when_repeated(ctx: Context, side: AirSide) -> None:
     first = flatten(CIRCLE, T, side, ctx)
     assert flatten(CIRCLE, T, side, ctx).tobytes() == first.tobytes()
+
+
+@pytest.mark.req("REQ-G2D-230")
+def test_the_step_limit_reaches_the_kernel(ctx: Context, monkeypatch: pytest.MonkeyPatch) -> None:
+    # With t far above the diameter the cap alone sets the count: 4 steps at pi/2, 2 at pi.
+    circle = Arc((1.0, 0.0), (1.0, 0.0), (0.0, 0.0), math.tau)
+    assert len(flatten(circle, 5.0, None, ctx)) == 5
+    monkeypatch.setattr("splintercam.geometry2d._flatten._MAX_STEP_RAD", math.pi)
+    assert len(flatten(circle, 5.0, None, ctx)) == 3
+
+
+@pytest.mark.req("REQ-G2D-106")
+def test_a_step_count_beyond_the_int_range_is_refused(ctx: Context) -> None:
+    with pytest.raises(ValueError, match="steps"):
+        flatten(CIRCLE, 5e-324, None, ctx)
