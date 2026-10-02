@@ -14,3 +14,4 @@ One file per decision, numbered, never edited after acceptance (a new ADR supers
 | [0006](0006-clean-room-and-provenance.md) | Clean-room and provenance policy | Accepted 2026-09-27 |
 | [0007](0007-headless-first.md) | Headless first: CLI, text formats and renders before the GUI | Accepted 2026-09-27 |
 | [0008](0008-deterministic-output.md) | Deterministic output | Accepted 2026-09-27 |
+| [0009](0009-vendored-shewchuk-predicates.md) | Vendor Shewchuk's predicates.c for the exact predicates | Proposed 2026-10-02 |
