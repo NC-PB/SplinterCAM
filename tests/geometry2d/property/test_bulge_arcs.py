@@ -15,7 +15,7 @@ coordinate = st.floats(-1000.0, 1000.0)
 
 # The ctx fixture holds a progress log and a debug sink that every example shares;
 # arc_from_bulge uses neither, so sharing it is safe here.
-@pytest.mark.req("REQ-G2D-044")
+@pytest.mark.req("REQ-G2D-044", "REQ-G2D-039")
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
 @given(
     x0=coordinate,
@@ -31,3 +31,5 @@ def test_arcs_from_bulges_are_never_inconsistent(  # noqa: PLR0913 (Hypothesis d
     p1 = (x0 + chord * math.cos(direction), y0 + chord * math.sin(direction))
     result = arc_from_bulge((x0, y0), p1, sense * size, ctx)
     assert result.ok, result.diagnostics
+    assert result.value is not None
+    assert (result.value.p0, result.value.p1) == ((x0, y0), p1)  # the end points as given

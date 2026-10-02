@@ -62,6 +62,8 @@ Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
 
 ## Backlog
 
+- Step 3 simplifier, nice-to-have (about 4 lines): one-line unwrap in `arc_from_bulge`; the loop ends of `curve_rows` computed once; `NDArray[Any]` parameters instead of `starts.view(np.int64)`. Step 3 test audit, minor: the REQ-G2D-197 cases rely on NumPy's default int64 and check no message; small chords with small bulges give lines, which prove nothing about the centre.
+
 - Step 2 test audit, optional: REQ-G2D-042 with P1 moved inward; a negative case for REQ-G2D-049 (P1 = P0 with a sweep of 2π − 0.1).
 
 - Step 2 spec review, spec gaps for Peter: (1) the r ≤ eps_len rule comes before the radial check, so an arc with r ≈ 0 and P1 far away becomes a long line; requiring |P1 − C| ≤ r + eps_len first would catch it (research 01's "within 2r of the segment" assumes P1 on the circle); (2) REQ-G2D-043 should state the evaluated form difference·r ≤ eps_len; (3) the arctangent has no requirement of its own (tested under REQ-G2D-018); (4) REQ-G2D-027 says nothing of NaN or shapes, and for very short non-zero vectors the bound underflows, so they are not parallel, unlike the zero vector; (5) the modulo-2π reading accepts a tiny positive sweep whose P1 lies just clockwise of P0.

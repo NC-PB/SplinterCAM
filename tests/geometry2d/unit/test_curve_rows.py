@@ -69,9 +69,9 @@ def test_arc_row_with_a_bad_centre_or_sweep_is_curve_invalid(
 @pytest.mark.req("REQ-G2D-192")
 def test_arc_row_breaking_the_arc_rule_is_arc_inconsistent(ctx: Context) -> None:
     # Peter, 2026-10-02: ARC_INCONSISTENT, where research 01 test 20 says CURVE_INVALID.
-    rows, _, _ = _valid()
+    rows, ids, starts = _valid()
     rows[2, 6] = -math.pi  # a CW half from (10, 0) to (0, 0) bulges the other way: still fits
-    assert np.array_equal(rows[2, :6], HALF[:6])
+    assert curve_rows(rows, ids, starts, ctx).ok
     rows[2, 6] = math.pi / 2  # a quarter cannot reach (0, 0) from (10, 0)
     _rejected(ctx, rows, "ARC_INCONSISTENT")
 
@@ -137,7 +137,8 @@ def test_arrays_are_contiguous_read_only_copies(ctx: Context) -> None:
     wide[:, ::2] = rows  # a strided view of the same values
     result = curve_rows(wide[:, ::2], ids, starts, ctx)
     assert result.value is not None
-    for array, given in ((result.value.rows, wide), (result.value.ids, ids)):
+    pairs = ((result.value.rows, wide), (result.value.ids, ids), (result.value.row_starts, starts))
+    for array, given in pairs:
         assert array.flags.c_contiguous
         assert not array.flags.writeable
         assert not np.shares_memory(array, given)
