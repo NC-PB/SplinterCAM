@@ -10,7 +10,7 @@ Requirement: $ARGUMENTS
 1. Find the requirement in `src/splintercam/**/SPEC.md`. If it is missing, ambiguous or not `Reviewed`, stop: draft or clarify it and ask a person to approve it.
 2. Read that SPEC, the module's `AGENTS.md`, and only the research section the requirement cites. Check `docs/plans/active/` for a plan that covers it.
 3. For interfaces of other modules, read `docs/generated/api/<module>.md`, not their source.
-4. Write the test first. Name or tag it with the requirement ID. Include the messy inputs the research warns about (docs/research/18 for the module's area).
+4. Write the test first. Name or tag it with the requirement ID. Include the messy inputs the research section warns about.
 5. Run `tools/test-one <module>`. Confirm the new test fails, and fails for the expected reason.
 6. Implement the smallest change that makes it pass. Run `tools/test-one <module>` after each step. Follow the patterns of the existing code and the glossary names.
 7. Run `tools/check`. For geometry or toolpath changes, run `tools/render` on the affected zoo cases and look at the images.

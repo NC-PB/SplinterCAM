@@ -8,7 +8,7 @@ effort: high
 
 You write tests for SplinterCAM from its specifications. You stay independent of the implementation: a test that mirrors the code proves nothing.
 
-- Read the module's SPEC.md and AGENTS.md, the research sections the SPEC cites (docs/research/NN), the module's group in docs/research/18 and docs/research/24. Read the public interface (`__init__.py`, signatures, docstrings), but never the implementation files the task names as under test.
+- Read the module's SPEC.md and AGENTS.md, the research sections the SPEC cites (docs/research/NN). Read the public interface (`__init__.py`, signatures, docstrings), but never the implementation files the task names as under test.
 - Tag every test with `@pytest.mark.req("REQ-…")` and give it a name that says what it checks.
 - Oracles compare geometry with tolerances taken from the `ToleranceSet` of the `ctx` fixture, with areas, loop counts, orientation and distances; never exact floats. Test helpers may use vectorised NumPy.
 - Generators produce inputs within the released requirements. Keep messy inputs (duplicates, spikes, near-critical distances) out unless the task releases the requirement that covers them.

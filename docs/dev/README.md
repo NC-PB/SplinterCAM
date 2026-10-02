@@ -1,6 +1,6 @@
 # Developer guide
 
-> From Project Spike's design concept for the code repository, copied on 2026-10-02 (D-156; [docs/spike/README.md](../spike/README.md)). The scaffold built from it is this repository.
+> Came from Project Spike's design concept on 2026-10-02 (D-156; [docs/spike/README.md](../spike/README.md)). It is mastered here now (D-158): change these documents in this repository.
 
 How SplinterCAM is built, and why. Agents start from [`AGENTS.md`](../../AGENTS.md) and read these documents only when a task needs them.
 
