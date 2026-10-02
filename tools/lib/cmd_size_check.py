@@ -85,9 +85,10 @@ def nloc(path: Path, source: str) -> int:
             lines.update(range(token.start[0], token.end[0] + 1))
     for node in ast.walk(ast.parse(source, filename=str(path))):
         # A string as a whole statement: a docstring, or the documentation of an attribute.
-        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
-            if isinstance(node.value.value, str):
-                lines.difference_update(range(node.lineno, (node.end_lineno or node.lineno) + 1))
+        if not isinstance(node, ast.Expr):
+            continue
+        if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+            lines.difference_update(range(node.lineno, (node.end_lineno or node.lineno) + 1))
     return len(lines)
 
 

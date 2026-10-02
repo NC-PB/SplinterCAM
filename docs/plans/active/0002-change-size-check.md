@@ -26,7 +26,7 @@
 ## Decisions
 
 - 2026-10-02: the label `large-change` lifts the hard limit; the soft limit is still reported (Peter, plan 0001, step 5).
-- 2026-10-02 (draft): the count is lines added plus removed, as Google's guide and the SmartBear study count a change (docs/dev/12, section 2); a moved file counts once through git's rename detection. To confirm with Peter.
+- 2026-10-02 (draft): the count is lines added plus removed, as the sources of docs/dev/12 (its first section, Google's guide and the SmartBear study) count a change; a moved file counts once through git's rename detection. To confirm with Peter.
 
 ## Progress log
 
