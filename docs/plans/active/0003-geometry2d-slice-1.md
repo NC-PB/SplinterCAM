@@ -53,6 +53,8 @@ Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
 
 ## Backlog
 
+- Step 2 simplifier, nice-to-have (about 15 lines): inline the two `view` overloads in `bindings.cpp`; `unpack_row` local unless a later kernel reuses it; shorter comments in `arcs.hpp` and `arcs.cpp` that restate REQ-G2D-042, 043 and `angle.hpp`.
+
 ## Blockers
 
 - Step 5: `predicates.c` is not in the repository, and this environment cannot download it.
