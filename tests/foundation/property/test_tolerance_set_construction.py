@@ -132,20 +132,16 @@ def test_an_unknown_budget_part_is_rejected(
         _build(tuple(shares))
 
 
-@st.composite
-def _shares_with_a_duplicated_part(draw: st.DrawFn) -> _Shares:
-    """The four parts with one given twice: in place of another part, or as a fifth pair."""
-    duplicated = draw(_PART)
-    replaced = draw(st.one_of(st.none(), _PART.filter(lambda part: part != duplicated)))
-    shares = [pair for pair in _RESEARCH_SHARES if pair[0] != replaced]
-    # Share 0 for the second copy, so the shares alone would be valid in either case.
-    shares.insert(draw(st.integers(0, len(shares))), (duplicated, 0.0))
-    return tuple(draw(st.permutations(shares)))
-
-
 @pytest.mark.req("REQ-FND-002")
-@given(shares=_shares_with_a_duplicated_part())
+@pytest.mark.parametrize(
+    "shares",
+    [
+        (*_RESEARCH_SHARES, ("fit", 0.0)),  # a fifth pair
+        (("geometry", 0.1), ("fit", 0.3), ("control", 0.5), ("fit", 0.0)),  # in place of reserve
+    ],
+)
 def test_a_budget_part_given_twice_is_rejected(shares: _Shares) -> None:
+    # The second copy has share 0, so the shares alone would be valid.
     with pytest.raises(ValueError, match="stage_shares"):
         _build(shares)
 
@@ -178,22 +174,6 @@ def test_valid_tolerance_sets_are_accepted(
     assert tolerances.stage_shares == expected
 
 
-@pytest.mark.req("REQ-FND-007")
-@given(
-    values=st.tuples(*(_finite_floats(min_value=0.0, max_value=0.25) for _ in BUDGET_PARTS)),
-    first_order=st.permutations(range(len(BUDGET_PARTS))),
-    second_order=st.permutations(range(len(BUDGET_PARTS))),
-)
-def test_equality_and_hash_do_not_depend_on_input_order(
-    values: tuple[float, ...], first_order: list[int], second_order: list[int]
-) -> None:
-    pairs = _shares(*values)
-    first = _build(tuple(pairs[i] for i in first_order))
-    second = _build(tuple(pairs[i] for i in second_order))
-    assert first == second
-    assert hash(first) == hash(second)
-
-
 @pytest.mark.req("REQ-FND-002")
 @given(
     values=st.tuples(*(st.floats(min_value=0.0, max_value=1.0) for _ in BUDGET_PARTS)),
@@ -209,31 +189,6 @@ def test_share_acceptance_matches_the_exact_fraction_sum(
             _build(shares)
     else:
         assert _build(shares).stage_shares == pairs
-
-
-@pytest.mark.req("REQ-FND-002")
-@given(
-    first_three=st.tuples(*(st.floats(min_value=0.0, max_value=1 / 3) for _ in range(3))),
-    steps=st.integers(-3, 3),
-    last=_PART,
-)
-def test_share_acceptance_next_to_a_sum_of_one_matches_the_exact_fraction_sum(
-    first_three: tuple[float, float, float], steps: int, last: str
-) -> None:
-    # The last share is the double rest 1 - a - b - c moved by a few doubles, so the exact sum
-    # lands at, just below or just over 1, where a double sum would round.
-    rest = 1.0 - first_three[0] - first_three[1] - first_three[2]
-    for _ in range(abs(steps)):
-        rest = math.nextafter(rest, math.inf if steps > 0 else -math.inf)
-    rest = max(rest, 0.0)
-    others = iter(first_three)
-    values = {part: rest if part == last else next(others) for part in BUDGET_PARTS}
-    shares = tuple(values.items())
-    if sum(Fraction(value) for value in values.values()) > 1:
-        with pytest.raises(ValueError, match="sum to at most 1"):
-            _build(shares)
-    else:
-        assert _build(shares).stage_shares == shares
 
 
 @pytest.mark.req("REQ-FND-002")

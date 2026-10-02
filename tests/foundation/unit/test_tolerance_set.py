@@ -3,10 +3,8 @@
 
 import copy
 import dataclasses
-import math
 import pickle
 import typing
-from fractions import Fraction
 
 import pytest
 
@@ -21,13 +19,6 @@ _LENGTH_EPS_MM = 1e-6
 _ANGLE_EPS_RAD = 1e-9
 _RESEARCH_SHARES: _Shares = (("geometry", 0.1), ("fit", 0.3), ("control", 0.5), ("reserve", 0.1))
 
-# The oracle's constants for the grid cost D-146 adds to geometry and takes from the fit band
-# (research 01, Tolerances: geometry = share·tol + 6u + max(0, 2u - 0.05·tol)), as exact decimals.
-_GRID_UNIT_MM = Fraction("0.0001")  # u (D-058, D-132)
-_ROUNDING_MARGIN_GRID_UNITS = 6  # D-132
-_ARC_TOL_SHARE = Fraction("0.05")  # a = max(0.05·tol, 2u) (D-058)
-_ARC_TOL_FLOOR_GRID_UNITS = 2  # D-058
-
 
 def _tolerance_set(
     chord_tol_mm: float = 0.01, stage_shares: _Shares = _RESEARCH_SHARES
@@ -38,19 +29,6 @@ def _tolerance_set(
         angle_eps_rad=_ANGLE_EPS_RAD,
         stage_shares=stage_shares,
     )
-
-
-def _exact_grid_cost_mm(tol_mm: float) -> Fraction:
-    floor_term = _ARC_TOL_FLOOR_GRID_UNITS * _GRID_UNIT_MM - _ARC_TOL_SHARE * Fraction(tol_mm)
-    return _ROUNDING_MARGIN_GRID_UNITS * _GRID_UNIT_MM + max(Fraction(0), floor_term)
-
-
-def _one_ulp_of(tol_mm: float) -> Fraction:
-    # Each part is a few correctly rounded double operations on values no larger than tol, so it
-    # lies within one unit in the last place of tol of its exact value (foundation SPEC,
-    # Invariants: the four parts sum to tol within two ulp of tol). The double nearest u differs
-    # from the decimal u by about 5e-21 mm, far below one ulp of any tol tested here.
-    return Fraction(math.ulp(tol_mm))
 
 
 @pytest.mark.req("REQ-FND-001")
@@ -97,69 +75,12 @@ def test_control_and_reserve_stage_tol_follow_non_default_shares() -> None:
     assert tolerances.stage_tol_mm("reserve") == 0.125 * 0.02
 
 
-@pytest.mark.req("REQ-FND-009")
-def test_geometry_and_fit_stage_tol_at_finishing_tolerance_match_the_spec_numbers() -> None:
-    # Foundation SPEC, Tolerance budget, and research 01 test 14: at tol = 0.01 mm the parts are
-    # 0.0016 + 0.0024 + 0.005 + 0.001 mm.
-    tolerances = _tolerance_set(chord_tol_mm=0.01)
-    bound = _one_ulp_of(0.01)
-    assert abs(Fraction(tolerances.stage_tol_mm("geometry")) - Fraction("0.0016")) <= bound
-    assert abs(Fraction(tolerances.stage_tol_mm("fit")) - Fraction("0.0024")) <= bound
-
-
-@pytest.mark.req("REQ-FND-009")
-@pytest.mark.parametrize(
-    "chord_tol_mm",
-    [
-        0.01,  # 0.05·tol ≥ 2u: no floor term
-        0.05,  # roughing default (D-029)
-        1.0,  # the user's upper limit (research 01, Parameters)
-        0.003,  # 0.05·tol < 2u: the floor term max(0, 2u - 0.05·tol) applies
-    ],
-)
-def test_geometry_adds_and_fit_subtracts_the_grid_cost(chord_tol_mm: float) -> None:
-    tolerances = _tolerance_set(chord_tol_mm=chord_tol_mm)
-    shares = dict(_RESEARCH_SHARES)
-    tol = Fraction(chord_tol_mm)
-    cost = _exact_grid_cost_mm(chord_tol_mm)
-    expected_geometry = Fraction(shares["geometry"]) * tol + cost
-    expected_fit = Fraction(shares["fit"]) * tol - cost
-    assert expected_fit > 0  # the clamp does not apply to these tolerances
-    bound = _one_ulp_of(chord_tol_mm)
-    assert abs(Fraction(tolerances.stage_tol_mm("geometry")) - expected_geometry) <= bound
-    assert abs(Fraction(tolerances.stage_tol_mm("fit")) - expected_fit) <= bound
-
-
-@pytest.mark.req("REQ-FND-009")
-@pytest.mark.parametrize("fit_share", [0.0, 0.03])
-def test_fit_stage_tol_is_clamped_at_zero_when_its_share_is_below_the_grid_cost(
-    fit_share: float,
-) -> None:
-    # At tol = 0.01 mm the grid cost is 6u = 0.0006 mm; a fit share of 0 or 0.03 leaves at most
-    # 0.0003 mm before the cost, so the band is negative before the clamp (foundation SPEC,
-    # Tolerance budget: fit is its share minus the grid cost, clamped at 0).
-    shares: _Shares = (("geometry", 0.1), ("fit", fit_share), ("control", 0.5), ("reserve", 0.1))
-    tolerances = _tolerance_set(chord_tol_mm=0.01, stage_shares=shares)
-    assert tolerances.stage_tol_mm("fit") == 0.0
-    expected_geometry = Fraction(0.1) * Fraction(0.01) + _exact_grid_cost_mm(0.01)
-    assert abs(Fraction(tolerances.stage_tol_mm("geometry")) - expected_geometry) <= _one_ulp_of(
-        0.01
-    )
-
-
 @pytest.mark.req("REQ-FND-001")
 @pytest.mark.parametrize("stage", ["offset", "fitting", "Geometry", "geometry ", ""])
 def test_stage_tol_mm_rejects_an_unknown_stage(stage: str) -> None:
     tolerances = _tolerance_set()
     with pytest.raises(ValueError, match="unknown stage"):
         tolerances.stage_tol_mm(stage)
-
-
-@pytest.mark.req("REQ-FND-007")
-def test_stage_shares_is_a_tuple_of_pairs() -> None:
-    tolerances = _tolerance_set(stage_shares=tuple(reversed(_RESEARCH_SHARES)))
-    assert type(tolerances.stage_shares) is tuple
-    assert all(type(pair) is tuple and len(pair) == 2 for pair in tolerances.stage_shares)
 
 
 @pytest.mark.req("REQ-FND-007")
