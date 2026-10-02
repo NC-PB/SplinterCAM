@@ -141,13 +141,18 @@ None.
 
 ## Size estimate
 
-About 250 lines of kept code (Python and the defaults file) and 450 of tests.
+360 NLOC of Python (472 lines with the defaults file) and about 1100 lines of tests, after plan 0001, step 2.
 
 ## Open questions
 
 - Whether `Point2` and `Vector2` are needed at all, or arrays suffice everywhere.
 - Research 01 lets the user set tol up to 1 mm, an upper limit against unit mistakes; the defaults file records that range, but no requirement says what `for_operation` does above it.
-- `stage_tol_mm` adds the grid cost for any shares, not only the defaults of REQ-FND-008; with the default shares it gives the parts of REQ-FND-009 (plan 0001, step 2).
+- Choices made in plan 0001, step 2, where Project Spike's draft leaves the design open, for Peter to confirm:
+  - The shares stay the base shares of REQ-FND-008. `stage_tol_mm` adds the grid cost to geometry and takes it from the fit band for any shares, so with the defaults it gives the parts of REQ-FND-009. "Fit = the rest" is evaluated as its share minus the grid cost, as research 01 writes it; the remainder tol − geometry − control − reserve would give +8e-20 mm instead of 0 at tol_min.
+  - `for_operation(tol_mm)` takes no `Context`, which holds the set it builds. t_flat and t_topo are properties.
+  - The defaults file is TOML, read with the standard library's `tomllib`. So foundation reads one file of its own, a change to "no I/O" in Purpose and Scope.
+  - A part given twice counts as REQ-FND-002's missing or unknown part.
+- The error paths of the defaults file's reader (a missing key, a default outside its range) have no test: they would need a broken file.
 
 ## Change log
 
