@@ -30,6 +30,10 @@
 
 <!-- Newest first. What was done, what tools/check reported, what is next. At most about 30 lines per session. -->
 
+### 2026-10-02, session 1, step 2 (tolerance budget)
+
+- Plan: take the changed REQ-FND-001 and 002 and the new 008 and 009 from `docs/spike/foundation-SPEC-draft.md` into the SPEC, marked `Reviewed`, with the draft's interface (`BUDGET_PARTS`, `stage_shares` as (part, share) pairs). Where the draft leaves the design open, choose and flag it for Peter: the shares stay the base shares of REQ-FND-008; `stage_tol_mm` gives each part as REQ-FND-009 computes it (geometry plus the grid cost, fit minus it, clamped at 0); `ToleranceSet.for_operation(tol_mm)` returns a `Result` and takes no `Context`, which holds the set; t_flat and t_topo are properties; the defaults live in `src/splintercam/foundation/tolerance_defaults.toml` (read with the standard library's `tomllib`), exposed as `TOLERANCE_DEFAULTS`. Tests first: research 01 tests 14 and 15, and property tests for the sum of the parts and the refusal below tol_min, written by the `test-designer` agent from the SPEC and research only; the existing tests are moved to the four parts. Then the code, `tools/check`, the reviews (`simplifier`, `test-auditor`, `spec-reviewer`) and the pull request, stacked on step 1's.
+
 ### 2026-10-02, session 1, step 1 (bootstrap)
 
 - Plan: run `tools/bootstrap` and `tools/check` on Linux (uv and git-lfs are installed here). Commit the stub `src/splintercam/_kernels.pyi` that the first build writes in place of `src/splintercam/_kernels/__init__.pyi`. Scan every relative link in the Markdown files; fix those in `docs/dev/`, `docs/glossary.md`, `docs/templates/`, `AGENTS.md` and `tools/README.md` (ADRs to `docs/adr/`, decisions and sources to `docs/spike/`, other Project Spike files as plain text "(Project Spike)", `test_repo` paths to this repository's files); list the broken links of the protected `docs/adr/`, `docs/research/` and `docs/spike/` here. Open the pull request, get `check.yml` green on Linux, macOS and Windows, and report `sanitize.yml`.
