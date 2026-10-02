@@ -70,6 +70,8 @@ Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
 
 ## Backlog
 
+- Step 4: twice the first local test run right after a kernel rebuild failed once and passed on every repeat (six full runs, three `tools/check` runs, 10 000-case property runs); the failure was not captured. Likely Hypothesis's default deadline of 200 ms in the local `dev` profile on the first, slower kernel call (CI's `ci` profile has none). Capture it next time before changing anything.
+
 - Step 3 spec review, spec gaps for Peter: (1) small bulges on long chords give huge radii (1000 mm chord, b = 1e-8: r = 2.5e10 mm), where the rounding of |P − C| exceeds eps_len and a valid bulge comes back `ARC_INCONSISTENT`; a radius or bulge limit is not in research 01; (2) an arc with P0 = P1 and a tiny sweep passes `make_arc` and `curve_rows` as a one-row loop; its removal is REQ-G2D-046, a later part.
 
 - Step 3 simplifier, nice-to-have (about 4 lines): one-line unwrap in `arc_from_bulge`; the loop ends of `curve_rows` computed once; `NDArray[Any]` parameters instead of `starts.view(np.int64)`. Step 3 test audit, minor: the REQ-G2D-197 cases rely on NumPy's default int64 and check no message; small chords with small bulges give lines, which prove nothing about the centre.
