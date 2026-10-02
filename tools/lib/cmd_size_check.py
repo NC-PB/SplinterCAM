@@ -3,14 +3,15 @@
 
 Soft limits are reported, hard limits fail:
 - file (Python or C++): over 400 lines reported, over 800 fails; generated files are excepted;
-- Python function: over 60 lines reported; ruff checks its hard limits and clang-tidy the C++
-  functions, both in tools/lint;
+- Python function: over 60 lines reported; its hard limits and those of C++ functions are ruff's
+  and clang-tidy's, in tools/lint, once docs/plans/active/0001-protected-changes.patch is applied;
 - module: the NLOC of src/splintercam/<module>/ against its `budget` in architecture/modules.yaml,
   reported over the budget, failing over the budget + 20 %; a module with code but no budget is
   reported.
 
 NLOC counts the lines that hold code: Python lines with a token other than a comment (docstrings
-count), C++ lines that are not blank and do not start with //.
+count), C++ lines that are not blank and do not start with //. A file that cannot be read as UTF-8
+or parsed fails.
 """
 
 import argparse
@@ -99,6 +100,21 @@ def _name(path: Path) -> str:
     return path.relative_to(ROOT).as_posix() if path.is_relative_to(ROOT) else path.as_posix()
 
 
+def source_findings(path: Path) -> tuple[list[Finding], int]:
+    """The findings of one source file and its NLOC; a generated file has neither."""
+    try:
+        source = path.read_text(encoding="utf-8-sig")  # -sig: a byte-order mark is not code
+        lines = source.splitlines()
+        if is_generated(lines):
+            return [], 0
+        findings = file_findings(path, lines)
+        if path.suffix == ".py":
+            findings += function_findings(path, source)
+        return findings, nloc(path, source)
+    except (SyntaxError, ValueError, tokenize.TokenError) as error:  # ValueError: bad UTF-8
+        return [Finding(True, f"{_name(path)}: cannot be read or parsed: {error}")], 0
+
+
 def size_findings() -> list[Finding]:
     listing = git_files("ls-files", "--cached", "--others", "--exclude-standard")
     sources = [path for path in listing if path.suffix in PYTHON_SUFFIXES | CPP_SUFFIXES]
@@ -107,14 +123,11 @@ def size_findings() -> list[Finding]:
     module_nloc: dict[str, int] = {}
     findings: list[Finding] = []
     for path in sources:
-        source = path.read_text(encoding="utf-8")
-        lines = source.splitlines()
-        findings += file_findings(path, lines)
-        if path.suffix == ".py":
-            findings += function_findings(path, source)
+        file_result, size = source_findings(path)
+        findings += file_result
         module = next((name for name in budgets if path.is_relative_to(package / name)), None)
-        if module is not None and not is_generated(lines):
-            module_nloc[module] = module_nloc.get(module, 0) + nloc(path, source)
+        if module is not None:
+            module_nloc[module] = module_nloc.get(module, 0) + size
     for module in sorted(module_nloc):
         findings += module_findings(module, budgets[module], module_nloc[module])
     return findings

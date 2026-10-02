@@ -9,7 +9,13 @@ from pathlib import Path
 import pytest
 
 import modules
-from cmd_size_check import file_findings, function_findings, module_findings, nloc
+from cmd_size_check import (
+    file_findings,
+    function_findings,
+    module_findings,
+    nloc,
+    source_findings,
+)
 
 
 def _lines(count: int) -> list[str]:
@@ -47,6 +53,20 @@ def test_nloc_counts_code_and_docstrings_not_comments_or_blank_lines() -> None:
     source = '"""Doc\nstring."""\n\n# comment\nx = (\n    1\n)  # trailing\n'
     assert nloc(Path("a.py"), source) == 5
     assert nloc(Path("a.cpp"), "// comment\n\nint f() {\n  return 1;\n}\n") == 3
+
+
+def test_a_file_that_cannot_be_parsed_fails_instead_of_stopping_the_check(tmp_path: Path) -> None:
+    broken = tmp_path / "broken.py"
+    broken.write_text("def f(:\n", encoding="utf-8")
+    (finding,) = source_findings(broken)[0]
+    assert finding.fails
+    assert "cannot be read or parsed" in finding.text
+
+
+def test_a_file_with_a_byte_order_mark_is_read(tmp_path: Path) -> None:
+    marked = tmp_path / "marked.py"
+    marked.write_text("\ufeffx = 1\n", encoding="utf-8")
+    assert source_findings(marked) == ([], 1)
 
 
 def test_a_module_over_its_budget_is_reported_and_over_120_percent_fails() -> None:

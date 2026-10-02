@@ -28,6 +28,18 @@ index 9e5b8b7..b5f7e69 100644
 +  readability-function-size.LineThreshold: 80
 +  readability-function-size.ParameterThreshold: 6
 +  readability-function-cognitive-complexity.Threshold: 15
+diff --git a/.claude/settings.json b/.claude/settings.json
+index 94f5dfc..b4a6d41 100755
+--- a/.claude/settings.json
++++ b/.claude/settings.json
+@@ -4,6 +4,7 @@
+       "Bash(tools/check *)",
+       "Bash(tools/test *)",
+       "Bash(tools/test-one *)",
++      "Bash(tools/size-check *)",
+       "Bash(tools/build *)",
+       "Bash(tools/format *)",
+       "Bash(tools/lint *)",
 diff --git a/architecture/modules.yaml b/architecture/modules.yaml
 index 8b0e369..f1b5cc9 100755
 --- a/architecture/modules.yaml
