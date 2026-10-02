@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: Apache-2.0
+# The tolerance defaults of splintercam.foundation (REQ-FND-008): every value is a declared parameter
+# with its default, unit, range (inclusive; a fixed value has its default at both ends) and source
+# (D-049). foundation reads this file once at import; no module holds these numbers as literals.
+# Lengths in mm, angles in rad (D-028). The budget formulas that use them: foundation SPEC,
+# REQ-FND-009, and docs/research/01-foundations.md, section Tolerances.
+
+# The operation tolerance tol, user-adjustable from tol_min (REQ-FND-009) to 1 mm; the upper limit
+# is ours, a guard against unit mistakes (research 01, Tolerances).
+chord_tol_roughing_mm = { default = 0.05, unit = "mm", range = [0.0022858, 1.0], source = "D-029" }
+chord_tol_finishing_mm = { default = 0.01, unit = "mm", range = [0.0022858, 1.0], source = "D-029" }
+
+# Epsilons of the float stages.
+length_eps_mm = { default = 1e-6, unit = "mm", range = [1e-6, 1e-6], source = "Q-034 answer (research 01, Tolerances)" }
+angle_eps_rad = { default = 1e-9, unit = "rad", range = [1e-9, 1e-9], source = "Q-034 answer, logged as D-056" }
+
+# Base shares of tol per budget part.
+share_geometry = { default = 0.1, unit = "share of tol", range = [0.1, 0.1], source = "D-056" }
+share_fit = { default = 0.3, unit = "share of tol", range = [0.3, 0.3], source = "D-056 (Q-060)" }
+share_control = { default = 0.5, unit = "share of tol", range = [0.5, 0.5], source = "D-056" }
+share_reserve = { default = 0.1, unit = "share of tol", range = [0.1, 0.1], source = "D-056, D-149" }
+
+# What the offset kernel's grid costs the geometry part (D-146).
+grid_unit_mm = { default = 0.0001, unit = "mm", range = [0.0001, 0.0001], source = "D-058, D-132" }
+rounding_margin_grid_units = { default = 6, unit = "grid units", range = [6, 6], source = "D-132" }
+arc_tol_share = { default = 0.05, unit = "share of tol", range = [0.05, 0.05], source = "D-058" }
+arc_tol_floor_grid_units = { default = 2, unit = "grid units", range = [2, 2], source = "D-132 (Q-036 answer)" }
+
+# What the rest of the geometry part pays for besides flattening (research 01, Tolerances).
+import_arc_deviation_mm = { default = 0.0001, unit = "mm", range = [0.0001, 0.0001], source = "D-093 (Q-075)" }
+snap_allowance_length_eps = { default = 3, unit = "length epsilons", range = [3, 3], source = "ours (research 01, Tolerances)" }
+
+# t_topo, and the step tol_min is rounded up to when a refusal names it.
+topology_tol_grid_units = { default = 2, unit = "grid units", range = [2, 2], source = "ours (research 01, resolution chain)" }
+tol_min_step_mm = { default = 1e-7, unit = "mm", range = [1e-7, 1e-7], source = "research 01, Tolerances (draft REQ-FND-009)" }
