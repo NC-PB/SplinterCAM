@@ -6,6 +6,7 @@ import math
 from dataclasses import dataclass
 
 import numpy as np
+from numpy.typing import NDArray
 
 from splintercam import _kernels
 from splintercam.foundation import Context, Diagnostic, Result, Severity
@@ -37,14 +38,14 @@ class Arc:
     @property
     def radius_mm(self) -> float:
         """r = |P0 - C| (REQ-G2D-038)."""
-        return _distance(self.p0, self.centre)
+        return distance(self.p0, self.centre)
 
 
 type Curve = Line | Arc
 """One curve of a chain (REQ-G2D-035)."""
 
 
-def _distance(a: Point, b: Point) -> float:
+def distance(a: Point, b: Point) -> float:
     # sqrt of a sum of squares: correctly rounded operations only, the same on every platform.
     dx, dy = a[0] - b[0], a[1] - b[1]
     return math.sqrt(dx * dx + dy * dy)
@@ -92,9 +93,9 @@ def make_arc(
     if radius <= eps:
         return Result(() if arc.p0 == arc.p1 else (Line(arc.p0, arc.p1),))
     size = abs(arc.sweep_rad)
-    if _distance(arc.p0, arc.p1) <= eps and size > math.pi and (math.tau - size) * radius <= eps:
+    if distance(arc.p0, arc.p1) <= eps and size > math.pi and (math.tau - size) * radius <= eps:
         return Result((Arc(arc.p0, arc.p0, arc.centre, math.copysign(math.tau, arc.sweep_rad)),))
-    message = _arc_inconsistency(np.array([[*arc.p0, *arc.p1, *arc.centre, arc.sweep_rad]]), eps)
+    message = arc_inconsistency(np.array([[*arc.p0, *arc.p1, *arc.centre, arc.sweep_rad]]), eps)
     if message is not None:
         return Result(None, (Diagnostic("ARC_INCONSISTENT", Severity.ERROR, f"{message}: {arc}"),))
     return Result((arc,))
@@ -103,7 +104,7 @@ def make_arc(
 _ARC_CHECK_MESSAGES = {1: "P1 is off the arc's circle", 2: "the sweep does not fit the end points"}
 
 
-def _arc_inconsistency(rows: np.ndarray, length_eps_mm: float) -> str | None:
+def arc_inconsistency(rows: NDArray[np.float64], length_eps_mm: float) -> str | None:
     """The first arc rule `rows` (C-contiguous (m, 7) float64 curve rows) break, or None."""
     checks = np.empty(rows.shape[0], dtype=np.int8)
     _kernels.geometry2d.check_arcs(rows, length_eps_mm, checks)

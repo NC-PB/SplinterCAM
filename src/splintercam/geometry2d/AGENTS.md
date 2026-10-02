@@ -24,3 +24,4 @@ Layer 1. Implements docs/research/01 (slice 1; the rest is under "Later parts" i
 
 - A flattened arc lies inside the true arc; on convex walls that is a gouge (research 01, trap 3).
 - A line row carries a NaN centre: never read cx and cy when the sweep is 0 (research 01, trap 13).
+- `ruff format` on a folder also rewrites the Python blocks of `SPEC.md`; format `.py` files by name, or use `tools/format`.
