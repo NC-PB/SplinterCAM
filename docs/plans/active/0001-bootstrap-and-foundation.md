@@ -48,6 +48,7 @@
 | `docs/spike/2026-10-01-delta-plan-0001.md` | `../reviews/2026-10-01-prototype-insights.md`, `foundation-SPEC.md` (here `foundation-SPEC-draft.md`), `geometry2d-SPEC.md` |
 
 - `tools/check`: PASS (8 of 13 steps; skipped: clang-format and clang-tidy, no C++ files; arch-check, trace-check and licence-check, not written yet).
+- CI on [pull request 1](https://github.com/NC-PB/SplinterCAM/pull/1), commit 9f0d2ac: `check.yml` green on ubuntu-24.04 (48 s), macos-15 (60 s) and windows-2025 (174 s); `sanitize.yml` green (54 s), so no kernels are needed for it.
 - Reviews: a link verifier, a build reviewer and `test-auditor` (PASS, no test touched); their two must-fix findings are in.
 - Size: `src/` +6 −7 (the stub), `tools/` +11 −5, docs +63 −63 (links), tests 0.
 - Questions for Peter: (1) D-156 is cited by `AGENTS.md`, this plan and `docs/dev/README.md` but has no row in `docs/spike/decisions-snapshot.md`; neither has D-135, cited by the sources snapshot. (2) `docs/dev/README.md` said "Change the concept here [Project Spike], not there"; step 1 edited this copy, as the plan asks. Which copy of `docs/dev/` is the master now?
@@ -58,5 +59,6 @@
 - "plan 0001" in `docs/dev/12` (its first section and section 8) and `docs/dev/03` means the stack test app's plan; read as this repository's plan, section 8 would exempt it from the lean-code limits. Name it as `docs/dev/07` and `10` now do (step 1 review).
 - `.claude/agents/test-designer.md` and `.claude/skills/implement-requirement/SKILL.md` point to `docs/research/18` and `24`, which are in Project Spike only (agent files, outside step 1's list).
 - A test that every committed kernel stub starts with the SPDX line, unless `tools/licence-check` covers `.pyi` files (step 1 review).
+- Before the first kernel: `from splintercam._kernels import geometry2d` gives pyright's `reportMissingModuleSource` warning, which `tools/lint` treats as an error; `import splintercam._kernels as kernels` with attribute access does not. Choose the import pattern, or a pyright setting in `pyproject.toml` for Peter (step 1 review).
 
 ## Blockers
