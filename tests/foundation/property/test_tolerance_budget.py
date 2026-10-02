@@ -144,6 +144,11 @@ def test_the_parts_of_any_accepted_set_never_sum_to_more_than_tol(
     parts = [budget.stage_tol_mm(part) for part in BUDGET_PARTS]
     assert all(part >= 0.0 for part in parts), parts
     assert budget.flatten_tol_mm > 0.0
+    # The fit band before the clamp, exactly: the floor, a double, may lie an ulp or two below its
+    # exact value, as tol_min may (research 01, Tolerances), so one ulp of tol is allowed.
+    tol = Fraction(tol_mm)
+    grid_cost = 6 * _GRID_UNIT + max(Fraction(0), 2 * _GRID_UNIT - Fraction("0.05") * tol)
+    assert Fraction(values[1]) * tol - grid_cost >= -Fraction(math.ulp(tol_mm))
     # Two ulps of tol for the rounding of the parts, as the foundation SPEC's invariant allows.
     assert sum(Fraction(part) for part in parts) <= Fraction(tol_mm) + 2 * Fraction(
         math.ulp(tol_mm)

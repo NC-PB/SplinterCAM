@@ -140,7 +140,7 @@ def test_a_set_whose_fit_band_would_be_negative_is_rejected(
     chord_tol_mm: float, values: tuple[float, float, float, float]
 ) -> None:
     shares = tuple(zip(BUDGET_PARTS, values, strict=True))
-    with pytest.raises(ValueError, match="chord_tol_mm"):
+    with pytest.raises(ValueError, match="chord_tol_mm must be >="):
         _tolerance_set(chord_tol_mm=chord_tol_mm, stage_shares=shares)
 
 

@@ -268,7 +268,7 @@ def test_a_chord_tolerance_below_the_floor_of_its_own_shares_is_rejected(fit_sha
     floor = _exact_floor_mm(fit_share)
     # One per cent either side: the floor itself is a double computed once, so its exact bits
     # are checked through for_operation at the default shares (research 01, test 15).
-    with pytest.raises(ValueError, match="chord_tol_mm"):
+    with pytest.raises(ValueError, match="chord_tol_mm must be >="):
         _build(shares, chord_tol_mm=float(floor * Fraction(99, 100)))
     assert _build(shares, chord_tol_mm=float(floor * Fraction(101, 100))).chord_tol_mm > 0
 
@@ -285,7 +285,7 @@ def test_the_floor_of_any_fit_share_separates_rejected_from_accepted(
     shares = _shares(0.2, fit_share, 0.25, 0.1)  # as above: only the floor is tested
     floor = _exact_floor_mm(fit_share)
     if below:
-        with pytest.raises(ValueError, match="chord_tol_mm"):
+        with pytest.raises(ValueError, match="chord_tol_mm must be >="):
             _build(shares, chord_tol_mm=float(floor / (1 + distance)))
     else:
         chord_tol = float(floor * (1 + distance))
@@ -297,7 +297,7 @@ def test_the_constructor_refuses_the_double_just_below_the_floor_of_the_default_
     # for_operation refuses below tol_min first, so the constructor's own edge is checked here:
     # the floor at fit share 0.3 is the double nearest 2/875 mm (research 01, test 15).
     floor = float(Fraction(2, 875))
-    with pytest.raises(ValueError, match="chord_tol_mm"):
+    with pytest.raises(ValueError, match="chord_tol_mm must be >="):
         _build(_RESEARCH_SHARES, chord_tol_mm=math.nextafter(floor, 0.0))
     assert _build(_RESEARCH_SHARES, chord_tol_mm=floor).chord_tol_mm == floor
 
@@ -306,5 +306,5 @@ def test_the_constructor_refuses_the_double_just_below_the_floor_of_the_default_
 @given(chord_tol=_VALID_TOLERANCE)
 def test_a_fit_share_of_0_is_rejected_at_any_tolerance(chord_tol: float) -> None:
     # 6u / 0: no tol leaves the fit band at 0 or above (Peter, 2026-10-02).
-    with pytest.raises(ValueError, match="chord_tol_mm"):
+    with pytest.raises(ValueError, match="chord_tol_mm must be >="):
         _build(_shares(0.2, 0.0, 0.5, 0.1), chord_tol_mm=chord_tol)
