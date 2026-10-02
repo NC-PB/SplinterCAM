@@ -10,7 +10,6 @@
 #include <array>
 #include <cmath>
 #include <numbers>
-#include <ranges>
 
 namespace splintercam::geometry2d {
 namespace {
@@ -49,8 +48,11 @@ CurveRow unpack_row(std::span<const double> row) {
 }
 
 void check_arcs(std::span<const double> rows, double length_eps_mm, std::span<std::int8_t> out) {
-    for (auto [values, check] : std::views::zip(rows | std::views::chunk(row_width), out)) {
-        const CurveRow row = unpack_row(std::span(values));
+    // An index walk, not std::views::chunk, which Apple's libc++ lacks.
+    auto row_start = rows.begin();
+    for (std::int8_t& check : out) {
+        const CurveRow row = unpack_row(std::span(row_start, row_width));
+        row_start += row_width;
         const bool is_line = row.sweep == 0.0;
         check = static_cast<std::int8_t>(is_line ? ArcCheck::consistent
                                                  : check_arc(row, length_eps_mm));
