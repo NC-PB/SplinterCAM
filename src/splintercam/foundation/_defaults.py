@@ -45,7 +45,7 @@ def _parameter(entry: dict[str, Any]) -> DeclaredParameter:
 
 
 def read_defaults(path: Path) -> Mapping[str, DeclaredParameter]:
-    """The entries of the defaults file at `path`; a broken one raises `ValueError` naming its key."""
+    """The entries of the defaults file at `path`; a broken one raises ValueError naming its key."""
     with path.open("rb") as file:
         table = tomllib.load(file)
     parameters: dict[str, DeclaredParameter] = {}
