@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
-# tools/size-check: file, function and module size limits (docs/dev/12, section 3; tools/README.md).
-# Logic: tools/lib/cmd_size_check.py.
-tool=size-check
-source "$(dirname "$0")/lib/env.sh"
-exec uv run --no-sync python tools/lib/cmd_size_check.py "$@"
+# tools/size-check: file, function, module and change size limits (docs/dev/12, section 3;
+# tools/README.md). Logic: tools/lib/cmd_size_check.py.
+# It needs only the standard library, so it runs without tools/bootstrap, as the change-size
+# workflow does (plan 0002).
+cd "$(dirname "$0")/.." || exit 2
+if ! command -v uv >/dev/null 2>&1; then
+  echo "size-check: ERROR (uv not found; see README.md, Prerequisites)"
+  exit 2
+fi
+exec uv run --no-project --python 3.13 python tools/lib/cmd_size_check.py "$@"

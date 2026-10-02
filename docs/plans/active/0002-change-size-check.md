@@ -8,7 +8,7 @@
 - Research: none
 - Branch: one branch and one pull request
 - Owner: Peter Burgener; agents: Claude Code cloud sessions
-- Status: draft (plan 0001, step 5); starts when Peter releases it
+- Status: step 1 done (plan 0003, session 1); the workflow of step 2 is applied
 
 ## Context
 
@@ -20,7 +20,7 @@
 <!-- Each step has a size estimate (kept code and tests). At 50 % over it, stop and ask, as for a timebox
      (docs/dev/12, section 3). -->
 
-- [ ] 1. **`tools/size-check --change <base>`**: count the lines added by `git diff --numstat <merge base>...HEAD` in non-test code (removed lines do not count), report over 200 and fail over 400; `--large-change` turns the failure into a report that names the label. Non-test code: every file except tests (`tests/`, `testdata/`), Markdown and generated files (docs/dev/04 header); a pull request that changes only those passes without a count. Binary files (numstat `-`) are named, not counted. Without `--change`, `tools/check` keeps its present behaviour, so local runs do not depend on a base branch. Tests in `tests/tools/test_size_check.py` with a temporary git repository: under, at and over both limits, the label, a change that removes many lines, a Markdown-only and a generated-only change, a test-only change, a renamed file. Update `tools/README.md`. Size: about 60 lines of kept code + 80 of tests.
+- [x] 1. **`tools/size-check --change <base>`**: count the lines added by `git diff --numstat <merge base>...HEAD` in non-test code (removed lines do not count), report over 200 and fail over 400; `--large-change` turns the failure into a report that names the label. Non-test code: every file except tests (`tests/`, `testdata/`), Markdown and generated files (docs/dev/04 header); a pull request that changes only those passes without a count. Binary files (numstat `-`) are named, not counted. Without `--change`, `tools/check` keeps its present behaviour, so local runs do not depend on a base branch. Tests in `tests/tools/test_size_check.py` with a temporary git repository: under, at and over both limits, the label, a change that removes many lines, a Markdown-only and a generated-only change, a test-only change, a renamed file. Update `tools/README.md`. Size: about 60 lines of kept code + 80 of tests.
 - [ ] 2. **Workflow** (Peter): apply `docs/plans/active/0002-workflow.patch`, create the label `large-change` in GitHub, and make the `change-size` check required on `main` if wanted. The agent checks the run on its next pull request and records the result here. Size: the patch, 35 lines.
 
 ## Decisions
@@ -31,6 +31,12 @@
 ## Progress log
 
 <!-- Newest first. What was done, what tools/check reported, what is next. At most about 30 lines per session. -->
+
+### 2026-10-02, step 1 (during plan 0003)
+
+- Why now: Peter applied the workflow first, so `change-size` failed on every pull request (pull request 7): the job runs no `tools/bootstrap`, so the wrapper stopped at its `.venv` check, and `--change` did not exist.
+- Done: `--change BASE` and `--large-change` in `tools/lib/cmd_size_check.py` (numstat with rename detection against the merge base; tests, test data, Markdown and generated files and removed lines not counted; binary files named); the `tools/size-check` wrapper runs with `uv run --no-project`, standard library only, so it needs no `.venv`. 7 tests in `tests/tools/test_change_size.py`, written first, with a temporary git repository: the classes of files, removed lines, a rename, base commits after the branch point, both limits and the label, binary files. `tools/README.md` updated.
+- `tools/check`: see the pull request. Step 2 (the label and a required check) stays with Peter.
 
 ### 2026-10-02, plan 0001, step 5
 
