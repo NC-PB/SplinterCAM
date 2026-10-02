@@ -20,7 +20,7 @@
      (docs/dev/12, section 3). -->
 
 - [x] 1. **SPEC cut and ADR 0009.** Cut `src/splintercam/geometry2d/SPEC.md` to slice 1 (requirements, interface, invariants, failure modes, links to research 01; the rest one line each under Later parts). Draft ADR 0009 for vendoring `predicates.c`, with its `modules.yaml` `kernel_libraries` entry (applied) and its `NOTICE` entry (`0003-notice.patch`; `NOTICE` is protected). Size: docs only.
-- [ ] 2. **Grid unit, lines and arcs.** First commit: `grid_unit_mm` on `ToleranceSet` (REQ-FND-001). Then the `geometry2d` package with `Line`, `Arc`, `make_line`, `make_arc` and `are_parallel`, its first kernel (`arcs.cpp`: the radial and angle checks; `angle.cpp`: the arctangent from basic operations), the module `AGENTS.md` and glossary terms. REQ-G2D-003, 018 (the arctangent), 025, 027, 035, 037 to 043, 045, 047 to 049. Size: about 250 + 350.
+- [x] 2. **Grid unit, lines and arcs.** First commit: `grid_unit_mm` on `ToleranceSet` (REQ-FND-001). Then the `geometry2d` package with `Line`, `Arc`, `make_line`, `make_arc` and `are_parallel`, its first kernel (`arcs.cpp`: the radial and angle checks; `angle.cpp`: the arctangent from basic operations), the module `AGENTS.md` and glossary terms. REQ-G2D-003, 018 (the arctangent), 025, 027, 035, 037 to 043, 045, 047 to 049. Size: about 250 + 350.
 - [ ] 3. **Curve rows and bulges.** `CurveRows`, `curve_rows`, `arc_from_bulge`, `bulges_from_arc`. REQ-G2D-044, 050 to 053, 188 to 197, 201, 203. Size: about 180 + 300.
 - [ ] 4. **Flattening and bounding boxes.** `flatten` (`flatten.cpp`), `bounding_box`, the step limit π/2 as a declared parameter in foundation's defaults file (a foundation SPEC change), the shared exact test of which axis directions lie in a sweep. REQ-G2D-102 to 113, 126, 213, 214, 230; the tests of REQ-G2D-231 and 232 start here and grow with each step. Size: about 220 + 300.
 - [ ] 5. **Exact predicates** (needs `predicates.c` in `kernel/vendor/`). The C build of the vendored file through our own wrapper, strict float flags, `exactinit` at load; `orient2d`, `incircle`, `in_arc_circle`, the (q_y − c_y)² comparison, `two_sum`, `two_product`; the build guard. REQ-G2D-005 to 011, 013 to 018, 021 to 024. Size: about 300 + 350.
@@ -42,6 +42,14 @@ Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
 
 <!-- Newest first. What was done, what tools/check reported, what is next. At most about 30 lines per session;
      numbers go into tables. Above 300 lines, older entries move to an archive file next to the plan. -->
+
+### 2026-10-02, session 1, step 2
+
+- Done: `grid_unit_mm` on `ToleranceSet` in its own commit (REQ-FND-001). The `geometry2d` package: `Line`, `Arc`, `make_line`, `make_arc` (the SPEC's rule order), `are_parallel`; the first kernel: `arcs.cpp` (radial and angle checks), `angle.cpp` (the arctangent from IEEE basic operations), `bindings.cpp`, with outputs allocated by Python; every kernel source with `-ffp-contract=off -fno-fast-math` (`/fp:precise` on MSVC); module `AGENTS.md`; glossary: line, arc, sweep. Tests first (they failed on the missing package), 46 + 1 property test + 4 for the arctangent.
+- Reviews: simplifier (no must-fix; about 15 lines of nice-to-have, in the backlog); spec-reviewer (code correct; fixed: the arctangent's bits pinned for fixed inputs so cross-platform CI shows tier 1, the radial and angle limits tested exactly with powers of two, full-circle rows through the kernel, the error claim in `angle.cpp`; REQ-G2D-044 moved to step 3; spec gaps in the backlog); test-auditor: see the pull request.
+- `tools/check`: PASS (11 of 14 steps; arch-check, trace-check and licence-check skipped). Property test also passes with 10 000 cases.
+- Size: non-test code +382 lines added (`size-check --change`), geometry2d 233 NLOC; tests +400. The estimate was 250 + 350; counted as NLOC the code is within it, counted as added lines (comments included) it is 53 % over: the arctangent was not in the estimate.
+- Next step: 3.
 
 ### 2026-10-02, session 1, step 1
 
