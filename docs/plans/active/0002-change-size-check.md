@@ -13,7 +13,7 @@
 ## Context
 
 - `tools/size-check` checks files, functions and module budgets since plan 0001, step 3; the change row of section 3 is the one it does not check yet.
-- Workflows are CI configuration: an agent drafts the change as `docs/plans/active/0002-workflow.patch` and Peter applies it. The patch adds a separate workflow, `change-size.yml`, so that adding or removing the label re-runs only this check, not the three-system matrix of `check.yml`.
+- Workflows are CI configuration: an agent drafts the change as `docs/plans/completed/0002-workflow.patch` and Peter applies it. The patch adds a separate workflow, `change-size.yml`, so that adding or removing the label re-runs only this check, not the three-system matrix of `check.yml`.
 
 ## Steps
 
@@ -21,7 +21,7 @@
      (docs/dev/12, section 3). -->
 
 - [x] 1. **`tools/size-check --change <base>`**: count the lines added by `git diff --numstat <merge base>...HEAD` in non-test code (removed lines do not count), report over 200 and fail over 400; `--large-change` turns the failure into a report that names the label. Non-test code: every file except tests (`tests/`, `testdata/`), Markdown and generated files (docs/dev/04 header); a pull request that changes only those passes without a count. Binary files (numstat `-`) are named, not counted. Without `--change`, `tools/check` keeps its present behaviour, so local runs do not depend on a base branch. Tests in `tests/tools/test_size_check.py` with a temporary git repository: under, at and over both limits, the label, a change that removes many lines, a Markdown-only and a generated-only change, a test-only change, a renamed file. Update `tools/README.md`. Size: about 60 lines of kept code + 80 of tests.
-- [ ] 2. **Workflow** (Peter): apply `docs/plans/active/0002-workflow.patch`, create the label `large-change` in GitHub, and make the `change-size` check required on `main` if wanted. The agent checks the run on its next pull request and records the result here. Size: the patch, 35 lines.
+- [ ] 2. **Workflow** (Peter): apply `docs/plans/completed/0002-workflow.patch` (applied in d1a0949; the label and the required check still to confirm), create the label `large-change` in GitHub, and make the `change-size` check required on `main` if wanted. The agent checks the run on its next pull request and records the result here. Size: the patch, 35 lines.
 
 ## Decisions
 

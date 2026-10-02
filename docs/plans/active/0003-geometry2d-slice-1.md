@@ -6,7 +6,7 @@
 - Goal: `geometry2d` meets slice 1 of its SPEC: exact predicates, lines and arcs with their validation, bulge conversion, distances and closest points, circle through three points, flattening with a known error side, area and orientation, point in region, cleanup and bounding boxes.
 - Specs: `src/splintercam/geometry2d/SPEC.md` (slice 1); `src/splintercam/foundation/SPEC.md` (REQ-FND-001, the grid unit)
 - Research: `docs/research/01-foundations.md`
-- Branch: one branch and one pull request per step, `claude/cool-ramanujan-evgci4` for step 1 and `claude/cool-ramanujan-evgci4-step-N` after it, each based on the one before
+- Branch: one branch and one pull request per step, based on `main` after the previous step's merge. Stacked pull requests (based on the previous step's branch) were tried in steps 2 and 3: merging with "delete branch" closed the next one (pull request 9) or merged it into a branch instead of `main` (12, then repeated as 10). Do not stack
 - Owner: Peter Burgener; agents: Claude Code cloud sessions
 
 ## Context
@@ -43,6 +43,11 @@ Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
 
 <!-- Newest first. What was done, what tools/check reported, what is next. At most about 30 lines per session;
      numbers go into tables. Above 300 lines, older entries move to an archive file next to the plan. -->
+
+### 2026-10-02, repository health check (Peter's request)
+
+- Every one of pull requests 1 to 13 has its head commit in `main`'s history, including those merged into stacked branches (2, 3, 4, 12); no remote branch besides `main` is left, and no local branch holds a commit outside `main`. `main` at b7c2dc0: `tools/check` PASS (11 of 14 steps), 340 tests.
+- Tidied: plan 0001 (all steps done) and the two applied patches (`0001-protected-changes`, `0002-workflow`) moved to `docs/plans/completed/`; plan 0001's stale merge note corrected; `AGENTS.md` now points at this plan; `tools/README.md` and `cmd_size_check.py` no longer say the protected-changes patch is pending. Still open for Peter: `0003-notice.patch` (not applied), plan 0002 step 2 (the `large-change` label and the required check), ADR 0009.
 
 ### 2026-10-02, session 1, step 4
 
