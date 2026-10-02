@@ -1,0 +1,11 @@
+# Paths that need the maintainer's review.
+/LICENSE                     @NC-PB
+/NOTICE                      @NC-PB
+/architecture/modules.yaml   @NC-PB
+/docs/adr/                   @NC-PB
+/testdata/golden/            @NC-PB
+/.claude/                    @NC-PB
+/.github/                    @NC-PB
+/tools/hooks/                @NC-PB
+/AGENTS.md                   @NC-PB
+/CLAUDE.md                   @NC-PB

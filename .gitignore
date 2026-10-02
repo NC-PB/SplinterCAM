@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.venv-sanitize/
+.pytest_cache/
+.hypothesis/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# C++ and CMake
+cmake-build-*/
+compile_commands.json
+*.so
+*.pyd
+*.dylib
+
+# Project outputs (docs/dev/02)
+out/
+failures/
+
+# Editors and operating systems
+.DS_Store
+._*
+.idea/
+.vscode/
+
+# Personal Claude Code settings
+.claude/settings.local.json
+CLAUDE.local.md

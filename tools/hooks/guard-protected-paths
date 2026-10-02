@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Claude Code PreToolUse hook for Edit|Write: block agent edits to protected paths.
+# Input: hook JSON on stdin. Exit 2 blocks the edit; the message on stderr goes back to the agent.
+# Needs only bash, sed and grep.
+set -uo pipefail
+
+input=$(cat)
+file=$(printf '%s' "$input" | sed -n 's/.*"file_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
+[ -z "$file" ] && exit 0
+
+root="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+rel="${file#"$root"/}"
+list="$root/tools/hooks/protected-paths.txt"
+[ -f "$list" ] || exit 0
+
+while IFS= read -r pattern || [ -n "$pattern" ]; do
+  case "$pattern" in ''|'#'*) continue ;; esac
+  # shellcheck disable=SC2254
+  case "$rel" in
+    $pattern)
+      echo "Blocked: $rel is protected (rule: $pattern). A person must make or approve this change. See docs/dev/07-agent-workflow.md, 'Human gates'." >&2
+      exit 2 ;;
+  esac
+done < "$list"
+
+# Accepted ADRs are never edited; a new ADR supersedes them.
+if [[ "$rel" == docs/adr/*.md && -f "$file" ]] && grep -qE '^- Status: Accepted' "$file"; then
+  echo "Blocked: $rel is an accepted ADR. Draft a new ADR that supersedes it instead." >&2
+  exit 2
+fi
+
+exit 0

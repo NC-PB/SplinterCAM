@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+# C++ formatting of the kernels (docs/dev/04): the formatter decides. Width and indent match Python.
+BasedOnStyle: LLVM
+Standard: c++20
+IndentWidth: 4
+AccessModifierOffset: -4
+ColumnLimit: 100
+PointerAlignment: Left
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+InsertBraces: true
+InsertNewlineAtEOF: true
+IncludeBlocks: Regroup
+SortIncludes: CaseSensitive

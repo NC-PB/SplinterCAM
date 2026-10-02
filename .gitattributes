@@ -1,0 +1,11 @@
+* text=auto eol=lf
+*.bat text eol=crlf
+
+# Large CAD and mesh files go through Git LFS (install git-lfs first)
+*.step filter=lfs diff=lfs merge=lfs -text
+*.stp  filter=lfs diff=lfs merge=lfs -text
+*.iges filter=lfs diff=lfs merge=lfs -text
+*.igs  filter=lfs diff=lfs merge=lfs -text
+*.stl  filter=lfs diff=lfs merge=lfs -text
+*.3mf  filter=lfs diff=lfs merge=lfs -text
+*.png  binary

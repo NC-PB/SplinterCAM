@@ -1,0 +1,9 @@
+# One shell glob per line, relative to the repository root. Agent edits to these paths are blocked.
+# Accepted ADRs are detected separately by their status line.
+LICENSE
+NOTICE
+LICENSES/*
+testdata/golden/*
+.github/workflows/*
+.claude/settings.json
+tools/hooks/*

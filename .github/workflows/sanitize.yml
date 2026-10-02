@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: Apache-2.0
+# Plan 0001, step 2: sanitizer CI job, drafted here; a person moves it into .github/workflows/
+# (tools/README.md; decision of 2026-09-26 in plan 0001, step 1, that CI workflows are a protected
+# path the agent only drafts). Same checkout, uv version and pinned action SHAs as
+# .github/workflows/check.yml, so the two jobs behave the same way apart from the sanitizer step.
+name: sanitize
+
+on:
+  push:
+    branches: [main, "spike/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sanitize-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sanitize:
+    name: sanitize (ubuntu-24.04)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    env:
+      # Derandomised, no deadline: the same profile check.yml uses (plan 0001, step 1 decisions).
+      HYPOTHESIS_PROFILE: ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: true
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.18"
+          enable-cache: false
+      - name: bootstrap
+        run: |
+          printf '| Step | Result |\n| --- | --- |\n' > "$RUNNER_TEMP/timings.md"
+          start=$SECONDS
+          tools/bootstrap
+          echo "| tools/bootstrap (cold) | $((SECONDS - start)) s |" >> "$RUNNER_TEMP/timings.md"
+      - name: test --all (sanitizer)
+        run: |
+          start=$SECONDS
+          tools/test --all
+          echo "| tools/test --all | $((SECONDS - start)) s |" >> "$RUNNER_TEMP/timings.md"
+      - name: summary
+        if: always()
+        run: cat "$RUNNER_TEMP/timings.md" >> "$GITHUB_STEP_SUMMARY"

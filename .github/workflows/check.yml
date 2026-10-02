@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: Apache-2.0
+name: check
+
+on:
+  push:
+    branches: [main, "spike/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: check (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash # Git Bash on Windows, as for developers (tools/README.md)
+    env:
+      HYPOTHESIS_PROFILE: ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: true
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.18"
+          # Off while plan 0001 measures cold runs; turn it on afterwards.
+          enable-cache: false
+      - name: bootstrap
+        run: |
+          printf '| Step | Result |\n| --- | --- |\n' > "$RUNNER_TEMP/timings.md"
+          start=$SECONDS
+          tools/bootstrap
+          echo "| tools/bootstrap (cold) | $((SECONDS - start)) s |" >> "$RUNNER_TEMP/timings.md"
+      - name: check
+        run: |
+          start=$SECONDS
+          tools/check
+          echo "| tools/check | $((SECONDS - start)) s |" >> "$RUNNER_TEMP/timings.md"
+      - name: incremental build
+        run: |
+          start=$SECONDS
+          tools/build
+          echo "| tools/build, nothing changed | $((SECONDS - start)) s |" >> "$RUNNER_TEMP/timings.md"
+      - name: wheel size
+        run: |
+          uv build --wheel --out-dir "$RUNNER_TEMP/dist" -C build-dir="$RUNNER_TEMP/wheel-build"
+          for wheel in "$RUNNER_TEMP"/dist/*.whl; do
+            echo "| $(basename "$wheel") | $(( $(wc -c < "$wheel") / 1024 )) KiB |" >> "$RUNNER_TEMP/timings.md"
+          done
+      - name: summary
+        if: always()
+        run: cat "$RUNNER_TEMP/timings.md" >> "$GITHUB_STEP_SUMMARY"

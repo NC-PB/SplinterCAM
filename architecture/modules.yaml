@@ -1,0 +1,70 @@
+# architecture/modules.yaml
+# Machine-readable module map (ADR 0004: Python package "splintercam" with C++ kernels in kernel/ folders).
+# tools/arch-check enforces it: Python imports (import-linter), kernel includes, external packages.
+# tools/docs draws docs/generated/modules.md from it. Changing this file needs a person's approval.
+
+version: 2
+package: splintercam                 # src/splintercam/
+kernel_module: splintercam._kernels  # built from every module's kernel/ folder
+
+layers:
+  0: foundation
+  1: geometry-and-input
+  2: model
+  3: planning
+  4: machine
+  5: application
+  6: apps
+
+rules:
+  - lower-layers-only        # a module depends only on lower layers, plus same-layer modules listed here
+  - no-cycles
+  - no-strategy-to-strategy  # modules under strategies/ never depend on each other
+  - kernels-private          # only a module's own Python code calls its kernel
+  - kernel-libraries-only    # kernels include only the libraries listed under kernel_libraries
+  - external-allowlist       # external Python packages only in the modules listed under external
+  - apps-use-job-only        # apps/* depend only on job
+
+modules:
+  foundation:             { layer: 0, kernel: false, depends_on: [], research: ["01"] }
+
+  geometry2d:             { layer: 1, kernel: true,  depends_on: [foundation], research: ["02", "03"] }
+  geometry3d:             { layer: 1, kernel: true,  depends_on: [foundation], research: ["06", "07"] }
+  io:                     { layer: 1, kernel: false, depends_on: [foundation, geometry2d, geometry3d], research: ["21"] }
+
+  model:                  { layer: 2, kernel: false, depends_on: [foundation], research: ["19", "23"] }
+  cl:                     { layer: 2, kernel: false, depends_on: [foundation], research: ["13"] }
+  stock:                  { layer: 2, kernel: true,  depends_on: [foundation, geometry2d, geometry3d], research: ["08"] }
+
+  features:               { layer: 3, kernel: false, depends_on: [foundation, geometry2d, geometry3d, io, model], research: ["19", "20"] }
+  toolpath:               { layer: 3, kernel: true,  depends_on: [foundation, geometry2d, geometry3d, model, cl, stock], research: ["10", "11"] }
+  strategies/profile:     { layer: 3, kernel: false, depends_on: [foundation, geometry2d, model, cl, toolpath], research: ["02", "22"] }
+  strategies/pocket:      { layer: 3, kernel: false, depends_on: [foundation, geometry2d, model, cl, toolpath], research: ["04"] }
+  strategies/adaptive:    { layer: 3, kernel: true,  depends_on: [foundation, geometry2d, model, cl, toolpath, stock], research: ["05"] }
+  strategies/drilling:    { layer: 3, kernel: false, depends_on: [foundation, model, cl, toolpath, features], research: ["20"] }
+  strategies/zlevel:      { layer: 3, kernel: false, depends_on: [foundation, geometry2d, geometry3d, model, cl, toolpath, stock], research: ["07"] }
+  strategies/finishing3d: { layer: 3, kernel: false, depends_on: [foundation, geometry2d, geometry3d, model, cl, toolpath, stock], research: ["09"] }
+  strategies/turning:     { layer: 3, kernel: false, depends_on: [foundation, geometry2d, model, cl, toolpath, stock], research: ["14", "15", "16"] }
+
+  kinematics:             { layer: 4, kernel: true,  depends_on: [foundation, model], research: ["12"] }
+  vnc:                    { layer: 4, kernel: false, depends_on: [foundation, model, cl, kinematics], research: ["13", "19"] }
+  post:                   { layer: 4, kernel: false, depends_on: [foundation, model, cl, vnc], research: ["13", "16"] }
+  simulation:             { layer: 4, kernel: true,  depends_on: [foundation, geometry3d, model, cl, stock, vnc], research: ["08"] }
+
+  job:                    { layer: 5, kernel: false, depends_on: [foundation, io, model, cl, stock, features, toolpath, "strategies/*", kinematics, vnc, post, simulation], research: ["18", "19"] }
+
+  apps/cli:               { layer: 6, kernel: false, depends_on: [job] }
+  apps/desktop:           { layer: 6, kernel: false, depends_on: [job] }
+
+kernel_libraries:
+  clipper2:      { licence: BSL-1.0,      used_by: [geometry2d, toolpath, strategies/adaptive] }
+  boost-polygon: { licence: BSL-1.0,      used_by: [geometry2d] }
+  nanoflann:     { licence: BSD-2-Clause, used_by: [geometry3d, stock] }
+  eigen:         { licence: MPL-2.0,      used_by: [geometry3d, kinematics] }
+  nanobind:      { licence: BSD-3-Clause, used_by: ["*"], note: "bindings.cpp only" }
+
+external:
+  numpy:         { licence: BSD-3-Clause, allowed_in: ["*"] }
+  cadquery-ocp:  { import: OCP, licence: "Apache-2.0 binding; OCCT LGPL-2.1 with exception", allowed_in: [io, features, apps/desktop] }
+  PySide6:       { licence: LGPL-3.0, allowed_in: [apps/desktop], banned_submodules: [QtCharts, QtGraphs, QtDataVisualization, QtQuick3D, QtVirtualKeyboard] }
+  ezdxf:         { licence: MIT, allowed_in: [io] }

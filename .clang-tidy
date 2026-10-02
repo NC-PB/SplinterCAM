@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+# Static analysis of the C++ kernels (docs/dev/04): bugprone, C++ Core Guidelines, performance and
+# selected modernize checks. Every finding is an error.
+Checks: >
+  -*,
+  bugprone-*,
+  cppcoreguidelines-*,
+  performance-*,
+  modernize-avoid-c-arrays,
+  modernize-loop-convert,
+  modernize-make-unique,
+  modernize-pass-by-value,
+  modernize-use-emplace,
+  modernize-use-equals-default,
+  modernize-use-equals-delete,
+  modernize-use-nodiscard,
+  modernize-use-nullptr,
+  modernize-use-override,
+  modernize-use-using
+WarningsAsErrors: "*"
+HeaderFilterRegex: "src/splintercam/.*/kernel/.*"
+FormatStyle: file

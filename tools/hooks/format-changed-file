@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Claude Code PostToolUse hook for Edit|Write: format the edited file with tools/format. Never blocks.
+# Does nothing until tools/format exists (plan 0001, step 1). Needs only bash and sed.
+input=$(cat)
+file=$(printf '%s' "$input" | sed -n 's/.*"file_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
+root="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+if [ -n "$file" ] && [ -f "$file" ] && [ -f "$root/tools/format" ]; then
+  "$root/tools/format" "$file" >/dev/null 2>&1 || true
+fi
+exit 0

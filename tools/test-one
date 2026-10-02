@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# tools/test-one: tests of one module (tools/README.md). Logic: tools/lib/cmd_test_one.py.
+tool=test-one
+source "$(dirname "$0")/lib/env.sh"
+exec uv run --no-sync python tools/lib/cmd_test_one.py "$@"

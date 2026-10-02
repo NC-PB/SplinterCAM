@@ -1,0 +1,88 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tools/check *)",
+      "Bash(tools/test *)",
+      "Bash(tools/test-one *)",
+      "Bash(tools/build *)",
+      "Bash(tools/format *)",
+      "Bash(tools/lint *)",
+      "Bash(tools/render *)",
+      "Bash(tools/replay *)",
+      "Bash(tools/golden-diff *)",
+      "Bash(tools/arch-check *)",
+      "Bash(tools/trace-check *)",
+      "Bash(tools/licence-check *)",
+      "Bash(tools/docs *)",
+      "Bash(uv sync *)",
+      "Bash(uv run *)",
+      "Bash(uv lock *)",
+      "Bash(uv python *)",
+      "Bash(cmake *)",
+      "Bash(git init *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git switch *)",
+      "Bash(git checkout -b *)",
+      "Bash(git worktree *)",
+      "Bash(git push -u origin *)",
+      "Bash(git push origin *)",
+      "Bash(gh pr create *)",
+      "Bash(gh pr view *)",
+      "Bash(gh pr checks *)",
+      "Bash(gh run view *)"
+    ],
+    "ask": [
+      "Bash(uv add *)",
+      "Bash(uv remove *)",
+      "Bash(tools/new-module *)",
+      "Edit(/architecture/modules.yaml)",
+      "Edit(/docs/adr/**)"
+    ],
+    "deny": [
+      "Edit(/testdata/golden/**)",
+      "Edit(/LICENSE)",
+      "Edit(/NOTICE)",
+      "Edit(/.claude/settings.json)",
+      "Edit(/.github/workflows/**)",
+      "Edit(/tools/hooks/**)",
+      "Bash(tools/golden-approve *)",
+      "Bash(git reset --hard *)",
+      "Bash(git clean *)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git push * --force*)",
+      "Bash(git push origin main*)",
+      "Bash(git push origin HEAD:main*)",
+      "Bash(git push * main)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/tools/hooks/guard-protected-paths\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/tools/hooks/format-changed-file\""
+          }
+        ]
+      }
+    ]
+  }
+}

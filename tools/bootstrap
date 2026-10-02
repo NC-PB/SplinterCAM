@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# tools/bootstrap: check the prerequisites, then install the pinned Python and dependencies and build
+# the kernels with one `uv sync` (tools/README.md). Run it after cloning and after pulling changes.
+cd "$(dirname "$0")/.." || exit 2
+missing=()
+command -v uv >/dev/null 2>&1 || missing+=("uv (https://docs.astral.sh/uv/)")
+git lfs version >/dev/null 2>&1 || missing+=("git-lfs (https://git-lfs.com/)")
+if [ ${#missing[@]} -gt 0 ]; then
+  printf 'missing: %s\n' "${missing[@]}"
+  echo "bootstrap: ERROR (missing ${#missing[@]} prerequisite(s); see README.md, Prerequisites)"
+  exit 2
+fi
+start=$SECONDS
+if ! uv sync --locked; then
+  echo "bootstrap: FAIL (uv sync --locked; reproduce: tools/bootstrap)"
+  exit 1
+fi
+echo "bootstrap: PASS ($((SECONDS - start)) s)"

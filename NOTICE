@@ -1,0 +1,10 @@
+SplinterCAM
+Copyright 2026 Peter Burgener and the SplinterCAM contributors
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Third-party components and the attributions their licences require are listed below.
+Update this file whenever a dependency is added (docs/dev/09-dependencies-licensing-provenance.md).
+
+None bundled yet. Planned (ADR 0004): Open CASCADE Technology through OCP, Qt through PySide6,
+NumPy, Clipper2, Boost.Polygon, nanobind.

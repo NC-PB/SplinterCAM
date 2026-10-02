@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(//ABSOLUTE/PATH/TO/OLD/COMMERCIAL/SOURCE/**)",
+      "Grep(//ABSOLUTE/PATH/TO/OLD/COMMERCIAL/SOURCE/**)"
+    ]
+  }
+}

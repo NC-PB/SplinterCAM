@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# tools/lint: ruff, pyright and clang-tidy, warnings as errors (tools/README.md). Logic: tools/lib/cmd_lint.py.
+tool=lint
+source "$(dirname "$0")/lib/env.sh"
+exec uv run --no-sync python tools/lib/cmd_lint.py "$@"

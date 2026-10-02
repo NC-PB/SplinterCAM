@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# tools/test [--all]: the whole pytest suite; --all also against the sanitizer build (tools/README.md).
+# Logic: tools/lib/cmd_test.py.
+tool=test
+source "$(dirname "$0")/lib/env.sh"
+exec uv run --no-sync python tools/lib/cmd_test.py "$@"
