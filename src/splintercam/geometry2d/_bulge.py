@@ -27,7 +27,7 @@ def arc_from_bulge(p0: Point, p1: Point, bulge: float, ctx: Context) -> Result[C
     if chord * abs(bulge) / 2 <= ctx.tolerances.length_eps_mm:
         return Result(Line(p0, p1))
     # C = M + d·n_left, d = c(1 - b²)/(4b), n_left the unit normal left of P0 -> P1.
-    scale = (1.0 - bulge * bulge) / (4.0 * bulge)  # d / c
+    scale = (1.0 / bulge - bulge) / 4.0  # d / c, without b² overflowing
     centre = (
         (p0[0] + p1[0]) / 2 - scale * (p1[1] - p0[1]),
         (p0[1] + p1[1]) / 2 + scale * (p1[0] - p0[0]),
@@ -45,7 +45,7 @@ def bulges_from_arc(arc: Arc, ctx: Context) -> tuple[tuple[Arc, float], ...]:
     Implements: REQ-G2D-052, REQ-G2D-053.
     """
     del ctx  # every public function takes the Context (SPEC, Public interface)
-    if arc.p0 != arc.p1:
+    if abs(arc.sweep_rad) != math.tau:  # P0 = P1 alone is a tiny arc, not a circle
         return ((arc, math.tan(arc.sweep_rad / 4)),)
     cx, cy = arc.centre
     opposite = (cx - (arc.p0[0] - cx), cy - (arc.p0[1] - cy))

@@ -224,7 +224,7 @@ The budget is foundation's (REQ-FND-009). Slice 1 spends none of it: `flatten` t
 | Situation | Result | Diagnostic |
 | --- | --- | --- |
 | A line or arc with a NaN or infinite value; an arc with φ = 0 or \|φ\| > 2π; a bulge on a zero chord; curve rows with a broken structure | no curve, no rows | `CURVE_INVALID` (error) |
-| An arc or arc row whose P_1 is off its circle or whose sweep does not fit its end points | no curve, no rows | `ARC_INCONSISTENT` (error) |
+| An arc or arc row whose P_1 is off its circle or whose sweep does not fit its end points | no curve, no rows | `ARC_INCONSISTENT` (error); rows that are also `CURVE_INVALID` report only that (ours) |
 | Arc with r ≤ eps_len; nearly closed arc; bulge with sagitta ≤ eps_len | the line, nothing, or a full circle | none |
 | Loop with \|A\| ≤ eps_len·L | no area | `LOOP_DEGENERATE` (warning) |
 | Zero-width spike | vertex dropped | `CLEANUP_SPIKE` (info), one per spike |

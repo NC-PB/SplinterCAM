@@ -91,3 +91,20 @@ def test_full_circle_becomes_two_half_arcs(ctx: Context, sweep: float) -> None:
     assert b1 == b2 == math.copysign(1.0, sweep)
     for half in (first, second):
         assert make_arc(half.p0, half.p1, half.centre, half.sweep_rad, ctx).value == (half,)
+
+
+@pytest.mark.req("REQ-G2D-052", "REQ-G2D-053")
+def test_a_tiny_arc_with_equal_end_points_is_not_split(ctx: Context) -> None:
+    # make_arc accepts P0 = P1 with a sweep whose arc length is within eps_len; it is no circle.
+    built = make_arc((10.0, 0.0), (10.0, 0.0), (0.0, 0.0), 1e-9, ctx)
+    assert built.value is not None
+    (tiny,) = built.value
+    assert isinstance(tiny, Arc)
+    assert bulges_from_arc(tiny, ctx) == ((tiny, math.tan(1e-9 / 4)),)
+
+
+@pytest.mark.req("REQ-G2D-050")
+def test_a_huge_bulge_does_not_overflow(ctx: Context) -> None:
+    # |b| = 1e200: b*b overflows, (1/b - b)/4 does not; the arc is all but a full circle.
+    result = arc_from_bulge((0.0, 0.0), (1.0, 0.0), 1e200, ctx)
+    assert codes(result) != ["CURVE_INVALID"]

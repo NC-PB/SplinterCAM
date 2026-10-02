@@ -143,3 +143,31 @@ def test_arrays_are_contiguous_read_only_copies(ctx: Context) -> None:
         assert not array.flags.writeable
         assert not np.shares_memory(array, given)
     np.testing.assert_array_equal(result.value.rows, rows)
+
+
+@pytest.mark.req("REQ-G2D-192")
+def test_arc_row_with_p1_off_its_circle_is_arc_inconsistent(ctx: Context) -> None:
+    rows, _, _ = _valid()
+    rows[2, 2:4] = rows[1, 0:2] = [-2e-6, 0.0]  # P1 2e-6 mm outside the circle, the loop still closed
+    _rejected(ctx, rows, "ARC_INCONSISTENT")
+
+
+@pytest.mark.req("REQ-G2D-193")
+def test_a_non_finite_joint_is_curve_invalid_though_continuous(ctx: Context) -> None:
+    # The same infinity on both sides of a joint: continuity holds, only the finite check fails.
+    lines = [
+        [0.0, 0.0, math.inf, 0.0, NAN, NAN, 0.0],
+        [math.inf, 0.0, 0.0, 1.0, NAN, NAN, 0.0],
+        [0.0, 1.0, 0.0, 0.0, NAN, NAN, 0.0],
+    ]
+    assert codes(curve_rows(np.array(lines), np.array([1, 2, 3]), np.array([0]), ctx)) == [
+        "CURVE_INVALID"
+    ]
+
+
+@pytest.mark.req("REQ-G2D-192", "REQ-G2D-197")
+def test_curve_invalid_is_reported_before_arc_inconsistent(ctx: Context) -> None:
+    rows, _, _ = _valid()
+    rows[2, 6] = math.pi / 2  # inconsistent arc
+    rows[1, 4] = 5.0  # and a line row with a centre
+    _rejected(ctx, rows)
