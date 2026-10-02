@@ -6,7 +6,6 @@ import math
 from typing import assert_never
 
 import numpy as np
-
 import pytest
 
 from geometry2d_checks import codes, with_length_eps
