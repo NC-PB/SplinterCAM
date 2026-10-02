@@ -143,7 +143,7 @@ None.
 
 ## Size estimate
 
-360 NLOC of Python (472 lines with the defaults file) and about 1100 lines of tests, after plan 0001, step 2.
+Budget 250 NLOC (Peter, 2026-10-02), counted without comments and docstrings as `tools/size-check` and lizard count them; 212 after plan 0001, step 5. About 1150 lines of tests.
 
 ## Open questions
 

@@ -41,15 +41,15 @@ index 94f5dfc..b4a6d41 100755
        "Bash(tools/format *)",
        "Bash(tools/lint *)",
 diff --git a/architecture/modules.yaml b/architecture/modules.yaml
-index 8b0e369..f1b5cc9 100755
+index 8b0e369..13597ea 100755
 --- a/architecture/modules.yaml
 +++ b/architecture/modules.yaml
 @@ -2,6 +2,8 @@
  # Machine-readable module map (ADR 0004: Python package "splintercam" with C++ kernels in kernel/ folders).
  # tools/arch-check enforces it: Python imports (import-linter), kernel includes, external packages.
  # tools/docs draws docs/generated/modules.md from it. Changing this file needs a person's approval.
-+# budget: a module's size in NLOC, from its SPEC's size estimate; tools/size-check reports a module
-+# over it and fails one over it + 20 % (docs/dev/12, section 3).
++# budget: a module's size in NLOC, without comments and docstrings (Peter, 2026-10-02);
++# tools/size-check reports a module over it and fails one over it + 20 % (docs/dev/12, section 3).
  
  version: 2
  package: splintercam                 # src/splintercam/
@@ -58,7 +58,7 @@ index 8b0e369..f1b5cc9 100755
  
  modules:
 -  foundation:             { layer: 0, kernel: false, depends_on: [], research: ["01"] }
-+  foundation:             { layer: 0, kernel: false, depends_on: [], research: ["01"], budget: 360 }
++  foundation:             { layer: 0, kernel: false, depends_on: [], research: ["01"], budget: 250 }
  
    geometry2d:             { layer: 1, kernel: true,  depends_on: [foundation], research: ["02", "03"] }
    geometry3d:             { layer: 1, kernel: true,  depends_on: [foundation], research: ["06", "07"] }
