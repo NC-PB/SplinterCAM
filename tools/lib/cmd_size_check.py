@@ -11,8 +11,7 @@ Soft limits are reported, hard limits fail:
 
 NLOC counts the lines that hold code, as lizard does (docs/dev/12, section 3): Python lines with a
 token other than a comment, docstrings and other bare strings left out; C++ lines that are not
-blank and do not start with //. A file that cannot be read as UTF-8
-or parsed fails.
+blank and do not start with //. A file that cannot be read as UTF-8 or parsed fails.
 """
 
 import argparse

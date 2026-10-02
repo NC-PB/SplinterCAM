@@ -1,0 +1,40 @@
+diff --git a/.github/workflows/change-size.yml b/.github/workflows/change-size.yml
+new file mode 100644
+--- /dev/null
++++ b/.github/workflows/change-size.yml
+@@ -0,0 +1,35 @@
++# SPDX-License-Identifier: Apache-2.0
++# The per-PR change limit of docs/dev/12, section 3 (plan 0002): non-test lines changed against
++# the base branch, over 200 reported, over 400 failing unless the PR has the label large-change.
++name: change-size
++
++on:
++  pull_request:
++    types: [opened, synchronize, reopened, labeled, unlabeled]
++
++permissions:
++  contents: read
++
++concurrency:
++  group: change-size-${{ github.ref }}
++  cancel-in-progress: true
++
++jobs:
++  change-size:
++    runs-on: ubuntu-24.04
++    timeout-minutes: 5
++    steps:
++      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
++        with:
++          fetch-depth: 0 # the merge base with the base branch
++      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
++        with:
++          version: "0.12.18"
++      - name: change size
++        env:
++          BASE_REF: ${{ github.base_ref }}
++          LARGE_CHANGE: ${{ contains(github.event.pull_request.labels.*.name, 'large-change') }}
++        run: |
++          args=(--change "origin/$BASE_REF")
++          if [ "$LARGE_CHANGE" = true ]; then args+=(--large-change); fi
++          tools/size-check "${args[@]}"
