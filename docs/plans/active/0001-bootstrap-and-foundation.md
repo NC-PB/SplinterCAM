@@ -68,7 +68,6 @@
 
 - Step 2 review, nice-to-have: inline `_read_defaults` (one caller); one shared test helper for the D-056 shares, eps values and the refusal assertion, used now in three test files; the unit and property tests both pin 0.0022857 and the double below tol_min; the order check in `test_tolerance_set.py` is implied by the equality test; the reader could reject booleans and quoted numbers; an import-time check that the floor term applies at tol_min (true for the declared values); the duplicated-part test could again draw any part at any position.
 - `_context.py`'s docstring names `src/splintercam/geometry2d/kernel/offset.cpp`, which is not in this repository.
-
 - "plan 0001" in `docs/dev/12` (its first section and section 8) and `docs/dev/03` means the stack test app's plan; read as this repository's plan, section 8 would exempt it from the lean-code limits. Name it as `docs/dev/07` and `10` now do (step 1 review).
 - `.claude/agents/test-designer.md` and `.claude/skills/implement-requirement/SKILL.md` point to `docs/research/18` and `24`, which are in Project Spike only (agent files, outside step 1's list).
 - A test that every committed kernel stub starts with the SPDX line, unless `tools/licence-check` covers `.pyi` files (step 1 review).
