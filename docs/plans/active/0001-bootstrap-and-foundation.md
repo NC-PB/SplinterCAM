@@ -19,7 +19,7 @@
 
 - [x] 1. **Bootstrap.** Run `tools/bootstrap` and `tools/check` (install uv and git-lfs first if your environment lacks them). While there are no kernels, the first build replaces the committed stub `src/splintercam/_kernels/__init__.pyi` by `src/splintercam/_kernels.pyi`: commit that. Get CI green on the three systems (`check.yml`); if `sanitize.yml` fails only because there are no kernels, report it and do not edit workflows. Fix links in `docs/dev/`, `docs/glossary.md`, `docs/templates/`, `AGENTS.md` and `tools/README.md` that point to files not in this repository: decisions and sources point to `docs/spike/`; other Project Spike files (its DECISIONS, QUESTIONS, ROADMAP, CHANGES, other research topics) are named as plain text "(Project Spike)" without a link. Mentions of `test_repo` in `docs/dev/` mean this repository's own files now. List broken links you find in the protected folders in the progress log instead of fixing them. Size: no kernel code; docs only.
 - [x] 2. **foundation: the tolerance budget.** Bring `src/splintercam/foundation/SPEC.md` to the proposed rows of `docs/spike/foundation-SPEC-draft.md`: the changes to REQ-FND-001 and 002 and the new REQ-FND-008 and 009 (D-056, D-146, D-149; research 01, section Tolerances, tests 14 and 15). Mark them `Reviewed` (they come from decisions Peter accepted). Tests first, tagged with the REQ IDs, including the numbers of research 01 tests 14 and 15 and a property test that the four parts sum to tol and that tol below tol_min = 2/875 mm is refused with `TOL_BELOW_MINIMUM` naming 0.0022858 mm. Then the code; defaults in a documented defaults file as REQ-FND-008 says. Size: about 150 lines of kept code + 200 of tests.
-- [ ] 3. **Lean-code tools** (`docs/dev/12-lean-code.md`, section 8). Write `tools/size-check` with the file, function and module limits of section 3 and add it to `tools/check`; the `simplifier` agent is already in `.claude/agents/`. The ruff and clang-tidy limits live in `pyproject.toml` and `.clang-tidy`, which are protected: write the proposed changes as `docs/plans/active/0001-protected-changes.patch` and list them for Peter; do not apply them. Size: about 150 + 80.
+- [x] 3. **Lean-code tools** (`docs/dev/12-lean-code.md`, section 8). Write `tools/size-check` with the file, function and module limits of section 3 and add it to `tools/check`; the `simplifier` agent is already in `.claude/agents/`. The ruff and clang-tidy limits live in `pyproject.toml` and `.clang-tidy`, which are protected: write the proposed changes as `docs/plans/active/0001-protected-changes.patch` and list them for Peter; do not apply them. Size: about 150 + 80.
 - [ ] 4. **geometry2d: SPEC draft for the topic 01 part** (no code). Write `src/splintercam/geometry2d/SPEC.md` from `docs/research/01-foundations.md` with `docs/templates/SPEC.md`, in the EARS style of the foundation SPEC. Cover the sections Vectors and exact signs, Curves (arc form and validation), Distances, Circle through three points, Flattening with a known error side, Area and orientation, Point in region, Loop tree, Kernel arrays, Helpers, Interfaces and Degenerate input; say where Frames and transforms belong if not here. One requirement per testable statement, each citing its research section and the research test it is checked by; status `Draft`. Mark which requirements need Clipper2 (the loop tree's PolyTree and its fallback difference) and which part goes into the C++ kernel under the split rule of `docs/dev/03`. Then **stop**: Peter reviews the draft before any geometry2d code.
 
 ## Decisions
@@ -33,6 +33,21 @@
 ### 2026-10-02, session 1, step 3 (lean-code tools)
 
 - Plan: `tools/size-check` with `tools/lib/cmd_size_check.py`, the limits of `docs/dev/12`, section 3, as named constants: files over 400 lines reported, over 800 failing, generated files excepted; Python functions over 60 lines reported (their hard limits are ruff's); each module's NLOC against a `budget` in `architecture/modules.yaml`, reported over it and failing over it + 20 %, reported where none is declared. Added to `tools/check` as a step; tests in `tests/tools/` (infrastructure, no requirement tag). C++ functions get their limits from clang-tidy. The proposed changes to the protected `pyproject.toml` (ruff `C901`, `PLR0911`, `PLR0912`, `PLR0913`, `PLR0915`) and `.clang-tidy` (`readability-function-size`, `readability-function-cognitive-complexity`), and a foundation budget in `modules.yaml` (a change that needs Peter), go into `docs/plans/active/0001-protected-changes.patch`, checked with `git apply --check` and against today's code, not applied. `tools/README.md` and the tool list in `AGENTS.md` follow.
+- Done: `tools/size-check` (`tools/lib/cmd_size_check.py`; budgets read by `tools/lib/modules.py`), a step of `tools/check`; 10 tests in `tests/tools/` (infrastructure, no requirement tag, as `tests/kernels/`), written first. It reports `module foundation: 360 NLOC, no budget in modules.yaml` today. `tools/README.md` and `AGENTS.md` list it (and `tools/test`, which exists).
+- `docs/plans/active/0001-protected-changes.patch`, for Peter, not applied; it applies to this branch with `git apply`, and with it ruff passes on today's code, `clang-tidy --verify-config` passes and a probe function over the line limit fails:
+
+| File | Change |
+| --- | --- |
+| `pyproject.toml` | ruff `C90`, `PLR0911`, `PLR0912`, `PLR0913`, `PLR0915`; complexity 10, 5 arguments, 12 branches, 6 returns, 50 statements |
+| `.clang-tidy` | `readability-function-size` (80 lines, 6 parameters), `readability-function-cognitive-complexity` (15) |
+| `architecture/modules.yaml` | `budget: 360` for foundation (the SPEC's size estimate; no headroom) and a comment on the key |
+| `.claude/settings.json` | allow `Bash(tools/size-check *)` |
+
+- `tools/check`: PASS (9 of 14 steps; the new step `size-check` passes with 1 report).
+- Reviews: `simplifier` (no must-fix, about 4 lines of nice-to-have), `test-auditor` (PASS), a correctness reviewer (one must-fix: a file size-check could not parse stopped `tools/check` without its summary line; fixed with tests). Each finding was checked by a second agent.
+- Size: `tools/` +188 −10 (estimate about 150), tests +107 (estimate about 80), docs +12 −5, the patch 104 lines.
+- Questions for Peter: (1) Does NLOC count docstrings? size-check counts them (foundation 360); lizard, named in `docs/dev/12` section 4, does not (196). (2) The change limit of section 3 (200 and 400 lines of non-test code against the base branch, with your label) was not in this step; when, and how is the label read? (3) Nothing reports C++ functions of 61 to 80 lines: clang-tidy can only fail. Should size-check report them, or should section 3 drop that soft limit? (4) ruff's `ARG` (`docs/dev/04`) is left out of the patch, because section 4 places it with the second module.
+- Next: step 4.
 
 ### 2026-10-02, session 1, step 2 (tolerance budget)
 
@@ -69,6 +84,8 @@
 - Next: step 2.
 
 ## Backlog
+
+- Step 3 review, nice-to-have: `cmd_size_check.py` could take `PYTHON_SUFFIXES`, `CPP_SUFFIXES` and `all_files()` from `cmd_format.py`; tests for `size_findings` and `size_check_step` (module assignment, generated files left out, FAIL versus PASS); C++ block comments count as NLOC.
 
 - Step 2 review, nice-to-have: inline `_read_defaults` (one caller); one shared test helper for the D-056 shares, eps values and the refusal assertion, used now in three test files; the unit and property tests both pin 0.0022857 and the double below tol_min; the order check in `test_tolerance_set.py` is implied by the equality test; the reader could reject booleans and quoted numbers; an import-time check that the floor term applies at tol_min (true for the declared values); the duplicated-part test could again draw any part at any position.
 - `_context.py`'s docstring names `src/splintercam/geometry2d/kernel/offset.cpp`, which is not in this repository.
