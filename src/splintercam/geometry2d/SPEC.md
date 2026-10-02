@@ -157,7 +157,7 @@ Release 1 kernels are single-threaded (Peter, 2026-10-02). Decisions and counts 
 | REQ-G2D-100 | IF P_1 = P_3, THEN THE `circle_through` function SHALL return no circle without dividing by \|P_3 − P_1\|. | new test | Released |
 | REQ-G2D-101 | THE `circle_through` function SHALL apply no radius or chord limit of its own. | test 9 | Released |
 | REQ-G2D-213 | THE `bounding_box` function SHALL give a line the box of its end points. | new test | Released |
-| REQ-G2D-214 | THE `bounding_box` function SHALL give an arc the box of its end points and of the points at the angles 0, π/2, π and 3π/2 about C that lie in its sweep, decided by exact signs, all four for a full circle. | test 18 | Released |
+| REQ-G2D-214 | THE `bounding_box` function SHALL give an arc the box of its end points and of the points at the angles 0, π/2, π and 3π/2 about C that lie in its sweep, decided by exact signs, all four for a full circle; where the octants of the end points contradict the sweep within the tolerance of REQ-G2D-043, the sweep governs (ours). | test 18 | Released |
 
 ### Flattening ([research 01, Flattening with a known error side][flat])
 
@@ -230,7 +230,7 @@ The budget is foundation's (REQ-FND-009). Slice 1 spends none of it: `flatten` t
 | Zero-width spike | vertex dropped | `CLEANUP_SPIKE` (info), one per spike |
 | `cleanup` keeps fewer than 3 vertices | those indices; the area test reports the loop | none (ours) |
 | Collinear points, P_2 within eps_len of P_1P_3, or P_1 = P_3, in `circle_through` | `None` | none |
-| t not positive and finite; `signed_area` given more than one loop | programming error | `ValueError` (ours) |
+| t not positive and finite, or so small that the step count exceeds an int; `signed_area` given more than one loop | programming error | `ValueError` (ours) |
 
 ## Algorithms and design inputs
 

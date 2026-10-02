@@ -22,7 +22,7 @@
 - [x] 1. **SPEC cut and ADR 0009.** Cut `src/splintercam/geometry2d/SPEC.md` to slice 1 (requirements, interface, invariants, failure modes, links to research 01; the rest one line each under Later parts). Draft ADR 0009 for vendoring `predicates.c`, with its `modules.yaml` `kernel_libraries` entry (applied) and its `NOTICE` entry (`0003-notice.patch`; `NOTICE` is protected). Size: docs only.
 - [x] 2. **Grid unit, lines and arcs.** First commit: `grid_unit_mm` on `ToleranceSet` (REQ-FND-001). Then the `geometry2d` package with `Line`, `Arc`, `make_line`, `make_arc` and `are_parallel`, its first kernel (`arcs.cpp`: the radial and angle checks; `angle.cpp`: the arctangent from basic operations), the module `AGENTS.md` and glossary terms. REQ-G2D-003, 018 (the arctangent), 025, 027, 035, 037 to 043, 045, 047 to 049. Size: about 250 + 350.
 - [x] 3. **Curve rows and bulges.** `CurveRows`, `curve_rows`, `arc_from_bulge`, `bulges_from_arc`. REQ-G2D-044, 050 to 053, 188 to 197, 201, 203. Size: about 180 + 300.
-- [ ] 4. **Flattening and bounding boxes.** `flatten` (`flatten.cpp`), `bounding_box`, the step limit π/2 as a declared parameter in foundation's defaults file (a foundation SPEC change), the shared exact test of which axis directions lie in a sweep. REQ-G2D-102 to 113, 126, 213, 214, 230; the tests of REQ-G2D-231 and 232 start here and grow with each step. Size: about 220 + 300.
+- [x] 4. **Flattening and bounding boxes.** `flatten` (`flatten.cpp`), `bounding_box`, the step limit π/2 as a declared parameter in foundation's defaults file (a foundation SPEC change), the shared exact test of which axis directions lie in a sweep. REQ-G2D-102 to 113, 126, 213, 214, 230; the tests of REQ-G2D-231 and 232 start here and grow with each step. Size: about 220 + 300.
 - [ ] 5. **Exact predicates** (needs `predicates.c` in `kernel/vendor/`). The C build of the vendored file through our own wrapper, strict float flags, `exactinit` at load; `orient2d`, `incircle`, `in_arc_circle`, the (q_y − c_y)² comparison, `two_sum`, `two_product`; the build guard. REQ-G2D-005 to 011, 013 to 018, 021 to 024. Size: about 300 + 350.
 - [ ] 6. **Distances and circles.** `closest_point`, `circle_through`. REQ-G2D-091 to 101. Size: about 150 + 250.
 - [ ] 7. **Area and orientation.** `signed_area` (`area.cpp`), with the exact sum. REQ-G2D-001, 002, 128 to 133. Size: about 180 + 250.
@@ -43,6 +43,13 @@ Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
 
 <!-- Newest first. What was done, what tools/check reported, what is next. At most about 30 lines per session;
      numbers go into tables. Above 300 lines, older entries move to an archive file next to the plan. -->
+
+### 2026-10-02, session 1, step 4
+
+- Done: `AirSide` and `flatten` (kernel `flatten.cpp`: inscribed and circumscribed, the step count from `basic_atan2`, the cap π/2 from foundation's defaults file); `Box` and `bounding_box` (the axis points in an arc's sweep by octants from exact comparisons, the sweep governing where P1's octant contradicts it). Glossary: air side, bounding box. Tests first (they failed on the missing names); one test had a wrong P1 and was corrected.
+- Reviews: simplifier (no must-fix, about 7 lines nice-to-have, backlog); test-auditor (fixed: the property test at 4 rounding units of |P0 − C| plus P1's offset on the last segment, as REQ-G2D-110 says, and without a deadline; both forms repeated byte for byte); spec-reviewer (fixed: a tiny arc with P1 just behind P0 got all four axis points, now the sweep governs; a step count beyond an int was undefined behaviour, now `ValueError`; a test that the cap reaches the kernel; the count in the spread test; spec gap on a lower bound of t in the backlog).
+- `tools/check`: PASS (11 of 14 steps). Property tests pass with 10 000 cases. Size: non-test code +250 lines added, tests +330.
+- Next step: 5, blocked: `predicates.c` is not in the repository. Stop here for Peter.
 
 ### 2026-10-02, session 1, step 3
 
@@ -69,6 +76,12 @@ Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
 - For Peter: vendor `predicates.c` (from <https://www.cs.cmu.edu/~quake/robust.html>) into `src/splintercam/geometry2d/kernel/vendor/` on the step 5 branch, or allow `www.cs.cmu.edu` in the environment's network settings; accept or change ADR 0009 and apply `0003-notice.patch`.
 
 ## Backlog
+
+- Step 4 spec review, spec gap for Peter: no lower bound on t and no declared maximum step count; today only a count beyond an int is refused (`ValueError`). Operation tolerances give at most about 55 000 steps per circle (t_flat >= 1.1e-5 mm, r < 6711 mm).
+
+- Step 4 simplifier, nice-to-have (about 7 lines): the full-circle branch of `_axes_in_sweep` (the shared-octant branch covers it); its private docstring; `max(steps, 1)` in `arc_steps`; the `kernel` alias in `_flatten.py`; a shared sampling helper for the flattening tests.
+
+- Step 4: twice the first local test run right after a kernel rebuild failed once and passed on every repeat (six full runs, three `tools/check` runs, 10 000-case property runs); the failure was not captured. Likely Hypothesis's default deadline of 200 ms in the local `dev` profile on the first, slower kernel call (CI's `ci` profile has none). Capture it next time before changing anything.
 
 - Step 3 spec review, spec gaps for Peter: (1) small bulges on long chords give huge radii (1000 mm chord, b = 1e-8: r = 2.5e10 mm), where the rounding of |P − C| exceeds eps_len and a valid bulge comes back `ARC_INCONSISTENT`; a radius or bulge limit is not in research 01; (2) an arc with P0 = P1 and a tiny sweep passes `make_arc` and `curve_rows` as a one-row loop; its removal is REQ-G2D-046, a later part.
 

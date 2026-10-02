@@ -31,6 +31,8 @@
 | line | `Line` | Strecke | A straight curve from P0 to P1 (D-057) | 01 |
 | arc | `Arc` | Kreisbogen | A circular curve in centre form: exact end points, centre, signed sweep (D-057) | 01 |
 | sweep | `sweep_rad` | Öffnungswinkel | Signed angle of an arc, positive counter-clockwise, 0 < \|sweep\| ≤ 2π | 01 |
+| air side | `AirSide` (`LEFT`, `RIGHT`) | Luftseite | Where air lies beside a curve, seen along it; a flattened arc keeps its error there (research 01, Flattening) | 01 |
+| bounding box | `Box` | Begrenzungsrechteck | Axis-aligned box of a curve, in mm | 01 |
 | bulge | `bulge` | Bulge (Ausbauchung) | DXF polyline value of an arc: tan(φ/4), positive counter-clockwise, only at DXF import and export (D-057) | 01 |
 | curve rows | `CurveRows` | Kurvenzeilen | Lines and arcs of closed loops as arrays at the kernel boundary: [x0, y0, x1, y1, cx, cy, sweep] per row, IDs, loop starts | 01 |
 | scallop height | `scallop_height` | Kammhöhe | Height of the ridge left between passes | 09 |
