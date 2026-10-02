@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Static analysis of the C++ kernels (docs/dev/04): bugprone, C++ Core Guidelines, performance and
-# selected modernize checks. Every finding is an error.
+# selected modernize checks, and the function limits of docs/dev/12, section 3. Every finding is an
+# error.
 Checks: >
   -*,
   bugprone-*,
@@ -16,7 +17,15 @@ Checks: >
   modernize-use-nodiscard,
   modernize-use-nullptr,
   modernize-use-override,
-  modernize-use-using
+  modernize-use-using,
+  readability-function-size,
+  readability-function-cognitive-complexity
 WarningsAsErrors: "*"
 HeaderFilterRegex: "src/splintercam/.*/kernel/.*"
 FormatStyle: file
+# docs/dev/12, section 3: at most 80 lines and 6 parameters per function, cognitive complexity 15
+# (its default is 25); declared tool settings, changed only by decision (D-139).
+CheckOptions:
+  readability-function-size.LineThreshold: 80
+  readability-function-size.ParameterThreshold: 6
+  readability-function-cognitive-complexity.Threshold: 15

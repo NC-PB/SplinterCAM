@@ -4,6 +4,7 @@
       "Bash(tools/check *)",
       "Bash(tools/test *)",
       "Bash(tools/test-one *)",
+      "Bash(tools/size-check *)",
       "Bash(tools/build *)",
       "Bash(tools/format *)",
       "Bash(tools/lint *)",

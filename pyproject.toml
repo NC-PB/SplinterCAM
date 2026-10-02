@@ -77,12 +77,17 @@ select = [
   "B",   # bugbear
   "BLE", # no blind `except Exception` (docs/dev/04, errors)
   "C4",
+  "C90", # function complexity (docs/dev/12, section 3)
   "E",
   "F",
   "I",   # import order
   "N",   # naming (docs/dev/04)
   "PGH", # no blanket `# noqa` or `# type: ignore`: name the rule (docs/dev/04)
   "PIE",
+  "PLR0911", # returns per function (docs/dev/12, section 3)
+  "PLR0912", # branches per function
+  "PLR0913", # arguments per function
+  "PLR0915", # statements per function
   "PT",  # pytest style
   "PTH", # pathlib
   "RUF",
@@ -94,6 +99,17 @@ select = [
 ]
 # TD003 wants an issue link on the next line; the ID in TODO(#123) replaces it.
 ignore = ["TD003"]
+
+# The hard function limits of docs/dev/12, section 3 (the pylint defaults ruff uses); declared
+# tool settings, changed only by decision (D-139).
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+max-args = 5
+max-branches = 12
+max-returns = 6
+max-statements = 50
 
 [tool.ruff.lint.per-file-ignores]
 "tools/**" = ["T20"]

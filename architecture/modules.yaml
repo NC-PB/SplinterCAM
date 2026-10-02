@@ -2,6 +2,8 @@
 # Machine-readable module map (ADR 0004: Python package "splintercam" with C++ kernels in kernel/ folders).
 # tools/arch-check enforces it: Python imports (import-linter), kernel includes, external packages.
 # tools/docs draws docs/generated/modules.md from it. Changing this file needs a person's approval.
+# budget: a module's size in NLOC, without comments and docstrings (Peter, 2026-10-02);
+# tools/size-check reports a module over it and fails one over it + 20 % (docs/dev/12, section 3).
 
 version: 2
 package: splintercam                 # src/splintercam/
@@ -26,7 +28,7 @@ rules:
   - apps-use-job-only        # apps/* depend only on job
 
 modules:
-  foundation:             { layer: 0, kernel: false, depends_on: [], research: ["01"] }
+  foundation:             { layer: 0, kernel: false, depends_on: [], research: ["01"], budget: 250 }
 
   geometry2d:             { layer: 1, kernel: true,  depends_on: [foundation], research: ["02", "03"] }
   geometry3d:             { layer: 1, kernel: true,  depends_on: [foundation], research: ["06", "07"] }
