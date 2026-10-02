@@ -7,7 +7,7 @@ reviewed: YYYY-MM-DD
 provenance: public
 ---
 
-[Index](../research/README.md)
+Index: `research/README.md` (Project Spike)
 
 # NN. Title
 
@@ -48,7 +48,7 @@ For strategies (clean room, D-144): every element of the method with its public 
 
 ## Open items
 
-Readiness **L0**, needed for release **1**. Levels are defined in [AGENTS.md](../AGENTS.md#readiness-levels).
+Readiness **L0**, needed for release **1**. Levels are defined in Project Spike's `AGENTS.md`, section Readiness levels (Project Spike).
 
 ### Registered questions and assumptions
 
@@ -62,4 +62,4 @@ Readiness **L0**, needed for release **1**. Levels are defined in [AGENTS.md](..
 
 ---
 
-[Index](../research/README.md)
+Index: `research/README.md` (Project Spike)

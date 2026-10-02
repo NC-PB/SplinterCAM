@@ -1,8 +1,8 @@
 # Developer guide
 
-> Part of Project Spike: the design concept for the code repository. The scaffold built from it is `test_repo` (its docs folder is a snapshot of 2026-09-27). Change the concept here, not there.
+> From Project Spike's design concept for the code repository, copied on 2026-10-02 (D-156; [docs/spike/README.md](../spike/README.md)). The scaffold built from it is this repository.
 
-How SplinterCAM is built, and why. Agents start from `test_repo/AGENTS.md` and read these documents only when a task needs them.
+How SplinterCAM is built, and why. Agents start from [`AGENTS.md`](../../AGENTS.md) and read these documents only when a task needs them.
 
 | # | Document | Question it answers |
 | --- | --- | --- |
@@ -19,4 +19,4 @@ How SplinterCAM is built, and why. Agents start from `test_repo/AGENTS.md` and r
 | 11 | [User interface](11-user-interface.md) | Layout, generated operation panels, selection slots, simulation workspace |
 | 12 | [Lean code](12-lean-code.md) | How does the code stay small: limits, checks, reviews that subtract, throwaway code? |
 
-Also: [decisions](../decisions/README.md), plans (`test_repo/docs/plans/active`), [research](../research/README.md), `test_repo/docs/templates`, [glossary](../glossary.md), [feature specs](../specs/README.md).
+Also: [ADRs](../adr/README.md), [decisions](../spike/decisions-snapshot.md) and [sources](../spike/sources-snapshot.md) (snapshots), [plans](../plans/active), research ([01](../research/01-foundations.md); the index and the other topics: Project Spike), [templates](../templates), [glossary](../glossary.md), feature specs (`docs/specs/`, none yet).

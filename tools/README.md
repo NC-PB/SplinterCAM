@@ -26,7 +26,7 @@ Agents and people run the same commands, whatever the stack. Each command is a s
 
 ## Implementation (ADR 0004)
 
-The scripts are written in the test app ([plan 0001](../docs/plans/active/0001-stack-test-app.md)). Written so far (step 1 and 2): `bootstrap`, `build`, `format`, `lint`, `test-one`, `check`, `test`.
+The scripts were written in the stack test app (its plan 0001, in the test app's own repository). Written so far (step 1 and 2): `bootstrap`, `build`, `format`, `lint`, `test-one`, `check`, `test`.
 
 `build` regenerates the kernel stubs in `src/splintercam/_kernels/` (nanobind stubgen; while no module has a kernel, the single file `src/splintercam/_kernels.pyi`) after every `uv sync`, so pyright sees the kernel API even though the compiled module itself is what Python imports.
 

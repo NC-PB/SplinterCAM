@@ -2,12 +2,12 @@
 
 # 11. User interface
 
-The desktop application ([ADR 0004](../decisions/0004-tech-stack.md): PySide6 with Qt Widgets and the OCCT viewer) is a client of the `job` module ([ADR 0007](../decisions/0007-headless-first.md)). This document fixes the layout, the interaction model and the rules that keep the interface small in code: most of it is generated from declarations, so adding a strategy needs no interface code. The geometry behind every selection is in [research 25](../research/25-machining-areas-and-selections.md).
+The desktop application ([ADR 0004](../adr/0004-tech-stack.md): PySide6 with Qt Widgets and the OCCT viewer) is a client of the `job` module ([ADR 0007](../adr/0007-headless-first.md)). This document fixes the layout, the interaction model and the rules that keep the interface small in code: most of it is generated from declarations, so adding a strategy needs no interface code. The geometry behind every selection is in research 25 (Project Spike).
 
 ## Principles
 
 1. **No computation in the GUI.** Every action is a call to the `job` API that the command-line runner can make too. The GUI shows state and sends commands.
-2. **Generated, not hand-built.** Operation panels are generated from each strategy's parameter declarations and selection slots ([research 19](../research/19-software-design.md#operations)). A new strategy gets its panel for free.
+2. **Generated, not hand-built.** Operation panels are generated from each strategy's parameter declarations and selection slots (research 19, section Operations (Project Spike)). A new strategy gets its panel for free.
 3. **Show the consequence.** Boundaries, tool positions, start points, leads and the stock are previewed in the 3D view while the user edits, computed by the same code that computes the toolpath.
 4. **Nothing silent.** Every warning and error is a diagnostic with a link to the operation, the parameter and the geometry it concerns.
 5. **Never block.** Computations run in the background with progress and a cancel button; the window always responds.
@@ -48,22 +48,22 @@ Parameters appear in the same groups, in the same order, for every strategy; gro
 
 | # | Group | Contents |
 | --- | --- | --- |
-| 1 | Tool and cutting data | Tool, driven point, spindle speed and feeds from the cutting-data solver, with a lock per value ([research 23](../research/23-cutting-data.md)) |
+| 1 | Tool and cutting data | Tool, driven point, spindle speed and feeds from the cutting-data solver, with a lock per value (research 23 (Project Spike)) |
 | 2 | Geometry | The selection slots of the strategy: machining faces, check faces, boundaries, curves, points, stock source |
 | 3 | Area | Tool position against boundaries, height limits, slope limits, rest material |
 | 4 | Strategy | Pattern, stepover, stepdown, direction, allowances, tolerance |
 | 5 | Order | Levels or regions, one-way or zigzag, start point, reverse |
 | 6 | Entry, leads and links | Entry type, lead-in and lead-out, link types with their fallbacks, the three safe heights |
-| 7 | Tool axis | Multi-axis strategies only ([research 12](../research/12-multi-axis-kinematics.md)) |
+| 7 | Tool axis | Multi-axis strategies only (research 12 (Project Spike)) |
 | 8 | Collision | Tool parts to check, clearances, what to do on a collision |
-| 9 | Feeds by move type | Cutting, plunge, ramp, lead, link and rapid; feed control options ([research 11](../research/11-path-optimisation.md)) |
+| 9 | Feeds by move type | Cutting, plunge, ramp, lead, link and rapid; feed control options (research 11 (Project Spike)) |
 | 10 | Output | Arc fitting, tolerance shares, the controller's smoothing mode, comments |
 
 A **basic view** shows the parameters marked as basic (typically ten or fewer); the **advanced view** shows all. Both edit the same values.
 
 To generate this, each parameter declaration carries, besides type, unit and default: its group, a basic or advanced flag, a label, a tooltip, a link to the help text, an allowed range, and an optional visibility condition in a small expression language (for example "only for closed contours"). A test checks that every declared parameter has all of these ([06](06-testing-and-quality-gates.md)).
 
-Numeric fields accept units and expressions ("10 mm", "0.4 * tool.diameter"), stored in millimetres ([research 19](../research/19-software-design.md#units-and-expressions)).
+Numeric fields accept units and expressions ("10 mm", "0.4 * tool.diameter"), stored in millimetres (research 19, section Units and expressions (Project Spike)).
 
 ## Selection slots
 
@@ -74,7 +74,7 @@ Each strategy declares its selection slots: a name, the allowed entity types (fa
 - **Curve chaining.** Picking one edge proposes the whole tangent-continuous chain; at a fork the candidates are highlighted and the user picks the branch. An arrow shows the direction (click to flip) and a marker shows the side.
 - **Points.** Picked on geometry with snapping (vertex, edge midpoint, arc centre, point on a face) or typed as coordinates in the work frame.
 - **Previews.** The region the tool centre may use (translucent fill), the tool outline at the start point, lead-in arcs, the stock box, the face orientation (two-coloured shading).
-- **Broken selections** (the part changed and a reference could not be re-mapped, [research 25](../research/25-machining-areas-and-selections.md#storing-selections)) are shown in red with a "pick again" action; the operation stays invalid until they are fixed.
+- **Broken selections** (the part changed and a reference could not be re-mapped, research 25, section Storing selections (Project Spike)) are shown in red with a "pick again" action; the operation stays invalid until they are fixed.
 
 ## 3D view
 
@@ -101,7 +101,7 @@ The diagnostics dock lists the typed diagnostics of all operations ([03](03-arch
 
 ## Long computations
 
-Operations compute in worker processes. The tree shows progress per operation and the status bar the overall progress with a cancel button. Editing a parameter marks only the affected aspects dirty ([research 19](../research/19-software-design.md#operations)) and recomputes in the background.
+Operations compute in worker processes. The tree shows progress per operation and the status bar the overall progress with a cancel button. Editing a parameter marks only the affected aspects dirty (research 19, section Operations (Project Spike)) and recomputes in the background.
 
 ## Testing the interface
 

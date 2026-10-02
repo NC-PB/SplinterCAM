@@ -75,7 +75,7 @@ of proprietary systems went in.>
 ## Size estimate
 
 <Kept code in NLOC (Python and C++) and tests. It becomes the module budget in architecture/modules.yaml;
-+20 % fails `tools/size-check` (engineering/12, section 3).>
++20 % fails `tools/size-check` (docs/dev/12, section 3).>
 
 ## Open questions
 
