@@ -30,6 +30,10 @@
 
 <!-- Newest first. What was done, what tools/check reported, what is next. At most about 30 lines per session. -->
 
+### 2026-10-02, session 1, step 1 (bootstrap)
+
+- Plan: run `tools/bootstrap` and `tools/check` on Linux (uv and git-lfs are installed here). Commit the stub `src/splintercam/_kernels.pyi` that the first build writes in place of `src/splintercam/_kernels/__init__.pyi`. Scan every relative link in the Markdown files; fix those in `docs/dev/`, `docs/glossary.md`, `docs/templates/`, `AGENTS.md` and `tools/README.md` (ADRs to `docs/adr/`, decisions and sources to `docs/spike/`, other Project Spike files as plain text "(Project Spike)", `test_repo` paths to this repository's files); list the broken links of the protected `docs/adr/`, `docs/research/` and `docs/spike/` here. Open the pull request, get `check.yml` green on Linux, macOS and Windows, and report `sanitize.yml`.
+
 ## Backlog
 
 ## Blockers
