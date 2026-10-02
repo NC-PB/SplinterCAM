@@ -28,6 +28,9 @@
 | flattening tolerance (t_flat) | `flatten_tol_mm` | Sehnentoleranz der Diskretisierung | What the geometry part leaves for flattening curves (REQ-FND-009) | 01 |
 | topology tolerance (t_topo) | `topology_tol_mm` | Topologietoleranz | Features closer than this count as touching in the float stages, 2u | 01 |
 | declared parameter | `DeclaredParameter` | deklarierter Parameter | A value with its unit, default, range and source (D-049) | 01 |
+| line | `Line` | Strecke | A straight curve from P0 to P1 (D-057) | 01 |
+| arc | `Arc` | Kreisbogen | A circular curve in centre form: exact end points, centre, signed sweep (D-057) | 01 |
+| sweep | `sweep_rad` | Öffnungswinkel | Signed angle of an arc, positive counter-clockwise, 0 < \|sweep\| ≤ 2π | 01 |
 | scallop height | `scallop_height` | Kammhöhe | Height of the ridge left between passes | 09 |
 | toolpath | `Toolpath` | Werkzeugweg | Ordered passes and links of one operation | 10 |
 | CL data | `ClData` | CL-Daten | Neutral cutter-location output before the post | 13 |

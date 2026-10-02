@@ -4,3 +4,5 @@
 C++ compute kernels of splintercam (ADR 0004).
 Only each module's own Python code calls its submodule (docs/dev/03, rule 3).
 """
+
+from splintercam._kernels import geometry2d as geometry2d
