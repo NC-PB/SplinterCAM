@@ -113,6 +113,7 @@ def test_tolerance_must_be_positive_and_finite(ctx: Context, t: float) -> None:
 
 
 @pytest.mark.req("REQ-G2D-231")
-def test_flattening_is_bit_identical_when_repeated(ctx: Context) -> None:
-    first = flatten(CIRCLE, T, AirSide.RIGHT, ctx)
-    assert flatten(CIRCLE, T, AirSide.RIGHT, ctx).tobytes() == first.tobytes()
+@pytest.mark.parametrize("side", [AirSide.LEFT, AirSide.RIGHT])
+def test_flattening_is_bit_identical_when_repeated(ctx: Context, side: AirSide) -> None:
+    first = flatten(CIRCLE, T, side, ctx)
+    assert flatten(CIRCLE, T, side, ctx).tobytes() == first.tobytes()

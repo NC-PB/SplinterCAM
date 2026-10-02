@@ -15,7 +15,8 @@ from splintercam.geometry2d import AirSide, Arc, flatten
 # The ctx fixture holds a progress log and a debug sink that every example shares; flatten uses
 # neither, so sharing it is safe here.
 @pytest.mark.req("REQ-G2D-106", "REQ-G2D-110", "REQ-G2D-112")
-@settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
+# No deadline: the first call after a kernel rebuild can be slow (plan 0003, backlog).
+@settings(suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=None)
 @given(
     r=st.floats(0.01, 1000.0),
     start=st.floats(-math.pi, math.pi),
@@ -30,14 +31,18 @@ def test_flattening_stays_within_t_on_its_side(  # noqa: PLR0913 (Hypothesis dra
     p1 = (r * math.cos(start + sweep), r * math.sin(start + sweep))
     points = flatten(Arc(p0, p1, (0.0, 0.0), sweep), t, side, ctx)
     assert (tuple(points[0]), tuple(points[-1])) == (p0, p1)
+    radius = math.sqrt(p0[0] * p0[0] + p0[1] * p0[1])  # r = |P0 - C|, as the kernel takes it
     s = np.linspace(0.0, 1.0, 64)[:, None, None]
     along = points[:-1] + s * (points[1:] - points[:-1])
     radii = np.hypot(along[..., 0], along[..., 1])
-    slack = 8 * math.ulp(r)  # the rounding of the vertices and of the end points on the circle
-    assert radii.max() <= r + t + slack
-    assert radii.min() >= r - t - slack
+    # Research 01, test 4: 4 rounding units of r; on the last segment also P1's distance from
+    # the circle (REQ-G2D-110).
+    slack = np.full(radii.shape[1], 4 * math.ulp(radius))
+    slack[-1] += abs(math.hypot(*p1) - radius)
+    assert (radii <= radius + t + slack).all()
+    assert (radii >= radius - t - slack).all()
     inscribed = (side is AirSide.LEFT) == (sweep > 0)
     if inscribed:
-        assert radii.max() <= r + slack
+        assert (radii <= radius + slack).all()
     else:
-        assert radii.min() >= r - slack
+        assert (radii >= radius - slack).all()
