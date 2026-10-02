@@ -7,7 +7,11 @@ Soft limits are reported, hard limits fail:
   and clang-tidy's, in tools/lint, once docs/plans/active/0001-protected-changes.patch is applied;
 - module: the NLOC of src/splintercam/<module>/ against its `budget` in architecture/modules.yaml,
   reported over the budget, failing over the budget + 20 %; a module with code but no budget is
-  reported.
+  reported;
+- change, with --change <base> only: lines of non-test code added since the merge base with
+  <base>, over 200 reported, over 400 failing unless --large-change (the pull request's label).
+  Tests, test data, Markdown and generated files do not count, nor do removed lines; renames are
+  detected, binary files named (plan 0002).
 
 NLOC counts the lines that hold code, as lizard does (docs/dev/12, section 3): Python lines with a
 token other than a comment, docstrings and other bare strings left out; C++ lines that are not
@@ -17,6 +21,7 @@ blank and do not start with //. A file that cannot be read as UTF-8 or parsed fa
 import argparse
 import ast
 import io
+import subprocess
 import sys
 import time
 import tokenize
@@ -27,11 +32,17 @@ from pathlib import Path
 from modules import module_budgets
 from runner import ROOT, Status, StepResult, finish, git_files
 
+# Not counted as non-test code by --change (docs/dev/12, section 3; plan 0002).
+TEST_FOLDERS = ("tests/", "testdata/")
+LARGE_CHANGE_LABEL = "large-change"
+
 # The limits of docs/dev/12, section 3: declared tool settings, changed only by decision (D-139).
 FILE_SOFT_LINES = 400
 FILE_HARD_LINES = 800
 FUNCTION_SOFT_LINES = 60
 MODULE_HARD_FACTOR = 1.2
+CHANGE_SOFT_LINES = 200
+CHANGE_HARD_LINES = 400
 
 PYTHON_SUFFIXES = frozenset({".py", ".pyi"})
 CPP_SUFFIXES = frozenset({".cpp", ".hpp", ".h"})
@@ -139,25 +150,91 @@ def size_findings() -> list[Finding]:
     return findings
 
 
+def _counted(name: str, root: Path) -> bool:
+    if name.startswith(TEST_FOLDERS) or name.endswith(".md"):
+        return False
+    path = root / name
+    if not path.is_file():
+        return True
+    head = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    return not is_generated(head)
+
+
+def added_lines(base: str, root: Path = ROOT) -> tuple[int, list[str]]:
+    """Lines of non-test code added since the merge base of HEAD with `base`, and the binary
+    files changed (git numstat cannot count their lines)."""
+    argv = ["git", "diff", "--numstat", "-z", "-M", f"{base}...HEAD"]
+    output = subprocess.run(argv, cwd=root, check=True, capture_output=True).stdout
+    fields = output.decode("utf-8").split("\0")
+    count, binaries = 0, list[str]()
+    while len(fields) > 1:
+        added, _removed, name = fields.pop(0).split("\t", 2)
+        if not name:  # a rename: the old and the new path follow
+            name = fields[1]
+            del fields[:2]
+        if added == "-":
+            binaries.append(name)
+        elif _counted(name, root):
+            count += int(added)
+    return count, sorted(binaries)
+
+
+def change_findings(added: int, binaries: Sequence[str], *, large_change: bool) -> list[Finding]:
+    findings = [Finding(False, f"binary file changed, not counted: {name}") for name in binaries]
+    if added > CHANGE_HARD_LINES and not large_change:
+        text = f"change: {added} lines of non-test code added, over {CHANGE_HARD_LINES}"
+        return [
+            *findings,
+            Finding(True, f"{text}; split it, or ask for the label {LARGE_CHANGE_LABEL}"),
+        ]
+    if added > CHANGE_SOFT_LINES:
+        text = f"change: {added} lines of non-test code added, over {CHANGE_SOFT_LINES}"
+        if added > CHANGE_HARD_LINES:
+            text += f", allowed by the label {LARGE_CHANGE_LABEL}"
+        findings.append(Finding(False, text))
+    return findings
+
+
+def _step(name: str, findings: Sequence[Finding], seconds: float, reproduce: str) -> StepResult:
+    for finding in findings:
+        print(f"{'FAIL' if finding.fails else 'REPORT'}  {finding.text}", flush=True)
+    failed = sum(finding.fails for finding in findings)
+    detail = f"{len(findings) - failed} reported"
+    if failed:
+        detail = f"{failed} over a hard limit, {detail}; reproduce: {reproduce}"
+        return StepResult(name, Status.FAIL, seconds, detail)
+    return StepResult(name, Status.PASS, seconds, detail)
+
+
 def size_check_step() -> StepResult:
     """One step for tools/check: fails over a hard limit and reports the soft ones."""
     start = time.perf_counter()
     findings = size_findings()
-    for finding in findings:
-        print(f"{'FAIL' if finding.fails else 'REPORT'}  {finding.text}", flush=True)
-    seconds = time.perf_counter() - start
-    failed = sum(finding.fails for finding in findings)
-    detail = f"{len(findings) - failed} reported"
-    if failed:
-        detail = f"{failed} over a hard limit, {detail}; reproduce: tools/size-check"
-        return StepResult("size-check", Status.FAIL, seconds, detail)
-    return StepResult("size-check", Status.PASS, seconds, detail)
+    return _step("size-check", findings, time.perf_counter() - start, "tools/size-check")
+
+
+def change_step(base: str, *, large_change: bool) -> StepResult:
+    """The change limit against `base`, the step the change-size workflow runs."""
+    start = time.perf_counter()
+    added, binaries = added_lines(base)
+    findings = change_findings(added, binaries, large_change=large_change)
+    print(f"change: {added} lines of non-test code added against {base}", flush=True)
+    reproduce = f"tools/size-check --change {base}"
+    return _step("change-size", findings, time.perf_counter() - start, reproduce)
 
 
 def main(argv: Sequence[str]) -> int:
     parser = argparse.ArgumentParser(prog="tools/size-check", description=__doc__)
-    parser.parse_args(argv)
-    return finish("size-check", [size_check_step()])
+    parser.add_argument("--change", metavar="BASE", help="check only the lines added against BASE")
+    parser.add_argument(
+        "--large-change",
+        action="store_true",
+        help=f"the pull request has the label {LARGE_CHANGE_LABEL}",
+    )
+    args = parser.parse_args(argv)
+    if args.change is None:
+        return finish("size-check", [size_check_step()])
+    return finish("size-check", [change_step(args.change, large_change=args.large_change)])
 
 
 if __name__ == "__main__":
