@@ -227,7 +227,7 @@ def _exact_floor_mm(fit_share: float) -> Fraction:
 @pytest.mark.req("REQ-FND-002")
 @pytest.mark.parametrize("fit_share", [0.0, 0.03, 0.1, 0.3, 0.4])
 def test_a_chord_tolerance_below_the_floor_of_its_own_shares_is_rejected(fit_share: float) -> None:
-    shares = _shares(0.1, fit_share, 0.5, 0.1)
+    shares = _shares(0.1, fit_share, 0.25, 0.1)  # sum at most 0.85: only the floor is tested
     floor = _exact_floor_mm(fit_share)
     # One per cent either side: the floor itself is a double computed once, so its exact bits
     # are checked through for_operation at the default shares (research 01, test 15).

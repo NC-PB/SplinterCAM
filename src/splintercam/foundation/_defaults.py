@@ -32,26 +32,32 @@ class DeclaredParameter:
     source: str
 
 
-def _parameter(name: str, entry: dict[str, Any]) -> DeclaredParameter:
-    where = f"{_DEFAULTS_FILE.name}, {name}"
+def _parameter(entry: dict[str, Any]) -> DeclaredParameter:
     if frozenset(entry) != _KEYS:
-        raise ValueError(f"{where}: needs exactly the keys {sorted(_KEYS)}")
+        raise ValueError(f"needs exactly the keys {sorted(_KEYS)}")
     low, high = (float(bound) for bound in entry["range"])
     parameter = DeclaredParameter(
         float(entry["default"]), str(entry["unit"]), (low, high), str(entry["source"])
     )
     if not (low <= parameter.default <= high and parameter.unit and parameter.source):
-        raise ValueError(f"{where}: default outside its range, or no unit or source")
+        raise ValueError("default outside its range, or no unit or source")
     return parameter
 
 
-def _read_defaults() -> Mapping[str, DeclaredParameter]:
-    with _DEFAULTS_FILE.open("rb") as file:
+def read_defaults(path: Path) -> Mapping[str, DeclaredParameter]:
+    """The entries of the defaults file at `path`; a broken one raises `ValueError` naming its key."""
+    with path.open("rb") as file:
         table = tomllib.load(file)
-    return types.MappingProxyType({name: _parameter(name, entry) for name, entry in table.items()})
+    parameters: dict[str, DeclaredParameter] = {}
+    for name, entry in table.items():
+        try:
+            parameters[name] = _parameter(entry)
+        except (TypeError, ValueError) as error:  # TypeError: a value or entry of the wrong type
+            raise ValueError(f"{path.name}, {name}: {error}") from error
+    return types.MappingProxyType(parameters)
 
 
-TOLERANCE_DEFAULTS = _read_defaults()
+TOLERANCE_DEFAULTS = read_defaults(_DEFAULTS_FILE)
 """Every entry of `tolerance_defaults.toml`, by name, read once at import (REQ-FND-008).
 
 For building tolerance sets and declaring parameters; a computation reads its tolerances from its

@@ -26,13 +26,21 @@ _ARC_TOL_FLOOR_MM = _default("arc_tol_floor_grid_units") * _GRID_UNIT_MM
 _IMPORT_ARC_DEVIATION_MM = _default("import_arc_deviation_mm")  # D-093
 _SNAP_ALLOWANCE_LENGTH_EPS = _default("snap_allowance_length_eps")
 _TOPOLOGY_TOL_MM = _default("topology_tol_grid_units") * _GRID_UNIT_MM
-# The fit band, (0.3 + 0.05)·tol - (6 + 2)·u below tol = 2u/0.05, is 0 at tol_min = 8u/0.35;
-# computed once, in double, it is the double nearest 2/875 mm (research 01, Tolerances).
-_TOL_MIN_MM = (
-    (_default("rounding_margin_grid_units") + _default("arc_tol_floor_grid_units"))
-    * _GRID_UNIT_MM
-    / (_default("share_fit") + _ARC_TOL_SHARE)
-)
+_MARGIN_AND_FLOOR_MM = (
+    _default("rounding_margin_grid_units") + _default("arc_tol_floor_grid_units")
+) * _GRID_UNIT_MM
+
+
+def _tol_min_mm(fit_share: float) -> float:
+    # The fit band, (fit share + 0.05)·tol - (6 + 2)·u below tol = 2u/0.05, is 0 at this tol
+    # (research 01, Tolerances; the floor of REQ-FND-002, Peter 2026-10-02).
+    return _MARGIN_AND_FLOOR_MM / (fit_share + _ARC_TOL_SHARE)
+
+
+# tol_min = 8u/0.35, computed once: the double nearest 2/875 mm (research 01, Tolerances).
+_TOL_MIN_MM = _tol_min_mm(_default("share_fit"))
+# The upper end of the declared tol range, a guard against unit mistakes (research 01, Tolerances).
+_TOL_MAX_MM = TOLERANCE_DEFAULTS["chord_tol_finishing_mm"].range[1]
 # Rounded up, so that the value a refusal suggests is accepted.
 _TOL_MIN_NAMED = str(
     Decimal(_TOL_MIN_MM).quantize(
@@ -92,6 +100,12 @@ class ToleranceSet:
         total = sum((fractions.Fraction(share) for share in shares.values()), fractions.Fraction(0))
         if total > 1:
             raise ValueError(f"stage_shares must sum to at most 1, got {float(total)!r}")
+        floor_mm = _tol_min_mm(shares["fit"])
+        if self.chord_tol_mm < floor_mm:
+            message = (
+                f"chord_tol_mm must be >= {floor_mm!r} for these shares, got {self.chord_tol_mm!r}"
+            )
+            raise ValueError(message)
         # Frozen dataclass: __setattr__ is disabled outside __init__/__post_init__.
         object.__setattr__(self, "stage_shares", tuple((p, shares[p]) for p in BUDGET_PARTS))
 
@@ -152,6 +166,9 @@ class ToleranceSet:
                 f"use at least {_TOL_MIN_NAMED} mm"
             )
             return Result(None, (Diagnostic("TOL_BELOW_MINIMUM", Severity.ERROR, message),))
+        if tol_mm > _TOL_MAX_MM:
+            message = f"tolerance {tol_mm!r} mm is above {_TOL_MAX_MM:g} mm; check its unit"
+            return Result(None, (Diagnostic("TOL_ABOVE_MAXIMUM", Severity.ERROR, message),))
         tolerances = cls(
             chord_tol_mm=tol_mm,
             length_eps_mm=_default("length_eps_mm"),
