@@ -49,9 +49,12 @@ def test_a_python_function_over_60_lines_is_reported_not_failed() -> None:
     assert "long: 61 lines" in finding.text
 
 
-def test_nloc_counts_code_and_docstrings_not_comments_or_blank_lines() -> None:
+def test_nloc_counts_code_not_docstrings_comments_or_blank_lines() -> None:
+    # Peter, 2026-10-02: docstrings do not count, as lizard counts NLOC (docs/dev/12, section 3).
     source = '"""Doc\nstring."""\n\n# comment\nx = (\n    1\n)  # trailing\n'
-    assert nloc(Path("a.py"), source) == 5
+    assert nloc(Path("a.py"), source) == 3
+    function = 'def f() -> int:\n    """Doc."""\n    return 1\n\n\nY = 2\n"""About Y."""\n'
+    assert nloc(Path("a.py"), function) == 3
     assert nloc(Path("a.cpp"), "// comment\n\nint f() {\n  return 1;\n}\n") == 3
 
 
