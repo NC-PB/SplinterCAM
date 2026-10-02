@@ -153,3 +153,26 @@ def test_the_parts_of_any_accepted_set_never_sum_to_more_than_tol(
     assert sum(Fraction(part) for part in parts) <= Fraction(tol_mm) + 2 * Fraction(
         math.ulp(tol_mm)
     )
+
+
+@pytest.mark.req("REQ-FND-002")
+@pytest.mark.req("REQ-FND-009")
+def test_the_overrun_shares_at_their_own_floor_sum_to_at_most_tol() -> None:
+    # The shares that summed to more than tol after the clamp at 0.011 mm (spec review), built two
+    # ulps above their floor 6u / 0.03 = 0.02 mm, where the fit band is about 0 and is clamped.
+    values = (0.42, 0.03, 0.45, 0.1)
+    tol_mm = float(6 * _GRID_UNIT / Fraction(values[1]))
+    for _ in range(2):
+        tol_mm = math.nextafter(tol_mm, math.inf)
+    budget = ToleranceSet(
+        chord_tol_mm=tol_mm,
+        length_eps_mm=float(_LENGTH_EPS),
+        angle_eps_rad=1e-9,
+        stage_shares=tuple(zip(BUDGET_PARTS, values, strict=True)),
+    )
+    parts = [budget.stage_tol_mm(part) for part in BUDGET_PARTS]
+    assert all(part >= 0.0 for part in parts), parts
+    assert budget.stage_tol_mm("fit") <= math.ulp(tol_mm)
+    assert sum(Fraction(part) for part in parts) <= Fraction(tol_mm) + 2 * Fraction(
+        math.ulp(tol_mm)
+    )

@@ -6,7 +6,7 @@ import sys
 from fractions import Fraction
 
 import pytest
-from hypothesis import given
+from hypothesis import assume, given
 from hypothesis import strategies as st
 
 from splintercam.foundation import BUDGET_PARTS, ToleranceSet
@@ -18,7 +18,7 @@ type _Shares = tuple[tuple[str, float], ...]
 _LENGTH_EPS_MM = 1e-6
 _ANGLE_EPS_RAD = 1e-9
 # 1 mm: the share tests below see the floor and t_flat of REQ-FND-002 only for a fit share under
-# 0.0006 or a geometry share under about 0.0501; `_build_or_none` tells those refusals apart.
+# 0.0006 or a geometry share under about 0.0501; `_expected_refusal` predicts those refusals.
 _CHORD_TOL_MM = 1.0
 _RESEARCH_SHARES: _Shares = (("geometry", 0.1), ("fit", 0.3), ("control", 0.5), ("reserve", 0.1))
 
@@ -38,14 +38,26 @@ def _build(
     )
 
 
-def _build_or_none(stage_shares: _Shares) -> ToleranceSet | None:
-    """The set, or None when the floor or t_flat of REQ-FND-002 refuses it, not its shares."""
+def _built_or_refusal(stage_shares: _Shares) -> ToleranceSet | str:
+    """The set at 1 mm, or "floor" or "t_flat" when that rule of REQ-FND-002 refuses it."""
     try:
         return _build(stage_shares)
     except ValueError as error:
-        if "t_flat" in str(error) or "chord_tol_mm must be >=" in str(error):
-            return None
+        if "t_flat" in str(error):
+            return "t_flat"
+        if "chord_tol_mm must be >=" in str(error):
+            return "floor"
         raise
+
+
+def _expected_refusal(geometry_share: float, fit_share: float) -> str | None:
+    """The rule of REQ-FND-002 that refuses shares summing to at most 1 at 1 mm, exactly."""
+    tol = Fraction(_CHORD_TOL_MM)
+    if fit_share == 0.0 or _exact_floor_mm(fit_share) > tol:
+        return "floor"
+    if (Fraction(geometry_share) - Fraction("0.05")) * tol <= _exact_zero_flatten_allowance():
+        return "t_flat"
+    return None
 
 
 def _shares(*values: float) -> _Shares:
@@ -160,13 +172,14 @@ def test_a_budget_part_given_twice_is_rejected(shares: _Shares) -> None:
 
 @pytest.mark.req("REQ-FND-002")
 @given(
-    length_eps=_finite_floats(min_value=5e-324, max_value=1e-3),
+    length_eps=_finite_floats(min_value=5e-324, max_value=1.0),
     angle_eps=_VALID_TOLERANCE,
     data=st.data(),
-    # A geometry share above 0.05 and a fit share above 0: otherwise no tol is valid.
+    # A geometry share above 0.05 and a fit share above 0: otherwise no tol is valid. The lower
+    # ends keep the smallest valid tol finite, at most 3.0001 mm / 0.0001 = 30001 mm.
     values=st.tuples(
-        _finite_floats(min_value=0.06, max_value=0.25),
-        _finite_floats(min_value=0.01, max_value=0.25),
+        _finite_floats(min_value=0.0501, max_value=0.25),
+        _finite_floats(min_value=1e-4, max_value=0.25),
         _finite_floats(min_value=0.0, max_value=0.25),
         _finite_floats(min_value=0.0, max_value=0.25),
     ),
@@ -211,15 +224,21 @@ def test_share_acceptance_matches_the_exact_fraction_sum(
         with pytest.raises(ValueError, match="sum to at most 1"):
             _build(shares)
     else:
-        built = _build_or_none(shares)
-        assert built is None or built.stage_shares == pairs
+        built = _built_or_refusal(shares)
+        expected = _expected_refusal(values[0], values[1])
+        if expected is None:
+            assert isinstance(built, ToleranceSet)
+            assert built.stage_shares == pairs
+        else:
+            assert built == expected
 
 
 @pytest.mark.req("REQ-FND-002")
 @pytest.mark.parametrize(
     ("values", "should_be_accepted"),
     [
-        ((1.0, 0.0, 0.0, 0.0), None),  # accepted shares, but fit share 0: refused by the floor
+        ((1.0, 0.0, 0.0, 0.0), "floor"),  # accepted shares, but fit share 0: refused by the floor
+        ((0.75, 0.25, 0.0, 0.0), True),  # exactly 1, one share dominant
         ((0.5, 0.5, 0.0, 0.0), True),
         ((0.25, 0.25, 0.5, 0.0), True),
         ((0.1, 0.3, 0.5, 0.1), True),  # D-056's shares: exactly 1 as doubles
@@ -230,11 +249,11 @@ def test_share_acceptance_matches_the_exact_fraction_sum(
     ],
 )
 def test_shares_summing_to_exactly_or_just_over_one(
-    values: tuple[float, float, float, float], should_be_accepted: bool | None
+    values: tuple[float, float, float, float], should_be_accepted: bool | str
 ) -> None:
     shares = _shares(*values)
-    if should_be_accepted is None:
-        assert _build_or_none(shares) is None
+    if isinstance(should_be_accepted, str):
+        assert _built_or_refusal(shares) == should_be_accepted
     elif should_be_accepted:
         assert _build(shares).stage_shares == shares
     else:
@@ -252,10 +271,15 @@ def _exact_floor_mm(fit_share: float) -> Fraction:
     return 8 * _U / (fit + Fraction("0.05")) if fit >= Fraction("0.15") else 6 * _U / fit
 
 
+def _exact_zero_flatten_allowance(length_eps_mm: float = _LENGTH_EPS_MM) -> Fraction:
+    # What t_flat = (geometry share - 0.05)·tol - 0.0001 mm - 3·eps_len takes from geometry
+    # besides the arc tolerance share (REQ-FND-009; research 01, Tolerances).
+    return Fraction("0.0001") + 3 * Fraction(length_eps_mm)
+
+
 def _exact_zero_flatten_tol_mm(geometry_share: float, length_eps_mm: float) -> Fraction:
-    # The tol where t_flat = (geometry share - 0.05)·tol - 0.0001 mm - 3·eps_len is 0
-    # (REQ-FND-009); geometry share > 0.05.
-    allowance = Fraction("0.0001") + 3 * Fraction(length_eps_mm)
+    # The tol where t_flat is 0; geometry share > 0.05.
+    allowance = _exact_zero_flatten_allowance(length_eps_mm)
     return allowance / (Fraction(geometry_share) - Fraction("0.05"))
 
 
@@ -308,3 +332,27 @@ def test_a_fit_share_of_0_is_rejected_at_any_tolerance(chord_tol: float) -> None
     # 6u / 0: no tol leaves the fit band at 0 or above (Peter, 2026-10-02).
     with pytest.raises(ValueError, match="chord_tol_mm must be >="):
         _build(_shares(0.2, 0.0, 0.5, 0.1), chord_tol_mm=chord_tol)
+
+
+@pytest.mark.req("REQ-FND-002")
+@given(
+    geometry_share=st.floats(min_value=0.0, max_value=0.5),
+    length_eps=st.floats(min_value=1e-9, max_value=1e-2),
+    chord_tol=st.floats(min_value=0.003, max_value=1.0),
+)
+def test_t_flat_separates_rejected_from_accepted(
+    geometry_share: float, length_eps: float, chord_tol: float
+) -> None:
+    # Fit share 0.3: the floor, 0.0022857 mm, lies below every tol drawn; only t_flat is tested.
+    shares = _shares(geometry_share, 0.3, 0.1, 0.1)
+    exact_t_flat = (Fraction(geometry_share) - Fraction("0.05")) * Fraction(
+        chord_tol
+    ) - _exact_zero_flatten_allowance(length_eps)
+    # Within a few ulps of tol of 0, the double t_flat may round to either side.
+    assume(abs(exact_t_flat) > 4 * Fraction(math.ulp(chord_tol)))
+    if exact_t_flat > 0:
+        built = _build(shares, chord_tol_mm=chord_tol, length_eps_mm=length_eps)
+        assert built.flatten_tol_mm > 0.0
+    else:
+        with pytest.raises(ValueError, match="t_flat"):
+            _build(shares, chord_tol_mm=chord_tol, length_eps_mm=length_eps)
