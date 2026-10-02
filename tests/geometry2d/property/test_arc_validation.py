@@ -18,7 +18,8 @@ sweep_size = st.floats(0.01, math.tau - 0.01)
 
 
 @pytest.mark.req("REQ-G2D-039", "REQ-G2D-042", "REQ-G2D-043")
-# The Context fixture is immutable, so sharing it across examples is safe.
+# The ctx fixture holds a progress log and a debug sink that every example shares; make_arc
+# uses neither, so sharing it is safe here.
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
 @given(
     cx=coordinate,
