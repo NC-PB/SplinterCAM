@@ -52,11 +52,13 @@ FetchContent_Declare(Clipper2
   SYSTEM)
 FetchContent_MakeAvailable(Clipper2)
 
-# Warnings are errors (docs/dev/04, C++ kernels).
+# Warnings are errors (docs/dev/04, C++ kernels). Strict floating point for every kernel source: no
+# contraction into fused multiply-adds, no fast-math (D-097; geometry2d SPEC, REQ-G2D-014), so the
+# exact arithmetic holds and constructions round the same way on every compiler.
 if(MSVC)
-  set(SPLINTERCAM_CXX_OPTIONS /W4 /WX /permissive-)
+  set(SPLINTERCAM_CXX_OPTIONS /W4 /WX /permissive- /fp:precise)
 else()
-  set(SPLINTERCAM_CXX_OPTIONS -Wall -Wextra -Wpedantic -Werror)
+  set(SPLINTERCAM_CXX_OPTIONS -Wall -Wextra -Wpedantic -Werror -ffp-contract=off -fno-fast-math)
 endif()
 
 # Assertions stay on in the Release builds the tests run against (docs/dev/04, errors). A release
