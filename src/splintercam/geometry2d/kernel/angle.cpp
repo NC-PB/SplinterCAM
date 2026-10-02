@@ -2,7 +2,8 @@
 // Arctangent by argument reduction and the Taylor series (ours, 2026-10-02): atan x = π/2 −
 // atan(1/x) for x > 1, and the addition formula atan x = π/6 + atan((√3·x − 1)/(√3 + x)) for x
 // above tan(π/12) = 2 − √3, leave |t| <= 2 − √3 < 0.268, where 14 terms of t − t³/3 + t⁵/5 − …
-// leave an error below 0.268^29 / 29 < 1e-18, far below a rounding unit. Every step is a correctly
+// leave an truncation error below 0.268^29 / 29 < 1e-18; the rounding of the reductions and of the
+// constants π/2, π/6 and π adds a few rounding units (the tests allow 4). Every step is a correctly
 // rounded IEEE operation, compiled without contraction (CMakeLists.txt), so the result is the same
 // everywhere.
 #include "angle.hpp"

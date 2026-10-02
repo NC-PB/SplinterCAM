@@ -5,9 +5,12 @@ Curves)."""
 import math
 from typing import assert_never
 
+import numpy as np
+
 import pytest
 
 from geometry2d_checks import codes, with_length_eps
+from splintercam import _kernels
 from splintercam.foundation import Context, Severity
 from splintercam.geometry2d import Arc, Curve, Line, make_arc, make_line
 
@@ -188,3 +191,44 @@ def test_length_eps_comes_from_the_context(ctx: Context) -> None:
     p0, p1, centre = (10.0, 0.0), (-(10.0 + 1.5e-6), 0.0), (0.0, 0.0)
     assert codes(make_arc(p0, p1, centre, math.pi, ctx)) == ["ARC_INCONSISTENT"]
     assert make_arc(p0, p1, centre, math.pi, with_length_eps(ctx, 2e-6)).ok
+
+
+def _check_arcs(rows: list[list[float]], length_eps_mm: float) -> list[int]:
+    out = np.empty(len(rows), dtype=np.int8)
+    _kernels.geometry2d.check_arcs(np.array(rows, dtype=np.float64), length_eps_mm, out)
+    return out.tolist()
+
+
+@pytest.mark.req("REQ-G2D-003", "REQ-G2D-042")
+def test_p1_exactly_eps_len_off_the_circle_counts_as_within() -> None:
+    # Powers of two: |P1 - C| - r = (1 + 2^-20) - 1 = 2^-20 exactly.
+    eps = 2.0**-20
+    beyond = math.nextafter(1.0 + eps, math.inf)
+    rows = [
+        [1.0, 0.0, -(1.0 + eps), 0.0, 0.0, 0.0, math.pi],
+        [1.0, 0.0, -beyond, 0.0, 0.0, 0.0, math.pi],
+    ]
+    assert _check_arcs(rows, eps) == [0, 1]
+
+
+@pytest.mark.req("REQ-G2D-003", "REQ-G2D-043")
+def test_sweep_exactly_at_the_angle_limit_counts_as_within() -> None:
+    # P1 = (0, 1) gives the angle pi/2 exactly (x = 0); with r = 1 the difference is
+    # sweep - pi/2, exact by Sterbenz's lemma, so a length epsilon equal to it sits on the limit.
+    sweep = math.pi / 2 + 2.0**-20
+    limit = sweep - math.pi / 2
+    row = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0, sweep]
+    assert _check_arcs([row], limit) == [0]
+    assert _check_arcs([row], math.nextafter(limit, 0.0)) == [2]
+
+
+@pytest.mark.req("REQ-G2D-043", "REQ-G2D-045")
+@pytest.mark.parametrize("sweep", [math.tau, -math.tau])
+def test_full_circle_row_passes_the_kernel_angle_check(sweep: float) -> None:
+    # The angle from P0 to P1 = P0 is 0, which matches |sweep| = 2*pi modulo 2*pi.
+    assert _check_arcs([[5.0, 0.0, 5.0, 0.0, 0.0, 0.0, sweep]], EPS) == [0]
+
+
+@pytest.mark.req("REQ-G2D-043")
+def test_line_rows_are_not_checked() -> None:
+    assert _check_arcs([[0.0, 0.0, 1.0, 0.0, math.nan, math.nan, 0.0]], EPS) == [0]
