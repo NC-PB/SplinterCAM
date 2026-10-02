@@ -48,7 +48,7 @@ Mixed stacks are possible, but each extra language doubles the tooling that has 
 
 Status on 2026-09-24, after ADR 0004:
 
-- Done: [ADR 0004](../adr/0004-tech-stack.md) accepted; the language appendix in [04](04-code-conventions.md); layout ([02](02-repository-layout.md)), architecture rules ([03](03-architecture-rules.md)), tests ([06](06-testing-and-quality-gates.md)), licences ([09](09-dependencies-licensing-provenance.md)); `templates/AGENTS.md` and `templates/modules.yaml` (Project Spike), which became [`AGENTS.md`](../../AGENTS.md) and [`architecture/modules.yaml`](../../architecture/modules.yaml), the path-scoped rules and the implementation column in [tools/README.md](../../tools/README.md).
+- Done: [ADR 0004](../adr/0004-tech-stack.md) accepted; the language appendix in [04](04-code-conventions.md); layout ([02](02-repository-layout.md)), architecture rules ([03](03-architecture-rules.md)), tests ([06](06-testing-and-quality-gates.md)), licences ([09](09-dependencies-licensing-provenance.md)); `templates/AGENTS.md` and `templates/modules.yaml` (Project Spike; here [`AGENTS.md`](../../AGENTS.md) and [`architecture/modules.yaml`](../../architecture/modules.yaml)), the path-scoped rules and the implementation column in [tools/README.md](../../tools/README.md).
 - In the test app (its plan 0001, in the test app's own repository): the real `tools/*` scripts, the CI matrix for the three systems, the packaging tool and signing, and confirming or replacing ADR 0004.
 
 ## Sources

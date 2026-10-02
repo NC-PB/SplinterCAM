@@ -39,7 +39,7 @@ def offset(region: Region, distance_mm: float, mode: OffsetMode, ctx: Context) -
 
 ## Invariants
 
-<Properties that hold for every valid input. Each maps to requirement IDs and a property test. Start from the module's row in docs/research/24.>
+<Properties that hold for every valid input. Each maps to requirement IDs and a property test. Start from the module's row in RESEARCH 24 (Project Spike).>
 
 ## Tolerance budget
 
@@ -64,7 +64,7 @@ of proprietary systems went in.>
 ## Test plan
 
 - Unit: <…>
-- Property: <generators, including messy inputs from docs/research/18>
+- Property: <generators, including messy inputs from RESEARCH 18 (Project Spike)>
 - Golden cases: <testdata/zoo names>
 - Differential: <reference library, if any>
 
