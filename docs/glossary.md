@@ -22,7 +22,12 @@
 | rapid | `rapid` | Eilgang | Positioning move at maximum speed (G0) | 10 |
 | clearance, retract and feed height | `clearance_height`, `retract_height`, `feed_height` | Sicherheits-, Rückzugs-, Vorschubhöhe | The three safe heights of an operation | 10 |
 | chord tolerance | `chord_tolerance` | Sehnentoleranz | Maximum deviation of a flattened or fitted curve | 01, 11 |
-| tolerance set | `ToleranceSet` | Toleranzsatz | All tolerances of an operation and their shares per stage | 01 |
+| tolerance set | `ToleranceSet` | Toleranzsatz | All tolerances of an operation: epsilons, tol and its budget parts | 01 |
+| budget part | `BUDGET_PARTS`: `geometry`, `fit`, `control`, `reserve` | Toleranzanteil | A part of the operation tolerance tol, with its base share (D-056, D-146) | 01 |
+| grid unit (u) | `grid_unit_mm` | Rasterweite | Step of the offset kernel's integer grid, 0.0001 mm (D-058, D-132) | 01, 02 |
+| flattening tolerance (t_flat) | `flatten_tol_mm` | Sehnentoleranz der Diskretisierung | What the geometry part leaves for flattening curves (REQ-FND-009) | 01 |
+| topology tolerance (t_topo) | `topology_tol_mm` | Topologietoleranz | Features closer than this count as touching in the float stages, 2u | 01 |
+| declared parameter | `DeclaredParameter` | deklarierter Parameter | A value with its unit, default, range and source (D-049) | 01 |
 | scallop height | `scallop_height` | Kammhöhe | Height of the ridge left between passes | 09 |
 | toolpath | `Toolpath` | Werkzeugweg | Ordered passes and links of one operation | 10 |
 | CL data | `ClData` | CL-Daten | Neutral cutter-location output before the post | 13 |

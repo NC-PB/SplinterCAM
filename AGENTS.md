@@ -30,14 +30,15 @@ Status: early start of release 1 (D-156): `foundation` first, then the topic 01 
 
 Run from the repository root. All are stack-neutral wrappers in `tools/`.
 
-- `tools/check`: format, lint, build, tests of changed modules, architecture, traceability and licence checks. Must pass before you report a task as done.
+- `tools/check`: format, lint, size, build, tests of changed modules, architecture, traceability and licence checks. Must pass before you report a task as done.
+- `tools/size-check`: the file, function and module size limits of `docs/dev/12`, section 3.
 - `tools/test-one <module> [filter]`: fast loop for one module.
 - `tools/test`: the full suite.
 - `tools/render <case>`: SVG/PNG of a test case's input, debug geometry and output. Look at it after any geometry change.
 - `tools/replay <failure-file>`: re-run a dumped failing input.
 - `tools/golden-diff <case>`: how the output differs from the approved golden files.
 - `tools/new-module <name>`: scaffold a module (only when asked).
-After cloning, run `tools/bootstrap`; on Windows, run the `tools/` scripts from Git Bash. Written so far: `bootstrap`, `build`, `format`, `lint`, `test-one`, `check` (`tools/README.md` says what each wraps). `tools/check` reports the checks that do not exist yet as skipped. `test`, `render`, `replay`, `golden-diff` and `new-module` come in later plan steps; until then, run the full suite with `uv run pytest`.
+After cloning, run `tools/bootstrap`; on Windows, run the `tools/` scripts from Git Bash. Written so far: `bootstrap`, `build`, `format`, `lint`, `test-one`, `test`, `size-check`, `check` (`tools/README.md` says what each wraps). `tools/check` reports the checks that do not exist yet as skipped. `render`, `replay`, `golden-diff` and `new-module` come in later plan steps.
 
 ## How to work
 

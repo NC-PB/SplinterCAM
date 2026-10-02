@@ -12,7 +12,8 @@ Agents and people run the same commands, whatever the stack. Each command is a s
 | `tools/lint [module]` | Linters and analyzers, warnings as errors | under 1 min |
 | `tools/test-one <module> [filter]` | Unit and property tests of one module | under 30 s |
 | `tools/test [--all]` | Tests of changed modules and their dependents; `--all` for everything | minutes |
-| `tools/check [--fast]` | format check, lint, build, tests of changed modules, `arch-check`, `trace-check`, `licence-check` | under 5 min |
+| `tools/check [--fast]` | format check, lint, `size-check`, build, tests of changed modules, `arch-check`, `trace-check`, `licence-check` | under 5 min |
+| `tools/size-check` | File, function and module size limits of [docs/dev/12](../docs/dev/12-lean-code.md), section 3 | seconds |
 | `tools/arch-check` | Enforce `architecture/modules.yaml` | seconds |
 | `tools/trace-check` | Requirements without tests, tests with unknown IDs; writes `docs/generated/traceability.md` | seconds |
 | `tools/licence-check` | SPDX headers (REUSE), dependency licences, `testdata/LICENSES.md` entries | seconds |
@@ -26,7 +27,7 @@ Agents and people run the same commands, whatever the stack. Each command is a s
 
 ## Implementation (ADR 0004)
 
-The scripts were written in the stack test app (its plan 0001, in the test app's own repository). Written so far (step 1 and 2): `bootstrap`, `build`, `format`, `lint`, `test-one`, `check`, `test`.
+The scripts were written in the stack test app (its plan 0001, in the test app's own repository). Written so far: `bootstrap`, `build`, `format`, `lint`, `test-one`, `check`, `test` there, and `size-check` here (this repository's plan 0001, step 3).
 
 `build` regenerates the kernel stubs in `src/splintercam/_kernels/` (nanobind stubgen; while no module has a kernel, the single file `src/splintercam/_kernels.pyi`) after every `uv sync`, so pyright sees the kernel API even though the compiled module itself is what Python imports.
 
@@ -42,7 +43,8 @@ What each one wraps:
 | `lint` | `ruff check`, `pyright --warnings` (strict), `clang-tidy --verify-config`, `clang-tidy` on the kernel sources with the build's `compile_commands.json` (on macOS with the SDK from `xcrun`; skipped on Windows, where the Visual Studio generator writes no compile database) |
 | `test-one` | `pytest tests/<module>` with Hypothesis, after `build`; requirement IDs work as `-k` keywords (`REQ_OFF_003`) |
 | `test` | `build`, then `pytest` over the whole suite. `--all` additionally builds the kernels a second time with `SPLINTERCAM_SANITIZE` (CMakeLists.txt) into a separate `.venv-sanitize` environment and reruns the suite against it with the ASan/UBSan runtime preloaded (Linux and macOS only; skipped on Windows, which has no supported sanitizer build) |
-| `check` | `build`, `format --check`, `lint`, `pytest`. First version: runs the whole suite, and reports `arch-check`, `trace-check` and `licence-check` as skipped until they exist |
+| `check` | `build`, `format --check`, `lint`, `size-check`, `pytest`. First version: runs the whole suite, and reports `arch-check`, `trace-check` and `licence-check` as skipped until they exist |
+| `size-check` | A script: files over 400 lines reported and over 800 failing (generated files excepted), Python functions over 60 lines reported, each module's NLOC against the `budget` in `modules.yaml` (over it reported, over it + 20 % failing); a file it cannot parse fails. The hard function limits are ruff's and clang-tidy's, in `lint`, once `docs/plans/active/0001-protected-changes.patch` is applied. Not yet checked: the change limit against the base branch and the 60-line soft limit of C++ functions |
 | `arch-check` | import-linter contracts generated from `modules.yaml`, plus a script for kernel includes and allowed external packages |
 | `trace-check` | A script reading the `@pytest.mark.req` markers and the requirement tables in the SPEC files |
 | `licence-check` | `reuse lint`, a licence report of the lock file, the banned Qt modules, `testdata/LICENSES.md` |

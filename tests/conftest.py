@@ -9,7 +9,7 @@ import pytest
 from hypothesis import settings
 from numpy.typing import NDArray
 
-from splintercam.foundation import CancellationToken, Context, ToleranceSet
+from splintercam.foundation import TOLERANCE_DEFAULTS, CancellationToken, Context, ToleranceSet
 
 # print_blob: a failing property test prints what is needed to replay it (docs/dev/06, rule 5).
 # CI sets HYPOTHESIS_PROFILE=ci, Hypothesis's built-in profile: derandomised, no deadline, and it
@@ -56,14 +56,11 @@ def debug_sink() -> _RecordingDebugSink:
 
 @pytest.fixture
 def ctx(progress_log: list[float], debug_sink: _RecordingDebugSink) -> Context:
-    """A `Context` for tests: real tolerances where research gives them, placeholders elsewhere."""
-    tolerances = ToleranceSet(
-        length_eps_mm=1e-6,  # RESEARCH 01, "Tolerances".
-        angle_eps_rad=1e-9,  # PLACEHOLDER: no default chosen yet (foundation SPEC, open questions).
-        chord_tol_mm=0.01,  # RESEARCH 01, "Tolerances".
-        # PLACEHOLDER: the geometry2d SPEC suggests 30 % for the offset stage.
-        stage_shares={"offset": 0.3},
-    )
+    """A `Context` for tests, with the tolerance set of the finishing default (REQ-FND-008, 009)."""
+    finishing_tol_mm = TOLERANCE_DEFAULTS["chord_tol_finishing_mm"].default
+    built = ToleranceSet.for_operation(finishing_tol_mm)
+    assert built.value is not None, built.diagnostics
+    tolerances = built.value
     return Context(
         tolerances=tolerances,
         cancel=CancellationToken(),

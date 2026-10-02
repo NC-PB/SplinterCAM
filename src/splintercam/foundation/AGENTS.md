@@ -12,11 +12,13 @@ Layer 0. Implements docs/research/01. Contract: `./SPEC.md`. Public API: `./__in
 - REQ-FND-004: `Result.ok` only with a value and no `ERROR` diagnostic.
 - REQ-FND-005: tolerances, cancellation, progress, logging, debug output and the seed come only from the `Context`.
 - REQ-FND-006: a cancelled token sets its one-element flag array to 1.
+- REQ-FND-009: from tol_min up, the four budget parts are not negative and sum to tol; below it, `TOL_BELOW_MINIMUM`.
 
 ## Local rules
 
-- No algorithms and no I/O here. If a helper needs geometry, it belongs in `geometry2d` or `geometry3d`.
+- No algorithms and no I/O here, except reading `tolerance_defaults.toml` once (REQ-FND-008). If a helper needs geometry, it belongs in `geometry2d` or `geometry3d`.
 - Every value type is a frozen dataclass with slots; only `CancellationToken` has state.
+- Tolerance values live in `tolerance_defaults.toml`, never as literals in code (D-049).
 - Every other module imports these types; keep the API small and stable, and change it only through the SPEC.
 
 ## Known pitfalls

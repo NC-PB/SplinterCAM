@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# tools/size-check: file, function and module size limits (docs/dev/12, section 3; tools/README.md).
+# Logic: tools/lib/cmd_size_check.py.
+tool=size-check
+source "$(dirname "$0")/lib/env.sh"
+exec uv run --no-sync python tools/lib/cmd_size_check.py "$@"
