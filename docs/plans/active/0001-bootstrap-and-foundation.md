@@ -22,6 +22,8 @@
 - [x] 3. **Lean-code tools** (`docs/dev/12-lean-code.md`, section 8). Write `tools/size-check` with the file, function and module limits of section 3 and add it to `tools/check`; the `simplifier` agent is already in `.claude/agents/`. The ruff and clang-tidy limits live in `pyproject.toml` and `.clang-tidy`, which are protected: write the proposed changes as `docs/plans/active/0001-protected-changes.patch` and list them for Peter; do not apply them. Size: about 150 + 80.
 - [x] 4. **geometry2d: SPEC draft for the topic 01 part** (no code). Write `src/splintercam/geometry2d/SPEC.md` from `docs/research/01-foundations.md` with `docs/templates/SPEC.md`, in the EARS style of the foundation SPEC. Cover the sections Vectors and exact signs, Curves (arc form and validation), Distances, Circle through three points, Flattening with a known error side, Area and orientation, Point in region, Loop tree, Kernel arrays, Helpers, Interfaces and Degenerate input; say where Frames and transforms belong if not here. One requirement per testable statement, each citing its research section and the research test it is checked by; status `Draft`. Mark which requirements need Clipper2 (the loop tree's PolyTree and its fallback difference) and which part goes into the C++ kernel under the split rule of `docs/dev/03`. Then **stop**: Peter reviews the draft before any geometry2d code.
 
+- [ ] 5. **Peter's answers to steps 1 to 3** (2026-10-02, one pull request): `docs/dev/` mastered here (D-158); the foundation SPEC confirmed as built, with the constructor's floor of REQ-FND-002, `TOL_ABOVE_MAXIMUM`, the reserve wording of REQ-FND-009 and a test of a broken defaults file; size-check's NLOC without docstrings and a foundation budget of 250; the per-PR change limit drafted as plan 0002; `docs/dev/12` without the C++ soft limit; the agent files and the "plan 0001" mentions. Size: about 60 lines of kept code + 60 of tests.
+
 ## Decisions
 
 - 2026-10-02: one pull request per step; steps 1 to 3 run without waiting for review unless a "Stop and ask" condition of `AGENTS.md` applies; step 4 ends the plan, because a SPEC needs Peter's review before code (D-156).
@@ -29,6 +31,10 @@
 ## Progress log
 
 <!-- Newest first. What was done, what tools/check reported, what is next. At most about 30 lines per session. -->
+
+### 2026-10-02, session 2, step 5 (Peter's answers)
+
+- Plan: one branch from `main`, which now holds steps 1 to 4. (1) `docs/dev/README.md` says `docs/dev/` is mastered here (D-158). (2) Foundation SPEC: the choices of step 2 confirmed, the packaged defaults file named as foundation's one read in Purpose, Scope and the module AGENTS.md. (3) REQ-FND-002: the constructor rejects a chord tolerance below (6 + 2)·u / (fit share + 0.05) of its own shares. (4) `for_operation` refuses tol above 1 mm with `TOL_ABOVE_MAXIMUM`; 0.0022858 mm stays the user-facing minimum of the defaults file. (5) REQ-FND-009's reserve: "the operation's rounding allowance (D-149), written by the NCX writer" (`ROUND_LIMIT`). (6) A broken defaults file fails at import naming the key, with one test. Tests first for (3), (4) and (6); the tests that build sets with small fit shares or chord tolerances follow the new floor. (8) size-check's NLOC without docstrings; the patch's foundation budget becomes 250. (9) The per-PR change limit drafted as `docs/plans/active/0002-change-size-check.md`, with the workflow change as a patch for Peter. (10) `docs/dev/12`, section 3 without the C++ soft limit. (11) The agent files without `docs/research/18` and `24`; `docs/dev/03` and `12` name the stack test app's plan.
 
 ### 2026-10-02, session 1, step 4 (geometry2d SPEC draft)
 
