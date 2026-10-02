@@ -9,9 +9,9 @@ Soft limits are reported, hard limits fail:
   reported over the budget, failing over the budget + 20 %; a module with code but no budget is
   reported.
 
-NLOC counts the lines that hold code: Python lines with a token other than a comment (docstrings
-count), C++ lines that are not blank and do not start with //. A file that cannot be read as UTF-8
-or parsed fails.
+NLOC counts the lines that hold code, as lizard does (docs/dev/12, section 3): Python lines with a
+token other than a comment, docstrings and other bare strings left out; C++ lines that are not
+blank and do not start with //. A file that cannot be read as UTF-8 or parsed fails.
 """
 
 import argparse
@@ -83,6 +83,12 @@ def nloc(path: Path, source: str) -> int:
     for token in tokenize.generate_tokens(io.StringIO(source).readline):
         if token.type not in NON_CODE_TOKENS:
             lines.update(range(token.start[0], token.end[0] + 1))
+    for node in ast.walk(ast.parse(source, filename=str(path))):
+        # A string as a whole statement: a docstring, or the documentation of an attribute.
+        if not isinstance(node, ast.Expr):
+            continue
+        if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+            lines.difference_update(range(node.lineno, (node.end_lineno or node.lineno) + 1))
     return len(lines)
 
 

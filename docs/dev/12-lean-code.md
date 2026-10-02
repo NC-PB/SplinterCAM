@@ -2,11 +2,11 @@
 
 # 12. Lean code
 
-> **Status: accepted** 2026-10-01 (CP-006, D-139). Written from what plan 0001 showed. The limits are declared tool settings; changing them needs a decision.
+> **Status: accepted** 2026-10-01 (CP-006, D-139). Written from what plan 0001 of the stack test app showed. The limits are declared tool settings; changing them needs a decision.
 
 Agents write code quickly and delete it rarely. Without limits that are checked, a code base grows faster than anyone can review it, and every extra line is one more place for a CAM error to hide. This document says what counts as bloat, which limits apply, which tools check them, and how reviews and throwaway code are handled so the code stays small.
 
-## What plan 0001 showed
+## What plan 0001 of the stack test app showed
 
 From the prototype at commit c1c21d3 (SRC-118 in the [sources snapshot](../spike/sources-snapshot.md); review `reviews/2026-10-01-prototype-insights.md` (Project Spike)):
 
@@ -57,8 +57,8 @@ The numbers are ours unless a source is named; they are declared tool settings (
 | Change (pull request), non-test code | 200 lines | 400 lines; more only with Peter's label | `tools/size-check` against the base branch |
 | File | 400 lines | 800 lines (generated code excepted) | `tools/size-check` |
 | Python function | 60 lines (as in [02](02-repository-layout.md) and [04](04-code-conventions.md)) | complexity 10 (ruff `C901`), 12 branches (`PLR0912`), 50 statements (`PLR0915`), 5 arguments (`PLR0913`), 6 returns (`PLR0911`); the pylint defaults ruff uses | ruff in `tools/lint` |
-| C++ function | 60 lines | 80 lines, 6 parameters (clang-tidy `readability-function-size`), cognitive complexity 15 (`readability-function-cognitive-complexity`; its default is 25) | clang-tidy in `tools/lint` |
-| Module | its budget | budget + 20 % | `NLOC` budget per module in `architecture/modules.yaml`, `tools/size-check`; raising a budget is a decision |
+| C++ function | none (clang-tidy can only fail) | 80 lines, 6 parameters (clang-tidy `readability-function-size`), cognitive complexity 15 (`readability-function-cognitive-complexity`; its default is 25) | clang-tidy in `tools/lint` |
+| Module | its budget | budget + 20 % | `NLOC` budget per module in `architecture/modules.yaml`, `tools/size-check`; raising a budget is a decision. NLOC counts code lines without comments and docstrings, as lizard does |
 | Plan step | its estimate | estimate + 50 %: stop and ask, as for the timebox | the plan and the size line of each report |
 
 A change that adds more than about 50 lines to `src/` without adding or changing a requirement is flagged for review: either a requirement is missing or the code is not needed.
@@ -76,7 +76,7 @@ A change that adds more than about 50 lines to `src/` without adding or changing
   - *Must fix:* the change breaks a released requirement, an invariant, safety or provenance. Fixed in this change.
   - *Spec gap:* a real risk that no released requirement covers. It becomes a question or a draft requirement, not code in this change.
   - *Nice to have:* recorded in the plan's backlog, no code.
-  Only must-fix findings change the code in the same change. This is what stops the growth seen in plan 0001.
+  Only must-fix findings change the code in the same change. This is what stops the growth seen in the stack test app's plan 0001.
 - **A simplifier reviewer** (a new agent, `simplifier`) runs on every change over about 100 lines of non-test code. It lists what could go without breaking a requirement: code no requirement needs, one-use abstractions, duplicated logic, checks inside trusted code, options without a requirement, comments that restate. It proposes deletions with the lines saved and never adds anything.
 - **Fix rounds are watched.** If a round of review fixes grows the non-test diff by more than 30 %, the change lists which finding each addition answers.
 - **Deleting has a legal path.** Removing code together with its tests, because their requirement was withdrawn or changed by a person, is allowed; the test auditor reports it as "removed with REQ-…", not as a weakened test. Weakening a test stays forbidden ([06](06-testing-and-quality-gates.md), rule 2), regression cases are never deleted, and golden outputs change only through a person.
@@ -99,9 +99,9 @@ Throwaway code (a probe) answers one question with numbers, for a plan's decisio
 
 ## 8. Where this starts
 
-- **Before the first product code (after plan 0001):** `tools/size-check`, the ruff and clang-tidy limits, the simplifier agent, the finding classes and the report line. They are cheap and they shape the first modules, which every later module copies (principle 7 of [01](01-ai-first-principles.md)).
+- **Before the first product code (after the stack test app's plan 0001):** `tools/size-check`, the ruff and clang-tidy limits, the simplifier agent, the finding classes and the report line. They are cheap and they shape the first modules, which every later module copies (principle 7 of [01](01-ai-first-principles.md)).
 - **With the second module:** jscpd, vulture and requirement coverage in `tools/trace-check`.
-- **For the rest of plan 0001:** only the throwaway-code rules (D-133).
+- **For the rest of the stack test app's plan 0001:** only the throwaway-code rules (D-133).
 
 ## Sources
 

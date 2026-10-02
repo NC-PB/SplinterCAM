@@ -6,7 +6,7 @@ import sys
 from fractions import Fraction
 
 import pytest
-from hypothesis import example, given
+from hypothesis import assume, example, given
 from hypothesis import strategies as st
 
 from splintercam.foundation import BUDGET_PARTS, Severity, ToleranceSet
@@ -111,3 +111,68 @@ def test_tol_below_tol_min_is_refused_with_tol_below_minimum(tol_mm: float) -> N
     assert diagnostic.code == "TOL_BELOW_MINIMUM"
     assert diagnostic.severity is Severity.ERROR
     assert _TOL_MIN_NAMED in diagnostic.message
+
+
+@pytest.mark.req("REQ-FND-002")
+@pytest.mark.req("REQ-FND-009")
+@given(
+    tol_mm=st.floats(min_value=1e-4, max_value=_TOL_MAX),
+    length_eps_mm=st.floats(min_value=1e-9, max_value=1e-3),
+    values=st.tuples(
+        st.floats(min_value=0.0, max_value=0.45),
+        st.floats(min_value=0.0, max_value=0.2),
+        st.floats(min_value=0.0, max_value=0.45),
+        st.floats(min_value=0.0, max_value=0.1),
+    ),
+)
+# Shares that summed to more than tol after the clamp at 0.011 mm (spec review); here above
+# their floor, 6u / 0.03 = 0.02 mm.
+@example(tol_mm=0.03, length_eps_mm=1e-6, values=(0.42, 0.03, 0.45, 0.1))
+def test_the_parts_of_any_accepted_set_never_sum_to_more_than_tol(
+    tol_mm: float, length_eps_mm: float, values: tuple[float, float, float, float]
+) -> None:
+    try:
+        budget = ToleranceSet(
+            chord_tol_mm=tol_mm,
+            length_eps_mm=length_eps_mm,
+            angle_eps_rad=1e-9,
+            stage_shares=tuple(zip(BUDGET_PARTS, values, strict=True)),
+        )
+    except ValueError:
+        assume(False)  # shares over 1, tol below the floor or t_flat not positive: refused
+        raise
+    parts = [budget.stage_tol_mm(part) for part in BUDGET_PARTS]
+    assert all(part >= 0.0 for part in parts), parts
+    assert budget.flatten_tol_mm > 0.0
+    # The fit band before the clamp, exactly: the floor, a double, may lie an ulp or two below its
+    # exact value, as tol_min may (research 01, Tolerances), so one ulp of tol is allowed.
+    tol = Fraction(tol_mm)
+    grid_cost = 6 * _GRID_UNIT + max(Fraction(0), 2 * _GRID_UNIT - Fraction("0.05") * tol)
+    assert Fraction(values[1]) * tol - grid_cost >= -Fraction(math.ulp(tol_mm))
+    # Two ulps of tol for the rounding of the parts, as the foundation SPEC's invariant allows.
+    assert sum(Fraction(part) for part in parts) <= Fraction(tol_mm) + 2 * Fraction(
+        math.ulp(tol_mm)
+    )
+
+
+@pytest.mark.req("REQ-FND-002")
+@pytest.mark.req("REQ-FND-009")
+def test_the_overrun_shares_at_their_own_floor_sum_to_at_most_tol() -> None:
+    # The shares that summed to more than tol after the clamp at 0.011 mm (spec review), built two
+    # ulps above their floor 6u / 0.03 = 0.02 mm, where the fit band is about 0 and is clamped.
+    values = (0.42, 0.03, 0.45, 0.1)
+    tol_mm = float(6 * _GRID_UNIT / Fraction(values[1]))
+    for _ in range(2):
+        tol_mm = math.nextafter(tol_mm, math.inf)
+    budget = ToleranceSet(
+        chord_tol_mm=tol_mm,
+        length_eps_mm=float(_LENGTH_EPS),
+        angle_eps_rad=1e-9,
+        stage_shares=tuple(zip(BUDGET_PARTS, values, strict=True)),
+    )
+    parts = [budget.stage_tol_mm(part) for part in BUDGET_PARTS]
+    assert all(part >= 0.0 for part in parts), parts
+    assert budget.stage_tol_mm("fit") <= math.ulp(tol_mm)
+    assert sum(Fraction(part) for part in parts) <= Fraction(tol_mm) + 2 * Fraction(
+        math.ulp(tol_mm)
+    )

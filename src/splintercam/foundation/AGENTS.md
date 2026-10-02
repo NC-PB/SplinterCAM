@@ -16,7 +16,7 @@ Layer 0. Implements docs/research/01. Contract: `./SPEC.md`. Public API: `./__in
 
 ## Local rules
 
-- No algorithms and no I/O here, except reading `tolerance_defaults.toml` once (REQ-FND-008). If a helper needs geometry, it belongs in `geometry2d` or `geometry3d`.
+- No algorithms and no I/O here. The one read is `tolerance_defaults.toml`, the defaults file packaged with this module, once at import (REQ-FND-008). If a helper needs geometry, it belongs in `geometry2d` or `geometry3d`.
 - Every value type is a frozen dataclass with slots; only `CancellationToken` has state.
 - Tolerance values live in `tolerance_defaults.toml`, never as literals in code (D-049).
 - Every other module imports these types; keep the API small and stable, and change it only through the SPEC.

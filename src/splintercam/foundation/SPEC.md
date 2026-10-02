@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| Status | Reviewed: REQ-FND-001, 002, 008 and 009 (decisions D-056, D-146 and D-149, accepted by Peter; plan 0001, step 2). Released for the stack test app (its own repository): REQ-FND-003 to 006; released by Peter on 2026-09-27: REQ-FND-007 |
+| Status | Reviewed: REQ-FND-001, 002, 008 and 009 (decisions D-056, D-146 and D-149, accepted by Peter; plan 0001, step 2) and REQ-FND-010 (Peter, 2026-10-02; step 5). Released for the stack test app (its own repository): REQ-FND-003 to 006; released by Peter on 2026-09-27: REQ-FND-007 |
 | Layer | 0 |
 | Depends on | Python standard library and NumPy only |
 | Research | [01](../../../docs/research/01-foundations.md), section Tolerances. RESEARCH 18 (Project Spike) is being rewritten from public sources; until then this spec takes only general software practice from it: result values with diagnostics, a cancellation flag, no global state |
@@ -13,11 +13,11 @@
 
 ## Purpose
 
-The types every other module shares: tolerances, results with diagnostics, the computation context, cancellation and small value types. It contains no algorithms and reads no file but its own tolerance defaults.
+The types every other module shares: tolerances, results with diagnostics, the computation context, cancellation and small value types. It contains no algorithms. Its one read is `tolerance_defaults.toml`, the defaults file packaged with it, read once at import (REQ-FND-008); it reads no other file.
 
 ## Scope
 
-- In: `ToleranceSet` with its budget parts, `nearly_equal`, `Severity`, `Diagnostic`, `Result`, `CancellationToken`, `Context`, a `DebugSink` protocol, the tolerance defaults file and its `DeclaredParameter` entries, small value types (`Point2`, `Vector2`).
+- In: `ToleranceSet` with its budget parts, `nearly_equal`, `Severity`, `Diagnostic`, `Result`, `CancellationToken`, `Context`, a `DebugSink` protocol, the packaged tolerance defaults file, foundation's one read, and its `DeclaredParameter` entries, small value types (`Point2`, `Vector2`).
 - Out: curves, loops and regions (`geometry2d`), meshes (`geometry3d`), anything that reads or writes user or job files.
 
 ## Units
@@ -97,22 +97,23 @@ class Context:
 | ID | Requirement (EARS) | Verified by | Status |
 | --- | --- | --- | --- |
 | REQ-FND-001 | THE `ToleranceSet` SHALL provide the length epsilon, the angle epsilon, the chord tolerance and, for each budget part (geometry, fit, control, reserve), its share of the chord tolerance. | unit: `tests/foundation/unit/test_tolerance_set.py` | Reviewed (D-056; plan 0001, step 2). Changed 2026-10-02: the stage names are the four budget parts |
-| REQ-FND-002 | IF a `ToleranceSet` is created with a tolerance that is not positive and finite, with a missing or unknown budget part, or with shares that are negative or sum to more than 1, THEN the constructor SHALL raise `ValueError`. | property and unit: `tests/foundation/property/test_tolerance_set_construction.py` | Reviewed (D-056; plan 0001, step 2). Changed 2026-10-02: missing or unknown parts are rejected |
+| REQ-FND-002 | IF a `ToleranceSet` is created with a tolerance that is not positive and finite, with a missing or unknown budget part, or with shares that are negative or sum to more than 1, with a part given twice, with a chord tolerance below the floor of its own fit share f (8u / (f + 0.05) for f ≥ 0.15, otherwise 6u / f, evaluated in double as tol_min is; no tol for f = 0), or with t_flat ≤ 0, THEN the constructor SHALL raise `ValueError`. | property and unit: `tests/foundation/property/test_tolerance_set_construction.py`, `property/test_tolerance_budget.py`, `unit/test_tolerance_set.py` | Reviewed (D-056; plan 0001, step 2). Changed 2026-10-02: missing, unknown or repeated parts, the floor and t_flat > 0 (Peter, step 5) |
 | REQ-FND-003 | THE `nearly_equal` function SHALL return true exactly when \|a − b\| ≤ tol for finite inputs, and false when an input is NaN; for infinite inputs the same expression applies, so `nearly_equal(inf, inf, tol)` is false. | property and unit: `tests/foundation/property/test_nearly_equal.py` | Released for plan 0001 of the stack test app |
 | REQ-FND-004 | THE `Result` type SHALL hold an optional value and an ordered tuple of diagnostics; `ok` SHALL be true only when a value is present and no diagnostic has severity `ERROR`. | unit and property: `tests/foundation/unit/test_result.py` | Released for plan 0001 of the stack test app |
 | REQ-FND-005 | THE `Context` SHALL carry the tolerance set, the cancellation token, the progress callback, the logger, the debug sink and the random seed; no module SHALL read any of these from global state. | unit: `tests/foundation/unit/test_context.py`; architecture check pending (`tools/arch-check`) | Released for plan 0001 of the stack test app |
 | REQ-FND-006 | WHEN `cancel()` is called, THE `CancellationToken` SHALL report it through `is_cancelled` and set its one-element `flag` array to 1, so kernels can poll it without calling Python. | unit: `tests/foundation/unit/test_cancellation_token.py`; a kernel polling the flag: pending, with the first kernel | Released for plan 0001 of the stack test app |
 | REQ-FND-007 | THE foundation value types SHALL be immutable, and hashable when their contents are; only `CancellationToken` changes state. | unit: `tests/foundation/unit/test_tolerance_set.py`, `test_result.py`, `test_context.py` | Released (Peter, 2026-09-27) |
-| REQ-FND-008 | THE default tolerance values SHALL be read from a documented defaults file where each value is a declared parameter with unit, default, range and source, and SHALL be: chord tolerance 0.05 mm for roughing and 0.01 mm for finishing operations (D-029); length epsilon 1e-6 mm; angle epsilon 1e-9 rad (Q-034 answer, logged as D-056); shares geometry 0.1, fit 0.3, control 0.5, reserve 0.1 (D-056), as the base of REQ-FND-009. No module SHALL hold these numbers as literals (D-049). | unit: `tests/foundation/unit/test_tolerance_defaults.py`; architecture check pending (`tools/arch-check`) | Reviewed (D-029, D-049, D-056; plan 0001, step 2) |
-| REQ-FND-009 | THE function that builds an operation's `ToleranceSet` SHALL compute the budget parts from tol and the grid unit u: geometry = 0.1·tol + 6u + max(0, 2u − 0.05·tol); reserve = 0.1·tol, written into the NCX as the operation's rounding allowance (D-149); control = 0.5·tol; fit = the rest, clamped at 0; t_flat = 0.05·tol − 0.0001 mm − 3·eps_len; t_topo = 2u. WHEN tol is below tol_min = 8u/0.35 = 2/875 mm ≈ 0.00228571 mm, computed once, it SHALL return no set and the diagnostic `TOL_BELOW_MINIMUM` naming tol_min rounded up to 0.1 nm (0.0022858 mm) (D-146, D-149; research 01, Tolerances). | unit (research 01, tests 14 and 15): `tests/foundation/unit/test_tolerance_budget.py`, `test_tolerance_set.py`; property: `tests/foundation/property/test_tolerance_budget.py` | Reviewed (D-146, D-149; plan 0001, step 2) |
+| REQ-FND-008 | THE default tolerance values SHALL be read from a documented defaults file where each value is a declared parameter with unit, default, range and source, and SHALL be: chord tolerance 0.05 mm for roughing and 0.01 mm for finishing operations (D-029); length epsilon 1e-6 mm; angle epsilon 1e-9 rad (Q-034 answer, logged as D-056); shares geometry 0.1, fit 0.3, control 0.5, reserve 0.1 (D-056), as the base of REQ-FND-009. No module SHALL hold these numbers as literals (D-049). IF an entry of the file is broken (a missing or extra key, a value of the wrong type, a default outside its range, no unit or source), THEN the import SHALL fail with `ValueError` naming the entry's key. | unit: `tests/foundation/unit/test_tolerance_defaults.py`; architecture check pending (`tools/arch-check`) | Reviewed (D-029, D-049, D-056; plan 0001, step 2). Changed 2026-10-02: a broken entry fails naming its key (Peter, step 5) |
+| REQ-FND-009 | THE function that builds an operation's `ToleranceSet` SHALL compute the budget parts from tol and the grid unit u: geometry = 0.1·tol + 6u + max(0, 2u − 0.05·tol); reserve = 0.1·tol, the operation's rounding allowance (D-149), written by the NCX writer; control = 0.5·tol; fit = the rest, clamped at 0; t_flat = 0.05·tol − 0.0001 mm − 3·eps_len; t_topo = 2u. WHEN tol is below tol_min = 8u/0.35 = 2/875 mm ≈ 0.00228571 mm, computed once, it SHALL return no set and the diagnostic `TOL_BELOW_MINIMUM` naming tol_min rounded up to 0.1 nm (0.0022858 mm) (D-146, D-149; research 01, Tolerances). | unit (research 01, tests 14 and 15): `tests/foundation/unit/test_tolerance_budget.py`, `test_tolerance_set.py`; property: `tests/foundation/property/test_tolerance_budget.py` | Reviewed (D-146, D-149; plan 0001, step 2). Changed 2026-10-02: the reserve's wording (Peter, step 5) |
+| REQ-FND-010 | WHEN tol is above 1 mm, the upper end of the tol range in the defaults file, THE function that builds an operation's `ToleranceSet` SHALL return no set and the diagnostic `TOL_ABOVE_MAXIMUM` (error), a guard against unit mistakes (research 01, Tolerances; Peter, 2026-10-02). | unit: `tests/foundation/unit/test_tolerance_budget.py` | Reviewed (Peter, 2026-10-02; plan 0001, step 5) |
 
 ## Invariants
 
-Value types are immutable, and hashable when their contents are (a `Result` holding a NumPy array is not); `Result.ok` is consistent with its diagnostics; a cancelled token never becomes uncancelled through its API (code that reaches the flag's owning array can defeat that; accepted by Peter, 2026-09-27); the budget shares sum to at most 1; for every tol from tol_min up, the four budget parts are not negative and sum to tol within two units in the last place of tol (rounding), and t_flat is positive.
+Value types are immutable, and hashable when their contents are (a `Result` holding a NumPy array is not); `Result.ok` is consistent with its diagnostics; a cancelled token never becomes uncancelled through its API (code that reaches the flag's owning array can defeat that; accepted by Peter, 2026-09-27); the budget shares sum to at most 1; for every set the constructor accepts, the four budget parts are not negative and sum to at most tol within two units in the last place of tol (rounding), and t_flat is positive; for the sets of `for_operation`, from tol_min up, they sum to tol.
 
 ## Tolerance budget
 
-Defines the budget; uses none itself. D-056: the operation tolerance tol covers the finished wall including the control. Geometry (flattening, offsets, snapping) gets 0.1·tol; the arc-fit band 0.3·tol lies on the air side; the control gets 0.5·tol, written per operation as NCX `TOLERANCE`; 0.1·tol is a reserve for output rounding, written into the NCX as the operation's rounding allowance (D-149). D-146 adds what the offset kernel's grid costs to geometry and takes it from the fit band: its rounding margin of 6 grid units (D-132) and max(0, 2u − 0.05·tol) for the floor of its arc tolerance a = max(0.05·tol, 2u) (D-058). The other 0.05·tol of geometry pays for arcs recognised at import (0.0001 mm, D-093), snapping (3·eps_len) and flattening, t_flat. At tol = 0.01 mm the parts are 0.0016 + 0.0024 + 0.005 + 0.001 mm and t_flat = 0.000397 mm. Below tol_min = 2/875 mm the fit band would be negative, and the operation is refused (REQ-FND-009).
+Defines the budget; uses none itself. D-056: the operation tolerance tol covers the finished wall including the control. Geometry (flattening, offsets, snapping) gets 0.1·tol; the arc-fit band 0.3·tol lies on the air side; the control gets 0.5·tol, written per operation as NCX `TOLERANCE`; 0.1·tol is a reserve for output rounding, the operation's rounding allowance (D-149); the NCX writer writes it as the word `ROUND_LIMIT` (NCXchange draft D363; Peter, 2026-10-02). D-146 adds what the offset kernel's grid costs to geometry and takes it from the fit band: its rounding margin of 6 grid units (D-132) and max(0, 2u − 0.05·tol) for the floor of its arc tolerance a = max(0.05·tol, 2u) (D-058). The other 0.05·tol of geometry pays for arcs recognised at import (0.0001 mm, D-093), snapping (3·eps_len) and flattening, t_flat. At tol = 0.01 mm the parts are 0.0016 + 0.0024 + 0.005 + 0.001 mm and t_flat = 0.000397 mm. Below tol_min = 2/875 mm the fit band would be negative, and the operation is refused (REQ-FND-009); above 1 mm it is refused as a likely unit mistake (REQ-FND-010). The defaults file gives tol the range [0.0022858, 1.0]: its lower end is the user-facing minimum, tol_min rounded up to 0.1 nm, the value `TOL_BELOW_MINIMUM` names; `for_operation` itself accepts from tol_min.
 
 `stage_tol_mm` gives each part as REQ-FND-009 computes it: control and reserve are their share of tol; geometry is its share plus the grid cost; fit is its share minus the grid cost, clamped at 0. The parts are evaluated in double in the order of the formulas; at tol_min the fit band comes out as −7e-20 mm and is clamped (research 01, Tolerances). Every number comes from `tolerance_defaults.toml` next to the code (REQ-FND-008), each entry a table with `default`, `unit`, `range` ([min, max], inclusive; a fixed value has its default at both ends) and `source`. The entries of REQ-FND-008 are `chord_tol_roughing_mm`, `chord_tol_finishing_mm`, `length_eps_mm`, `angle_eps_rad`, `share_geometry`, `share_fit`, `share_control` and `share_reserve`; those REQ-FND-009 adds are `grid_unit_mm` (u), `rounding_margin_grid_units` (6), `arc_tol_share` (0.05), `arc_tol_floor_grid_units` (2), `import_arc_deviation_mm` (0.0001), `snap_allowance_length_eps` (3), `topology_tol_grid_units` (2) and `tol_min_step_mm` (0.1 nm).
 
@@ -127,8 +128,9 @@ D-055, three tiers: topology and decisions identical on every platform; output b
 | Situation | Result | Diagnostic |
 | --- | --- | --- |
 | `for_operation` with tol below tol_min | no set | `TOL_BELOW_MINIMUM` (error), naming 0.0022858 mm |
-| Invalid construction of a `ToleranceSet`, `for_operation` with a non-finite tol, `stage_tol_mm` with a stage that is not a budget part | programming error | `ValueError` |
-| A defaults file entry without unit, default, range or source, or with its default outside its range | programming error at import | `ValueError` |
+| `for_operation` with tol above 1 mm | no set | `TOL_ABOVE_MAXIMUM` (error) |
+| Invalid construction of a `ToleranceSet` (REQ-FND-002, including a chord tolerance below the floor of its own fit share and t_flat ≤ 0), `for_operation` with a non-finite tol, `stage_tol_mm` with a stage that is not a budget part | programming error | `ValueError` |
+| A broken defaults file entry | programming error at import | `ValueError` naming the entry's key |
 
 ## Algorithms
 
@@ -136,27 +138,16 @@ None.
 
 ## Test plan
 
-- Unit: construction, `stage_tol_mm` for each budget part, `Result.ok`, cancellation flag, defaults read from the defaults file with units, ranges and sources, research 01 tests 14 and 15.
-- Property: `nearly_equal` against the definition, including NaN and infinities; invalid tolerance sets always rejected, including missing or unknown budget parts; the parts sum to tol for every tol from tol_min to 1 mm; every tol below tol_min refused with `TOL_BELOW_MINIMUM`.
+- Unit: construction, sets refused for their floor or t_flat, `stage_tol_mm` for each budget part, `Result.ok`, cancellation flag, defaults read from the defaults file with units, ranges and sources, research 01 tests 14 and 15, `TOL_ABOVE_MAXIMUM` above 1 mm, a broken defaults file failing with the entry's key.
+- Property: `nearly_equal` against the definition, including NaN and infinities; invalid tolerance sets always rejected, including missing, unknown or repeated budget parts, a chord tolerance below the floor of its own fit share, t_flat ≤ 0; the parts of any accepted set never sum to more than tol; the parts sum to tol for every tol from tol_min to 1 mm; every tol below tol_min refused with `TOL_BELOW_MINIMUM`.
 
 ## Size estimate
 
-360 NLOC of Python (472 lines with the defaults file) and about 1100 lines of tests, after plan 0001, step 2.
+Budget 250 NLOC (Peter, 2026-10-02), counted without comments and docstrings as `tools/size-check` and lizard count them; 224 after plan 0001, step 5. About 1150 lines of tests.
 
 ## Open questions
 
 - Whether `Point2` and `Vector2` are needed at all, or arrays suffice everywhere.
-- Research 01 lets the user set tol up to 1 mm, an upper limit against unit mistakes; the defaults file records that range, but no requirement says what `for_operation` does above it.
-- Choices made in plan 0001, step 2, where Project Spike's draft leaves the design open, for Peter to confirm:
-  - The shares stay the base shares of REQ-FND-008. `stage_tol_mm` adds the grid cost to geometry and takes it from the fit band for any shares, so with the defaults it gives the parts of REQ-FND-009. "Fit = the rest" is evaluated as its share minus the grid cost, as research 01 writes it; the remainder tol − geometry − control − reserve would give +8e-20 mm instead of 0 at tol_min.
-  - `for_operation(tol_mm)` takes no `Context`, which holds the set it builds. t_flat and t_topo are properties.
-  - The defaults file is TOML, read with the standard library's `tomllib`. So foundation reads one file of its own, a change to "no I/O" in Purpose and Scope.
-  - A part given twice counts as REQ-FND-002's missing or unknown part.
-- Found by the step 2 reviews, for Peter to decide:
-  - The `ToleranceSet` constructor accepts a chord tolerance below tol_min and shares whose fit band cannot cover the grid cost; only `for_operation` refuses. Either REQ-FND-002 rejects such sets too, or `for_operation` is the only way to build an operation's set.
-  - REQ-FND-009 says the reserve is written into the NCX as the rounding allowance. Foundation provides the value; the writing belongs to the module that writes the NCX, and has no owner or test yet.
-  - The defaults file gives tol the range [0.0022858, 1.0], the named minimum, while `for_operation` accepts from tol_min = 2/875 ≈ 0.00228571 mm.
-  - The reader's failure modes (a missing key, a default outside its range) have no requirement and no test; a broken entry of another type raises `TypeError`.
 
 ## Change log
 
@@ -165,3 +156,4 @@ None.
 - 2026-09-27: review fixes (pickling, exact share sum, `bool` results, read-only flag owner, `Result` keeps a tuple); "Verified by" now names the test files, the `req` markers name the tests.
 - 2026-09-26: REQ-FND-001 to REQ-FND-006 implemented in the stack test app (its plan 0001, step 2a).
 - 2026-10-02: plan 0001, step 2: REQ-FND-001 and 002 changed and REQ-FND-008 and 009 added from Project Spike's draft (D-029, D-049, D-056, D-146, D-149), all four `Reviewed`; `stage_shares` holds (part, share) pairs; `for_operation`, `flatten_tol_mm`, `topology_tol_mm`, `DeclaredParameter` and `TOLERANCE_DEFAULTS` added; the defaults file replaces the placeholders; `TOL_BELOW_MINIMUM` is foundation's first diagnostic.
+- 2026-10-02: plan 0001, step 5, Peter's answers: the choices of step 2 confirmed (base shares with the grid cost in `stage_tol_mm`, `for_operation` without a `Context`, t_flat and t_topo as properties, a repeated part as a REQ-FND-002 error, the TOML file read with `tomllib` as foundation's one read); REQ-FND-002 adds the floor of the set's own shares; REQ-FND-008 a broken entry naming its key; REQ-FND-009's reserve is written by the NCX writer (`ROUND_LIMIT`); REQ-FND-010 `TOL_ABOVE_MAXIMUM`. Then the floor's open question answered: 8u / (f + 0.05) for f ≥ 0.15, otherwise 6u / f, and t_flat > 0, so the invariants hold for every accepted set.

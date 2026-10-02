@@ -5,8 +5,9 @@
 # Lengths in mm, angles in rad (D-028). The budget formulas that use them: foundation SPEC,
 # REQ-FND-009, and docs/research/01-foundations.md, section Tolerances.
 
-# The operation tolerance tol, user-adjustable from tol_min (REQ-FND-009) to 1 mm; the upper limit
-# is ours, a guard against unit mistakes (research 01, Tolerances).
+# The operation tolerance tol, user-adjustable from 0.0022858 mm, tol_min rounded up to 0.1 nm and the
+# user-facing minimum (REQ-FND-009), to 1 mm (REQ-FND-010); the upper limit is ours, a guard against
+# unit mistakes (research 01, Tolerances).
 chord_tol_roughing_mm = { default = 0.05, unit = "mm", range = [0.0022858, 1.0], source = "D-029" }
 chord_tol_finishing_mm = { default = 0.01, unit = "mm", range = [0.0022858, 1.0], source = "D-029" }
 

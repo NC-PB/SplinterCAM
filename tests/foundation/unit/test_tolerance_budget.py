@@ -124,3 +124,21 @@ def test_non_finite_tol_raises_value_error(tol_mm: float) -> None:
     # naming the tolerance, like the ToleranceSet construction errors (REQ-FND-002).
     with pytest.raises(ValueError, match="tol"):
         ToleranceSet.for_operation(tol_mm)
+
+
+@pytest.mark.req("REQ-FND-010")
+@pytest.mark.parametrize("tol_mm", [math.nextafter(1.0, math.inf), 1.5, 25.4])
+def test_tol_above_1_mm_is_refused_with_tol_above_maximum(tol_mm: float) -> None:
+    # Peter, 2026-10-02: a guard against unit mistakes (research 01, Tolerances: tol up to 1 mm).
+    result = ToleranceSet.for_operation(tol_mm)
+    assert result.value is None
+    assert result.ok is False
+    (diagnostic,) = result.diagnostics
+    assert diagnostic.code == "TOL_ABOVE_MAXIMUM"
+    assert diagnostic.severity is Severity.ERROR
+    assert "1 mm" in diagnostic.message
+
+
+@pytest.mark.req("REQ-FND-010")
+def test_tol_of_1_mm_is_accepted() -> None:
+    assert _budget(1.0).chord_tol_mm == 1.0

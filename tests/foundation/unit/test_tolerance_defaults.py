@@ -2,12 +2,14 @@
 """Unit tests for the tolerance defaults file and TOLERANCE_DEFAULTS (REQ-FND-008)."""
 
 import tomllib
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 import splintercam.foundation as foundation
+import splintercam.foundation._defaults as defaults_module
 from splintercam.foundation import BUDGET_PARTS, TOLERANCE_DEFAULTS, ToleranceSet
 
 # The documented defaults file next to the code (foundation SPEC, Tolerance budget).
@@ -77,3 +79,32 @@ def test_for_operation_takes_epsilons_and_shares_from_the_defaults() -> None:
         (part, TOLERANCE_DEFAULTS[f"share_{part}"].default) for part in BUDGET_PARTS
     )
     assert budget.stage_shares == expected_shares
+
+
+@pytest.mark.req("REQ-FND-008")
+@pytest.mark.parametrize(
+    "entry",
+    [
+        '{ default = 2.0, unit = "mm", range = [0.0, 1.0], source = "x" }',  # outside its range
+        '{ default = 1.0, unit = "mm", range = [0.0, 2.0] }',  # no source
+        '{ default = "one", unit = "mm", range = [0.0, 2.0], source = "x" }',  # not a number
+        '{ default = 1.0, unit = "mm", range = [0.0, 2.0], source = "x", note = "y" }',  # extra key
+        '{ default = 1.0, unit = "", range = [0.0, 2.0], source = "x" }',  # empty unit
+        '{ default = 1.0, unit = "mm", range = [0.0, 2.0], source = "" }',  # empty source
+        '{ default = "0.5", unit = "mm", range = [0.0, 2.0], source = "x" }',  # a quoted number
+        '{ default = true, unit = "mm", range = [0.0, 2.0], source = "x" }',  # a boolean
+        '{ default = 1.0, unit = 5, range = [0.0, 2.0], source = "x" }',  # unit not a string
+        '{ default = 1.0, unit = " ", range = [0.0, 2.0], source = "x" }',  # blank unit
+        '{ default = 1.0, unit = "mm", range = ["0", "2"], source = "x" }',  # quoted range
+        '{ default = 1.0, unit = "mm", range = [0.0], source = "x" }',  # one range end
+        '{ default = 1.0, unit = "mm", range = 2.0, source = "x" }',  # range not a list
+        "5",  # not a table
+    ],
+)
+def test_a_broken_defaults_file_fails_naming_the_key(tmp_path: Path, entry: str) -> None:
+    # Peter, 2026-10-02: a broken defaults file fails at import with an error naming the key.
+    broken = tmp_path / "tolerance_defaults.toml"
+    broken.write_text(f"broken_key_mm = {entry}\n", encoding="utf-8")
+    read: Callable[[Path], Mapping[str, object]] = defaults_module.read_defaults
+    with pytest.raises(ValueError, match="broken_key_mm"):
+        read(broken)

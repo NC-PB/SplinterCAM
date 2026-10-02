@@ -90,8 +90,7 @@ def _exact_grid_cost_mm(tol_mm: float) -> Fraction:
     [
         (0.01, 0.2, 0.4),  # 0.05·tol >= 2u: no floor term
         (0.003, 0.2, 0.4),  # 0.05·tol < 2u: the floor term applies
-        (0.01, 0.1, 0.03),  # the fit band is negative before the clamp
-        (0.01, 0.1, 0.0),
+        (0.03, 0.2, 0.1),  # fit share below 0.15: its floor is 6u / 0.1 = 0.006 mm
     ],
 )
 def test_geometry_fit_and_flatten_tol_follow_the_sets_own_shares(
@@ -122,6 +121,54 @@ def test_geometry_fit_and_flatten_tol_follow_the_sets_own_shares(
     # A few correctly rounded double operations on values below tol: within one ulp of tol.
     for name, value in expected.items():
         assert abs(Fraction(actual[name]) - value) <= Fraction(math.ulp(chord_tol_mm)), name
+
+
+@pytest.mark.req("REQ-FND-002")
+@pytest.mark.parametrize(
+    ("chord_tol_mm", "values"),
+    [
+        # Below 6u / fit share, the floor for a fit share under 0.15 (Peter, 2026-10-02): the
+        # fit band would be negative before the clamp. Accepted before that answer.
+        (0.011, (0.1, 0.03, 0.25, 0.125)),
+        # Fit share 0: no tol leaves a fit band of 0 or more.
+        (0.02, (0.1, 0.0, 0.25, 0.125)),
+        # After the clamp the parts would sum to 0.01127 mm, more than tol (spec review).
+        (0.011, (0.42, 0.03, 0.45, 0.1)),
+    ],
+)
+def test_a_set_whose_fit_band_would_be_negative_is_rejected(
+    chord_tol_mm: float, values: tuple[float, float, float, float]
+) -> None:
+    shares = tuple(zip(BUDGET_PARTS, values, strict=True))
+    with pytest.raises(ValueError, match="chord_tol_mm must be >="):
+        _tolerance_set(chord_tol_mm=chord_tol_mm, stage_shares=shares)
+
+
+@pytest.mark.req("REQ-FND-002")
+@pytest.mark.parametrize(
+    ("chord_tol_mm", "geometry_share", "length_eps_mm"),
+    [
+        (1.0, 0.05, _LENGTH_EPS_MM),  # t_flat = 0·tol - 0.0001 mm - 3·eps_len
+        (0.003, 0.08, _LENGTH_EPS_MM),  # t_flat = 0.03·0.003 - 0.000103 = -1.3e-5 mm
+        (0.01, 0.1, 1e-3),  # the default geometry share, but a large eps_len
+    ],
+)
+def test_a_set_whose_flatten_tol_is_not_positive_is_rejected(
+    chord_tol_mm: float, geometry_share: float, length_eps_mm: float
+) -> None:
+    shares: _Shares = (
+        ("geometry", geometry_share),
+        ("fit", 0.3),
+        ("control", 0.5),
+        ("reserve", 0.1),
+    )
+    with pytest.raises(ValueError, match="t_flat"):
+        ToleranceSet(
+            chord_tol_mm=chord_tol_mm,
+            length_eps_mm=length_eps_mm,
+            angle_eps_rad=_ANGLE_EPS_RAD,
+            stage_shares=shares,
+        )
 
 
 @pytest.mark.req("REQ-FND-001")

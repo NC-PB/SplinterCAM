@@ -7,11 +7,9 @@ description: Draft or extend a module SPEC.md from a research section (docs/rese
 
 Input: $ARGUMENTS (a research section number and the target module)
 
-1. Read the research section, the module's row in docs/research/24 (invariants), and the matching group in docs/research/18 (pitfalls). Read nothing else unless the section links to it.
+1. Read the research section. Read nothing else unless the section links to it.
 2. Start from `docs/templates/SPEC.md` (in the repository: the existing `SPEC.md`, if any; keep existing IDs).
 3. Write requirements in EARS form with new IDs `REQ-<MODULE>-<NNN>`:
-   - one per invariant from docs/research/24;
-   - one per pitfall from docs/research/18 that applies (each pitfall is a requirement in disguise);
    - one per "trap" in the research section;
    - failure modes as WHEN/IF requirements with a diagnostic code.
 4. For each requirement, name how it will be verified (unit, property, golden case).

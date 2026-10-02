@@ -51,7 +51,7 @@ StrategyInput = part geometry, stock snapshot, tool, cutting data, work frame, t
 - **Versioned algorithms and files.** Each strategy carries an algorithm version, and old job files recompute with the version they were made with. Schemas and file formats carry versions too.
 - **Kernels speak arrays.** A kernel function takes NumPy arrays and plain values and returns arrays, plain values and diagnostic codes. No Python objects, callbacks or OCCT types cross the boundary. Long kernels release the interpreter lock and check a cancellation flag passed in as a plain value (RESEARCH 18, section General engineering (Project Spike)).
 - **The split rule.** Loops over points, segments, triangles or grid cells belong in a kernel or in vectorised NumPy. Loops over operations, tools, features, files or UI elements stay in Python ([ADR 0004](../adr/0004-tech-stack.md)).
-- **Long OCCT work in a worker process (D-140).** Imports, sewing, meshing, healing, shape checks, face references and feature recognition run outside the GUI process and send back a `ShapeRef` and arrays. OCP holds the interpreter lock for the whole of every OCCT call, so a thread in the GUI process would freeze the interface (plan 0001).
+- **Long OCCT work in a worker process (D-140).** Imports, sewing, meshing, healing, shape checks, face references and feature recognition run outside the GUI process and send back a `ShapeRef` and arrays. OCP holds the interpreter lock for the whole of every OCCT call, so a thread in the GUI process would freeze the interface (the stack test app's plan 0001).
 
 ## Public interfaces
 
