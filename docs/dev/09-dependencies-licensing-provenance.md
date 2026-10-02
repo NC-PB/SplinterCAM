@@ -6,7 +6,7 @@ Agents copy readily and do not feel licence obligations. The rules below make th
 
 ## The project licence
 
-The project is licensed under **Apache-2.0** ([ADR 0002](../decisions/0002-licence-apache-2.md)): permissive, with an explicit patent licence from every contributor for their contributions, and a `NOTICE` file that redistributors must keep. Apache-2.0 code may be used in GPL-3.0 projects, but not in GPL-2.0-only ones.
+The project is licensed under **Apache-2.0** ([ADR 0002](../adr/0002-licence-apache-2.md)): permissive, with an explicit patent licence from every contributor for their contributions, and a `NOTICE` file that redistributors must keep. Apache-2.0 code may be used in GPL-3.0 projects, but not in GPL-2.0-only ones.
 
 ## Which licences may enter
 
@@ -42,7 +42,7 @@ The person who submits a change is responsible for it, whoever typed it. Review 
 
 ## Patents
 
-Apache-2.0 gives users a licence to the patents of the project's contributors, not to anyone else's. Toolpath methods, adaptive clearing in particular, were patented heavily ([RESEARCH 05](../research/05-adaptive-clearing.md)). Prefer methods published in academic papers, avoid imitating a specific commercial product's behaviour, and check the status of any patent that clearly covers a method before shipping it.
+Apache-2.0 gives users a licence to the patents of the project's contributors, not to anyone else's. Toolpath methods, adaptive clearing in particular, were patented heavily (RESEARCH 05 (Project Spike)). Prefer methods published in academic papers, avoid imitating a specific commercial product's behaviour, and check the status of any patent that clearly covers a method before shipping it.
 
 ## File-level hygiene
 

@@ -8,7 +8,7 @@ Agents write code quickly and delete it rarely. Without limits that are checked,
 
 ## What plan 0001 showed
 
-From the prototype at commit c1c21d3 (SRC-118; [review](../reviews/2026-10-01-prototype-insights.md)):
+From the prototype at commit c1c21d3 (SRC-118 in the [sources snapshot](../spike/sources-snapshot.md); review `reviews/2026-10-01-prototype-insights.md` (Project Spike)):
 
 - **Where a SPEC bounded the work, the code stayed lean.** `foundation` and the `geometry2d` offset: 980 lines in `src/`, 12 Python functions, one longer than 50 lines. Requirements, tests written from the SPEC and reviews kept it small.
 - **Where nothing bounded it, it grew.** Throwaway measurement code reached 9 114 lines, nine times the kept code: 286 functions, 28 of them over 50 lines, the longest 338 lines. One file grew from 538 to 1 027 lines in a single commit of review fixes.
@@ -105,7 +105,7 @@ Throwaway code (a probe) answers one question with numbers, for a plan's decisio
 
 ## Sources
 
-- SRC-118: plan 0001 in `test_repo`, commit c1c21d3, our measurements.
+- SRC-118 ([sources snapshot](../spike/sources-snapshot.md)): plan 0001 in the stack test app's own repository (`test_repo`), commit c1c21d3, our measurements.
 - Anthropic, [Claude prompting best practices](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices), section on over-eagerness in agentic coding.
 - GitClear, [AI Copilot Code Quality 2025](https://www.gitclear.com/ai_assistant_code_quality_2025_research).
 - Google, [Small CLs](https://google.github.io/eng-practices/review/developer/small-cls.html).

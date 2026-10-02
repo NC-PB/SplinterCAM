@@ -39,20 +39,20 @@ The root `AGENTS.md` carries a short "Lean code" section: the eight rules of [12
 
 Write rules in the imperative, specific and checkable: "Tolerances come from the `ToleranceSet`; never write a literal epsilon" instead of "be careful with floating point".
 
-## Templates in this folder
+## Templates and what they became
 
 | Template | Becomes |
 | --- | --- |
-| templates/AGENTS.md (`test_repo/AGENTS.md`) | Root `AGENTS.md` |
-| templates/CLAUDE.md (`test_repo/CLAUDE.md`) | Root `CLAUDE.md` |
-| templates/module-AGENTS.md (`test_repo/docs/templates/module-AGENTS.md`) | `src/splintercam/<m>/AGENTS.md` |
-| templates/module-CLAUDE.md (`test_repo/docs/templates/module-CLAUDE.md`) | `src/splintercam/<m>/CLAUDE.md` |
-| templates/dot-claude/settings.json (`test_repo/.claude/settings.json`) | `.claude/settings.json` |
-| templates/dot-claude/rules/ (`test_repo/.claude/rules`) | Path-scoped rules for tests, C++ kernels, OCP code and posts |
-| templates/dot-claude/skills/ (`test_repo/.claude/skills`) | Skills listed below |
-| templates/dot-claude/agents/ (`test_repo/.claude/agents`) | Subagents listed below |
-| [templates/dot-claude/agents/simplifier.md](../templates/dot-claude/agents/simplifier.md) (drafted here, not yet in `test_repo`) | `.claude/agents/simplifier.md` |
-| templates/tools/ (`test_repo/tools`) | The `tools/` command contract and the two hook scripts |
+| templates/AGENTS.md (Project Spike) | Root [`AGENTS.md`](../../AGENTS.md) |
+| templates/CLAUDE.md (Project Spike) | Root [`CLAUDE.md`](../../CLAUDE.md) |
+| [docs/templates/module-AGENTS.md](../templates/module-AGENTS.md) | `src/splintercam/<m>/AGENTS.md` |
+| [docs/templates/module-CLAUDE.md](../templates/module-CLAUDE.md) | `src/splintercam/<m>/CLAUDE.md` |
+| templates/dot-claude/settings.json (Project Spike) | [`.claude/settings.json`](../../.claude/settings.json) |
+| templates/dot-claude/rules/ (Project Spike) | [`.claude/rules/`](../../.claude/rules): path-scoped rules for tests, C++ kernels, OCP code and posts |
+| templates/dot-claude/skills/ (Project Spike) | [`.claude/skills/`](../../.claude/skills): skills listed below |
+| templates/dot-claude/agents/ (Project Spike) | [`.claude/agents/`](../../.claude/agents): subagents listed below |
+| templates/dot-claude/agents/simplifier.md (Project Spike) | [`.claude/agents/simplifier.md`](../../.claude/agents/simplifier.md) |
+| templates/tools/ (Project Spike) | [`tools/`](../../tools): the command contract and the two hook scripts |
 
 ## Skills
 

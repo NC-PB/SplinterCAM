@@ -2,7 +2,7 @@
 
 # 02. Repository layout
 
-The layout has one goal: from any file, an agent (or a new contributor) can tell what it belongs to, what rules apply, and where the contract and the tests are. It follows [ADR 0004](../decisions/0004-tech-stack.md): one Python package, `splintercam`, with a C++ `kernel/` folder inside the modules that need fast array work.
+The layout has one goal: from any file, an agent (or a new contributor) can tell what it belongs to, what rules apply, and where the contract and the tests are. It follows [ADR 0004](../adr/0004-tech-stack.md): one Python package, `splintercam`, with a C++ `kernel/` folder inside the modules that need fast array work.
 
 ## The tree
 
@@ -91,9 +91,9 @@ SplinterCAM/
 - **`strategies/` holds one folder per strategy.** Strategies never depend on each other, so several agents can work on different strategies in parallel without conflicts.
 - **`kernel/` folders hold all C++.** They are compiled into one extension module, `splintercam._kernels`. Kernels see only arrays and small permissive C++ libraries, never OCCT, Qt or Python objects. OCCT is reached only through OCP, in `io`, `features` and the desktop viewer ([03](03-architecture-rules.md), [09](09-dependencies-licensing-provenance.md)).
 - **`apps/cli` comes before `apps/desktop`.** A headless runner lets agents and CI run complete jobs, compare outputs and render pictures without a GUI.
-- **Posts and machines are data.** Post-processors and machine definitions are text files that users edit, not compiled code ([RESEARCH 13](../research/13-post-processing.md)).
+- **Posts and machines are data.** Post-processors and machine definitions are text files that users edit, not compiled code (RESEARCH 13 (Project Spike)).
 - **`testdata/` is shared, `tests/` is per module.** Big files (meshes, STEP models, reference outputs) are shared between modules and CI, tracked with Git LFS, and each has a licence entry.
-- **`tools/` is the stable interface.** Whatever the stack, agents always run `tools/check`, `tools/test-one` and so on (templates/tools/README.md (`test_repo/tools/README.md`)). Changing the build system later then does not invalidate the agent instructions.
+- **`tools/` is the stable interface.** Whatever the stack, agents always run `tools/check`, `tools/test-one` and so on ([tools/README.md](../../tools/README.md)). Changing the build system later then does not invalidate the agent instructions.
 
 ## Naming and size rules
 

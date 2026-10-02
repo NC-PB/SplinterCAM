@@ -12,7 +12,7 @@
 ## Steps
 
 <!-- Each step has a size estimate (kept code and tests). At 50 % over it, stop and ask, as for a timebox
-     (engineering/12, section 3). -->
+     (docs/dev/12, section 3). -->
 
 - [ ] 1. <step, with REQ IDs>; size: <lines of kept code> + <lines of tests>
 - [ ] 2. <step>; size: <…>
@@ -20,7 +20,7 @@
 
 ## Probes
 
-<!-- Only for questions answered with numbers (engineering/12, section 6). Delete this section if there are none. -->
+<!-- Only for questions answered with numbers (docs/dev/12, section 6). Delete this section if there are none. -->
 
 - Question: <one question, and the decision it feeds>
 - Folder: `spikes/<plan>/<step>/`; nothing in `src/` imports it

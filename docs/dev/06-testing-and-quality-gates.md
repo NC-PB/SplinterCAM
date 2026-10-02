@@ -2,7 +2,7 @@
 
 # 06. Testing and quality gates
 
-Tests are the sensors that let agents work unsupervised between reviews. [RESEARCH 24](../research/24-testing-and-verification.md) lists what to test (the invariants per module, reference parts and datasets); this document fixes where tests live, when they run, and the rules agents must follow around them.
+Tests are the sensors that let agents work unsupervised between reviews. RESEARCH 24 (Project Spike) lists what to test (the invariants per module, reference parts and datasets); this document fixes where tests live, when they run, and the rules agents must follow around them.
 
 ## Test kinds and locations
 

@@ -41,7 +41,7 @@ Two readers matter: the person who reviews and maintains the code, and the next 
 - Validate at the boundary, trust inside. Public functions, importers and kernel entry points check their inputs; code inside a module does not re-check what the boundary guarantees.
 - Expected outcomes are values: an empty offset, a tool that does not fit, a hole that cannot be reached. Return them as results with typed diagnostics ([03](03-architecture-rules.md)).
 - Programming errors (a broken invariant, a null where none is allowed) fail loudly with an assertion or exception. Assertions stay on in release test builds.
-- Never swallow an error. Never catch "everything" except at the top of a job, where the failure is logged, dumped for replay and reported ([RESEARCH 18](../research/18-known-pitfalls.md#general-engineering)).
+- Never swallow an error. Never catch "everything" except at the top of a job, where the failure is logged, dumped for replay and reported (RESEARCH 18, section General engineering (Project Spike)).
 - Never swallow out-of-memory or cancellation.
 
 ## Determinism
@@ -49,7 +49,7 @@ Two readers matter: the person who reviews and maintains the code, and the next 
 - Stable sorts, with an explicit tie-breaker.
 - Never let the output order depend on hash-map iteration, pointer addresses or thread timing.
 - Random numbers only from a seeded generator passed in through the `Context`.
-- Text output (G-code, reports) formats numbers with an invariant culture and explicit rounding rules ([RESEARCH 18](../research/18-known-pitfalls.md#multi-axis-machine-and-post-processing), item 1).
+- Text output (G-code, reports) formats numbers with an invariant culture and explicit rounding rules (RESEARCH 18, section Multi-axis machine and post-processing, item 1 (Project Spike)).
 
 ## State and concurrency
 
@@ -67,7 +67,7 @@ Two readers matter: the person who reviews and maintains the code, and the next 
 - Tests carry the requirement ID as a pytest marker, `@pytest.mark.req("REQ-OFF-003")`, and a name that says what they check: `test_inward_offset_stays_inside_region`.
 - Geometry is compared with tolerances or a Hausdorff distance, never as exact floats or text.
 
-## Language appendix ([ADR 0004](../decisions/0004-tech-stack.md))
+## Language appendix ([ADR 0004](../adr/0004-tech-stack.md))
 
 ### Python
 

@@ -26,9 +26,9 @@ Agents and people run the same commands, whatever the stack. Each command is a s
 
 ## Implementation (ADR 0004)
 
-The scripts are written in the test app ([plan 0001](../docs/plans/active/0001-stack-test-app.md)). Written so far (step 1 and 2): `bootstrap`, `build`, `format`, `lint`, `test-one`, `check`, `test`.
+The scripts were written in the stack test app (its plan 0001, in the test app's own repository). Written so far (step 1 and 2): `bootstrap`, `build`, `format`, `lint`, `test-one`, `check`, `test`.
 
-`build` regenerates the kernel stubs in `src/splintercam/_kernels/` (nanobind stubgen) after every `uv sync`, so pyright sees the kernel API even though the compiled module itself is what Python imports.
+`build` regenerates the kernel stubs in `src/splintercam/_kernels/` (nanobind stubgen; while no module has a kernel, the single file `src/splintercam/_kernels.pyi`) after every `uv sync`, so pyright sees the kernel API even though the compiled module itself is what Python imports.
 
 Each command is a short bash script (on Windows, run it from Git Bash). `bootstrap` is plain bash; the others check that `tools/bootstrap` has run (`lib/env.sh`) and hand over to typed Python in `lib/cmd_<command>.py`, which `tools/lint` checks like the rest of the code. Every tool (CMake, Ninja, ruff, pyright with its own Node.js, clang-format, clang-tidy) comes from PyPI at the version pinned in `uv.lock`, so all three systems run the same versions.
 

@@ -71,7 +71,7 @@ A person must approve: reviewed specs, accepted ADRs, `modules.yaml`, new depend
 - One branch per task: `feat/geometry2d-offset-arcs`, `fix/post-arc-rounding`.
 - Commit messages follow Conventional Commits and name the requirement: `feat(geometry2d): true-arc offsets (REQ-OFF-006)`.
 - AI-assisted commits carry the agent's attribution trailer (for example `Co-Authored-By:`), and the human who submits the work signs off (Developer Certificate of Origin, `Signed-off-by:`), taking responsibility for it.
-- The pull request uses templates/github/PULL_REQUEST_TEMPLATE.md (`test_repo/.github/PULL_REQUEST_TEMPLATE.md`): requirements covered, commands run with results, renders, tests added or changed (and why), golden changes, dependencies, sources used. The maintainer reviews with templates/REVIEW-CHECKLIST.md (`test_repo/docs/templates/REVIEW-CHECKLIST.md`).
+- The pull request uses [.github/PULL_REQUEST_TEMPLATE.md](../../.github/PULL_REQUEST_TEMPLATE.md): requirements covered, commands run with results, renders, tests added or changed (and why), golden changes, dependencies, sources used. The maintainer reviews with [docs/templates/REVIEW-CHECKLIST.md](../templates/REVIEW-CHECKLIST.md).
 
 ## Several agents in parallel
 
@@ -81,7 +81,7 @@ A person must approve: reviewed specs, accepted ADRs, `modules.yaml`, new depend
 
 ## Starting the project
 
-The first modules become the examples every later agent imitates. After the stack test app ([plan 0001](../plans/0001-stack-test-app.md)), write `foundation` and the first part of `geometry2d` with the most human attention: review every line, adjust the language appendix of [04](04-code-conventions.md) where practice differs from the plan, and add each lesson to `AGENTS.md` or a check. Before the first of them, set up `tools/size-check`, the linter limits, the `simplifier` and the finding classes ([12](12-lean-code.md), section 8). Only then hand out larger tasks.
+The first modules become the examples every later agent imitates. After the stack test app (its plan 0001, in the test app's own repository), write `foundation` and the first part of `geometry2d` with the most human attention: review every line, adjust the language appendix of [04](04-code-conventions.md) where practice differs from the plan, and add each lesson to `AGENTS.md` or a check. Before the first of them, set up `tools/size-check`, the linter limits, the `simplifier` and the finding classes ([12](12-lean-code.md), section 8). Only then hand out larger tasks.
 
 ## Things that go wrong
 

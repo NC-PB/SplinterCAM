@@ -2,7 +2,7 @@
 
 # 10. Stack decision
 
-**Decision of 2026-09-24 ([ADR 0004](../decisions/0004-tech-stack.md)):** a Python application on Windows, macOS and Linux, using OCCT through its Python binding OCP (including the OCCT viewer), a PySide6 GUI, and C++20 compute kernels that work on arrays, built with nanobind. Loops over points, segments, triangles or cells go into the kernels; everything else stays in Python. An all-C++ application with Qt and OCCT is the fallback. The stack test app ([plan 0001](../plans/0001-stack-test-app.md)) confirms the decision before real code is written.
+**Decision of 2026-09-24 ([ADR 0004](../adr/0004-tech-stack.md)):** a Python application on Windows, macOS and Linux, using OCCT through its Python binding OCP (including the OCCT viewer), a PySide6 GUI, and C++20 compute kernels that work on arrays, built with nanobind. Loops over points, segments, triangles or cells go into the kernels; everything else stays in Python. An all-C++ application with Qt and OCCT is the fallback. The stack test app (its plan 0001, in the test app's own repository) confirms the decision before real code is written.
 
 The rest of this document is kept as the record of how the decision was prepared: the questions, the criteria, and the candidates. The candidate table does not yet list the chosen hybrid, which combines profile E (Python with C++) with OCP instead of an own OCCT layer. Facts about tools and versions were checked on 2026-09-24.
 
@@ -22,10 +22,10 @@ The rest of this document is kept as the record of how the decision was prepared
 | Platforms | Decides UI toolkit, packaging and whether native libraries can be used everywhere |
 | Maintainer review | The quality gate of an AI-first project is human review; a language the reviewers read fluently makes reviews real |
 | Agent effectiveness | Strict types and compiler errors, one-command build and test, fast incremental builds and a mainstream language all make agents more reliable |
-| Library access | OCCT, Clipper2, Boost.Polygon Voronoi, Manifold, OpenVDB and geometry-central are C++; cavalier_contours is Rust with a C API; Clipper2 also exists in C# ([RESEARCH 17](../research/17-libraries-and-roadmap.md)) |
+| Library access | OCCT, Clipper2, Boost.Polygon Voronoi, Manifold, OpenVDB and geometry-central are C++; cavalier_contours is Rust with a C API; Clipper2 also exists in C# (RESEARCH 17 (Project Spike)) |
 | Numerics and speed | 64-bit floats, SIMD, multithreading, control over memory for large meshes and stock models |
 | UI and 3D view | A cross-platform toolkit with a usable 3D viewport |
-| Scripting | Posts and templates are user-edited scripts or data ([RESEARCH 13](../research/13-post-processing.md), [19](../research/19-software-design.md)) |
+| Scripting | Posts and templates are user-edited scripts or data (RESEARCH 13 and 19 (Project Spike)) |
 | Packaging | Shipping native libraries for every platform |
 | Contributors | Who else could help in an open-source CAM project |
 
@@ -48,8 +48,8 @@ Mixed stacks are possible, but each extra language doubles the tooling that has 
 
 Status on 2026-09-24, after ADR 0004:
 
-- Done: [ADR 0004](../decisions/0004-tech-stack.md) accepted; the language appendix in [04](04-code-conventions.md); layout ([02](02-repository-layout.md)), architecture rules ([03](03-architecture-rules.md)), tests ([06](06-testing-and-quality-gates.md)), licences ([09](09-dependencies-licensing-provenance.md)); `templates/AGENTS.md`, `templates/modules.yaml`, the path-scoped rules and the implementation column in templates/tools/README.md (`test_repo/tools/README.md`).
-- In the test app ([plan 0001](../plans/0001-stack-test-app.md)): the real `tools/*` scripts, the CI matrix for the three systems, the packaging tool and signing, and confirming or replacing ADR 0004.
+- Done: [ADR 0004](../adr/0004-tech-stack.md) accepted; the language appendix in [04](04-code-conventions.md); layout ([02](02-repository-layout.md)), architecture rules ([03](03-architecture-rules.md)), tests ([06](06-testing-and-quality-gates.md)), licences ([09](09-dependencies-licensing-provenance.md)); `templates/AGENTS.md` and `templates/modules.yaml` (Project Spike; here [`AGENTS.md`](../../AGENTS.md) and [`architecture/modules.yaml`](../../architecture/modules.yaml)), the path-scoped rules and the implementation column in [tools/README.md](../../tools/README.md).
+- In the test app (its plan 0001, in the test app's own repository): the real `tools/*` scripts, the CI matrix for the three systems, the packaging tool and signing, and confirming or replacing ADR 0004.
 
 ## Sources
 
