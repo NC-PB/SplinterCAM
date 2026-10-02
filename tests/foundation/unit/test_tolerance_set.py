@@ -90,8 +90,9 @@ def _exact_grid_cost_mm(tol_mm: float) -> Fraction:
     [
         (0.01, 0.2, 0.4),  # 0.05·tol >= 2u: no floor term
         (0.003, 0.2, 0.4),  # 0.05·tol < 2u: the floor term applies
-        (0.01, 0.1, 0.03),  # the fit band is negative before the clamp
-        (0.01, 0.1, 0.0),
+        # The fit band is negative before the clamp, though tol lies above the floor of
+        # REQ-FND-002 for this fit share, 0.01 mm.
+        (0.011, 0.1, 0.03),
     ],
 )
 def test_geometry_fit_and_flatten_tol_follow_the_sets_own_shares(

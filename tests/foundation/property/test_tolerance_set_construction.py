@@ -13,11 +13,13 @@ from splintercam.foundation import BUDGET_PARTS, ToleranceSet
 
 type _Shares = tuple[tuple[str, float], ...]
 
-# Test inputs: eps_len, eps_ang and tol at finishing (research 01, Tolerances), and the shares of
+# Test inputs: eps_len and eps_ang (research 01, Tolerances), and the shares of
 # D-056 in BUDGET_PARTS order, whose exact sum is 1 (0.1 + 0.3 + 0.5 + 0.1 as doubles).
 _LENGTH_EPS_MM = 1e-6
 _ANGLE_EPS_RAD = 1e-9
-_CHORD_TOL_MM = 0.01
+# 1 mm lies above the floor of REQ-FND-002 for every fit share, (6 + 2)·u / (fit share + 0.05)
+# <= 8u / 0.05 = 0.016 mm, so these tests see only the rule they check.
+_CHORD_TOL_MM = 1.0
 _RESEARCH_SHARES: _Shares = (("geometry", 0.1), ("fit", 0.3), ("control", 0.5), ("reserve", 0.1))
 
 
@@ -150,7 +152,7 @@ def test_a_budget_part_given_twice_is_rejected(shares: _Shares) -> None:
 @given(
     length_eps=_VALID_TOLERANCE,
     angle_eps=_VALID_TOLERANCE,
-    chord_tol=_VALID_TOLERANCE,
+    chord_tol=_finite_floats(min_value=0.02, max_value=sys.float_info.max),  # above the floor
     values=st.tuples(*(_finite_floats(min_value=0.0, max_value=0.25) for _ in BUDGET_PARTS)),
     order=st.permutations(range(len(BUDGET_PARTS))),
 )
@@ -214,3 +216,21 @@ def test_shares_summing_to_exactly_or_just_over_one(
     else:
         with pytest.raises(ValueError, match="sum to at most 1"):
             _build(shares)
+
+
+def _exact_floor_mm(fit_share: float) -> Fraction:
+    # REQ-FND-002 (Peter, 2026-10-02): tol_min of the own shares, (6 + 2)·u / (fit share + 0.05),
+    # with u = 0.0001 mm (research 01, Tolerances), in exact rationals.
+    return 8 * Fraction("0.0001") / (Fraction(fit_share) + Fraction("0.05"))
+
+
+@pytest.mark.req("REQ-FND-002")
+@pytest.mark.parametrize("fit_share", [0.0, 0.03, 0.1, 0.3, 0.4])
+def test_a_chord_tolerance_below_the_floor_of_its_own_shares_is_rejected(fit_share: float) -> None:
+    shares = _shares(0.1, fit_share, 0.5, 0.1)
+    floor = _exact_floor_mm(fit_share)
+    # One per cent either side: the floor itself is a double computed once, so its exact bits
+    # are checked through for_operation at the default shares (research 01, test 15).
+    with pytest.raises(ValueError, match="chord_tol_mm"):
+        _build(shares, chord_tol_mm=float(floor * Fraction(99, 100)))
+    assert _build(shares, chord_tol_mm=float(floor * Fraction(101, 100))).chord_tol_mm > 0
