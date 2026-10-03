@@ -69,6 +69,7 @@ def cleanup(points, ctx) -> Result[NDArray[np.int64]]: ...                    # 
 - `closest_point`'s parameter is t ∈ [0, 1] on a line and the angle from P_0 in the sense of φ on an arc (ours). `circle_through`'s radius is |P_1 − C| (ours).
 - `cleanup` takes a closed polyline (n, 2) and returns the indices of the vertices it keeps, in order, so callers carry source IDs along (ours). Its passes run in the order merge, collinear, spike (research 01, Helpers); a kept vertex carries the vertices merged into it, so no vertex moves twice; the collinear and spike passes stop at three vertices, a loop that would lose more encloses nothing and the area test reports it (ours; the three-vertex stop confirmed by Peter, 2026-10-03).
 - The exact predicates are exact for coordinates that are 0 or have a magnitude in [2^−142, 2^201], about 1.8e-43 to 3e60 mm: SRC-032 (p. 308) proves this range for orient2d and incircle, and our expansions of the arc predicates stay inside it (ours). A precondition, not checked (Peter); outside it products underflow or overflow. A NaN or infinite coordinate is a programming error, `ValueError` (ours), since it would read as sign 0.
+- For eps_len ≥ 1e-6 mm (the default), `signed_area` guarantees its sign for loops whose arcs all have r·min(1, φ²) ≤ 10^7 mm and whose end points have a half-extent E ≤ 10^9 mm (DEC-G2D-016, ours); the float limits of REQ-G2D-131 assume the same eps_len: beyond them the rounding of the segment terms or of the translation could reach eps_len·L. A precondition, not checked (Peter, 2026-10-03).
 - Arcs are valid input up to a radius of 10^9 mm (DEC-G2D-019, ours): beyond it the rounding of |P − C| can exceed eps_len, and `make_arc`, `arc_from_bulge` and `curve_rows` may reject a valid arc with `ARC_INCONSISTENT` (at 10^10 mm about a third of valid bulges were). A precondition, not checked (Peter, 2026-10-03). `signed_area` has a tighter one (DEC-G2D-016). REQ-G2D-047 and 048 apply to `make_arc` only; `curve_rows` checks every arc row by REQ-G2D-042 and 043 at any radius (ours).
 - `flatten` expects t ≥ eps_len (DEC-G2D-020, ours). Within that and the radius limit a full circle needs fewer than 2^31 steps; the `ValueError` for a count beyond an int fires only outside them. A precondition, not checked.
 - Internal entries for tests, not in `__all__`: `two_sum`, `two_product` (exact.cpp) and `point_in_region_exact`, the exact layer alone.
@@ -81,7 +82,7 @@ def cleanup(points, ctx) -> Result[NDArray[np.int64]]: ...                    # 
 
 | ID | Requirement (EARS) | Verified by | Status |
 | --- | --- | --- | --- |
-| REQ-G2D-005 | THE geometry2d module SHALL take every decision on input geometry that depends on a sign (side, collinearity, inside or outside, the sweep an angle lies in) from exact predicates or exact comparisons of doubles, never from the sign of a rounded expression; loop orientation (REQ-G2D-131) is the one exception. | review; tests 5 and 12 | Released |
+| REQ-G2D-005 | THE geometry2d module SHALL take every decision on input geometry that depends on a sign (side, collinearity, inside or outside, the sweep an angle lies in) from exact predicates or exact comparisons of doubles, never from the sign of a rounded expression; loop orientation (REQ-G2D-131, 132), decided by a proven bound, is the one exception. | review; tests 5 and 12 | Released |
 | REQ-G2D-006 | THE geometry2d kernel SHALL compute orient2d and incircle with Shewchuk's `predicates.c`, vendored unchanged (D-097, ADR 0009). | review | Released |
 | REQ-G2D-007 | THE `orient2d` predicate SHALL return the exact sign of the orient2d determinant of research 01: +1 when c lies left of a → b, −1 right, 0 collinear. | property: note test 1, exact rationals as oracle | Released |
 | REQ-G2D-008 | WHEN three points share their x or their y coordinate, THE `orient2d` predicate SHALL return 0. | note test 2 | Released |
@@ -186,8 +187,8 @@ Release 1 kernels are single-threaded (Peter, 2026-10-02). Decisions and counts 
 | REQ-G2D-002 | WHEN a loop is reversed, THE `signed_area` function SHALL return the negated area within the rounding bound of research 01 (ours). | test 3 | Released |
 | REQ-G2D-128 | THE `signed_area` function SHALL return the area A of research 01 (polygon sum plus each arc's circular segment), in mm². | test 3 | Released |
 | REQ-G2D-130 | THE `signed_area` function SHALL evaluate its sums after translating the loop so the centre of its end points' bounding box is the origin (ours). | property against exact rationals; the exact sum equals the translated loop's area within a rounding unit | Released |
-| REQ-G2D-131 | WHERE a loop has n ≤ 10^6 vertices and a half-extent E ≤ 3355 mm, THE `signed_area` function SHALL decide the orientation from the floating-point sums. | property against exact rationals | Released |
-| REQ-G2D-132 | WHERE a loop has more than 10^6 vertices or E > 3355 mm (ours), THE `signed_area` function SHALL sum the polygon part exactly. | a loop just above each limit; the exact path with arcs | Released |
+| REQ-G2D-131 | WHERE a loop has n ≤ 10^6 vertices and a half-extent E ≤ 3355 mm, THE `signed_area` function SHALL decide the orientation from the floating-point polygon sum and the exactly summed segment terms (DEC-G2D-016, ours). | property against exact rationals, polygons and loops with arcs; full circles up to r = 10^7 mm; the bound at the limits | Released |
+| REQ-G2D-132 | WHERE a loop has more than 10^6 vertices or E > 3355 mm (ours), THE `signed_area` function SHALL sum the polygon part exactly, with the segment terms. | a loop just above each limit; the exact path with arcs; property with arcs beyond 3355 mm | Released |
 | REQ-G2D-133 | IF \|A\| ≤ eps_len·L, with L the loop length, THEN THE `signed_area` function SHALL return no value and `LOOP_DEGENERATE` (warning). | test 19 (widths 1e-7 and 1e-5 mm); strips just below and above the limit | Released |
 | REQ-G2D-134 | THE `point_in_region` function SHALL classify each query point against the given loops as exactly one of IN, OUT and ON. | tests 5 and 6; note test 6 | Released |
 | REQ-G2D-135 | THE exact layer (`point_in_region_exact`) SHALL compute the winding number over all loops by the ray rules of research 01, Point in region: arcs split at π/2 and 3π/2 by exact signs, half-open height ranges, ±1 per crossing edge; an arc runs on its circle of radius \|P_0 − C\| to the ray from C through P_1 and on along that ray to P_1, a radial connector where P_1 lies off the circle (Peter, 2026-10-03). | tests 5 and 6; rays through vertices and tangent at a circle's top and bottom; arcs split at their top and bottom; P_1 off the circle near a top and a bottom; the exact height of a connector's end; properties against an exact winding oracle and a fine flattening, also with P_1 off the circle | Released |
@@ -210,7 +211,7 @@ Release 1 kernels are single-threaded (Peter, 2026-10-02). Decisions and counts 
 - Predicates are pure functions of their input doubles, the same on every platform (REQ-G2D-007 to 011, 018, 021).
 - Every `Arc` the validating entries return is valid and keeps its P_0 and P_1, except under the nearly closed rule (REQ-G2D-037 to 049).
 - Every flattening starts and ends bit for bit at the curve's end points, stays within t and keeps an arc on the side asked for (REQ-G2D-102 to 126).
-- The sign of `signed_area` is right whenever \|A\| > eps_len·L and flips under reversal (REQ-G2D-001, 002, 128 to 133).
+- The sign of `signed_area` is right whenever \|A\| > eps_len·L, for loops within its precondition, and flips under reversal (REQ-G2D-001, 002, 128 to 133; DEC-G2D-016).
 - `point_in_region` returns one of IN, OUT and ON, and for one loop does not depend on its orientation (REQ-G2D-134 to 150).
 - Cleanup moves no vertex by more than eps_len, keeps the area and is idempotent (REQ-G2D-204 to 212).
 - No tolerance is a literal; fixed values are declared parameters (REQ-G2D-025, 230).
@@ -246,7 +247,7 @@ The budget is foundation's (REQ-FND-009). Slice 1 spends none of it: `flatten` t
 | Arc form and validation; bulge | D-057; SRC-123 for the bulge's meaning; formulas own design, research 01, Curves (2026-10-02) |
 | Distances; circle through three points | research 01 (the arc rule own design, 2026-10-02); SRC-032, p. 359 |
 | Inscribed and circumscribed flattening | Altintas 2012 (SRC-119), eqs. 5.85–5.86, Table 5.2; the circumscribed form, count rule and side rule own design, research 01 (2026-10-02) |
-| Signed area, orientation bound; point in region; cleanup; arc bounding boxes | own design, research 01 (2026-10-02) |
+| Signed area, orientation bound; point in region; cleanup; arc bounding boxes | own design, research 01 (2026-10-02); the bound's arc term own design, DEC-G2D-016 (2026-10-03) |
 
 ## Test plan
 
@@ -286,6 +287,7 @@ No requirements; each line names the work and where its drafted requirements and
 - 2026-10-03: the module budget of 1700 NLOC set in `architecture/modules.yaml` (Peter's answer 6).
 - 2026-10-03: Peter's answers on point in region (plan 0003, step 8): REQ-G2D-143's ON on an arc by the sweep instead of the chord side; REQ-G2D-135's radial connector for P1 off the circle; REQ-G2D-148 measures to the nearer of the radii |P_0 − C| and |P_1 − C|. Research 01, Point in region, still states the earlier rule.
 - 2026-10-03: research 01, Point in region, updated to Peter's answers of step 8 (DEC-G2D-012: ON in the sweep, the radial connector, the nearer radius) on his answer 2 of 2026-10-03; the requirements are unchanged.
+- 2026-10-03: Peter's answer 1 of 2026-10-03: the arc term of the area's error bound derived (DEC-G2D-016); the segment terms are summed exactly on both paths (REQ-G2D-131, 132); the precondition r·min(1, φ²) ≤ 10^7 mm and E ≤ 10^9 mm stated in the Public interface. Research 01, Area and orientation, updated in the same pull request.
 - 2026-10-03: Peter's answer 5 of 2026-10-03 on the spec gaps of the reviews: `make_arc` checks P_1 against a tiny circle before turning it into a line (REQ-G2D-047, DEC-G2D-018); arcs up to r = 10^9 mm as a precondition (DEC-G2D-019; Peter named 10^10 mm, which measurement refuted); t ≥ eps_len for `flatten` as a precondition (DEC-G2D-020); the arctangent's own requirement REQ-G2D-233 (DEC-G2D-021). The translation limit E ≤ 10^9 mm of `signed_area` is DEC-G2D-016.
 
 [r01]: ../../../docs/research/01-foundations.md

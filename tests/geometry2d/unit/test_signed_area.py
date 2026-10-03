@@ -147,6 +147,17 @@ def test_the_float_limits_keep_research_01s_bound_below_eps_len() -> None:
 
 
 @pytest.mark.req("REQ-G2D-131", "REQ-G2D-132")
+def test_the_arc_precondition_keeps_the_whole_bound_below_eps_len() -> None:
+    # DEC-G2D-016: arcs add at most 40u·r·min(1, φ²) per mm of loop length, r·min(1, φ²) <= 10^7 mm.
+    u, n, e, eps = 2.0**-53, 10**6, 3355.0, 1e-6
+    arcs_per_mm = 40 * u * 1e7
+    float_path = n * u * (math.sqrt(2) * e + 3 * e * e / (4 * e))  # per mm, at L = 4E
+    exact_path = 2 * u * 1e9  # the translation, per mm, at E = 10^9 mm
+    assert float_path + arcs_per_mm <= 0.9 * eps
+    assert exact_path + arcs_per_mm <= 0.3 * eps
+
+
+@pytest.mark.req("REQ-G2D-131", "REQ-G2D-132")
 @pytest.mark.parametrize(("n", "exact"), [(10**6, False), (10**6 + 1, True)])
 def test_a_loop_just_above_the_vertex_limit_sums_exactly(
     ctx: Context, monkeypatch: pytest.MonkeyPatch, n: int, exact: bool
@@ -197,3 +208,30 @@ def test_the_area_is_bit_identical_when_repeated(ctx: Context, scale: float) -> 
     bulged = loop(rows, ctx)
     first = signed_area(bulged, ctx)
     assert signed_area(bulged, ctx) == first
+
+
+@pytest.mark.req("REQ-G2D-131")
+def test_the_segment_terms_are_summed_exactly_on_the_float_path(ctx: Context) -> None:
+    # Full circles through one point, so the polygon part is 0: 1000 pairs of radius 1e-3 to
+    # 1e4 mm in opposite senses that nearly cancel, and one of radius 100 mm. The area is the exact
+    # sum of the terms r̂²·p̂/2 the kernel forms, rounded once (DEC-G2D-016); a floating-point sum
+    # of the same terms misses it by thousands of units.
+    rng = np.random.default_rng(16)
+    centres: list[tuple[float, float, float]] = []
+    for r in (10.0 ** rng.uniform(-3.0, 4.0, size=1000)).tolist():
+        for sense in (1.0, -1.0):
+            a = float(rng.uniform(0.0, math.tau))
+            centres.append((-r * math.cos(a), -r * math.sin(a), sense * math.tau))
+    centres.append((-100.0, 0.0, math.tau))
+    rows = [[0.0, 0.0, 0.0, 0.0, cx, cy, sweep] for cx, cy, sweep in centres]
+    p_hat = np.empty(len(rows))
+    _kernels.geometry2d.phi_minus_sin(np.array([row[6] for row in rows]), p_hat)
+    exact = Fraction(0)
+    for (cx, cy, _), p in zip(centres, p_hat.tolist(), strict=True):
+        ax, ay = 0.0 - cx, 0.0 - cy
+        exact += Fraction(ax * ax + ay * ay) * Fraction(p) / 2  # r̂² rounded as in the kernel
+    loop_rows = CurveRows(
+        np.array(rows), np.arange(len(rows), dtype=np.int64), np.zeros(1, np.int64)
+    )
+    area = _area(loop_rows, ctx)
+    assert abs(Fraction(area) - exact) <= Fraction(math.ulp(float(exact)))

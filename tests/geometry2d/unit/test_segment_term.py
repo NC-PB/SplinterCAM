@@ -8,6 +8,7 @@ from fractions import Fraction
 import numpy as np
 import pytest
 
+import geometry2d_oracles as oracle
 from splintercam import _kernels
 
 U = 2.0**-53
@@ -17,15 +18,6 @@ def _kernel(phi: list[float]) -> list[float]:
     out = np.empty(len(phi))
     _kernels.geometry2d.phi_minus_sin(np.array(phi), out)
     return [float(v) for v in out]
-
-
-def _exact(phi: float) -> Fraction:
-    # φ³/3! - φ⁵/5! + …: 40 terms leave less than (2π)^83 / 83! < 1e-58 for |φ| <= 2π.
-    x, total, term = Fraction(phi), Fraction(0), Fraction(phi)
-    for k in range(1, 41):
-        term = term * x * x / ((2 * k) * (2 * k + 1))
-        total += term if k % 2 == 1 else -term
-    return total
 
 
 PHIS = [
@@ -46,9 +38,10 @@ PHIS = [
 @pytest.mark.req("REQ-G2D-128")
 def test_within_a_few_rounding_units_of_the_exact_series() -> None:
     for phi, got in zip(PHIS, _kernel(PHIS), strict=True):
-        exact = _exact(phi)
+        exact = oracle.phi_minus_sin(phi)
         # Relative near 0, where the series has no cancellation, absolute beyond |φ| = 1; 16u is
-        # an observed margin, not a derived bound (the output is pinned below).
+        # an observed margin, inside the bounds the area's proof derives: 16u relative for
+        # |φ| <= 1, 64u absolute beyond (DEC-G2D-016; the output is pinned below).
         scale = max(abs(float(exact)), 1.0 if abs(phi) > 1.0 else 0.0)
         assert abs(Fraction(got) - exact) <= Fraction(16 * U * scale), phi
 

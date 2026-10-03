@@ -75,6 +75,27 @@ def polygon_area(points: list[P]) -> Fraction:
     return total / 2
 
 
+def phi_minus_sin(phi: float) -> Fraction:
+    """φ - sin φ by its series φ³/3! - φ⁵/5! + …: 40 terms leave less than (2π)^83 / 83! < 1e-58
+    for |φ| <= 2π."""
+    x, total, term = Fraction(phi), Fraction(0), Fraction(phi)
+    for k in range(1, 41):
+        term = term * x * x / ((2 * k) * (2 * k + 1))
+        total += term if k % 2 == 1 else -term
+    return total
+
+
+def loop_area(rows: list[list[float]]) -> Fraction:
+    """The signed area of research 01 for one loop of curve rows [x0, y0, x1, y1, cx, cy, sweep]:
+    the polygon of the end points plus r²(φ - sin φ)/2 per arc with r = |P0 - C|, exact but for
+    the truncation of `phi_minus_sin`."""
+    total = polygon_area([(row[0], row[1]) for row in rows])
+    for x0, y0, _, _, cx, cy, sweep in rows:
+        if sweep != 0.0:
+            total += squared_distance((x0, y0), (cx, cy)) * phi_minus_sin(sweep) / 2
+    return total
+
+
 def winding(q: P, points: list[P]) -> int | None:
     """The winding number of the closed polygon through `points` about q by a ray to the right,
     with half-open height ranges, exactly; None when q lies on an edge."""

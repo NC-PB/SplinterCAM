@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // The signed area of a loop by Green's theorem (research 01, Area and orientation, ours), the
-// polygon part taken about the centre of the end points' bounding box. On the exact path the
-// polygon terms and the rounded segment terms are summed exactly (SRC-032's expansion arithmetic).
+// polygon part taken about the centre of the end points' bounding box. The rounded segment terms
+// are always summed exactly (SRC-032's expansion arithmetic), so their error bound has no factor
+// of the arc count (DEC-G2D-016); on the exact path the polygon terms join them.
 // The segment term and the lengths use basic operations only, so |A| <= eps_len·L decides the same
 // on every platform (REQ-G2D-018).
 #include "area.hpp"
@@ -15,9 +16,8 @@
 namespace splintercam::geometry2d {
 
 LoopSums loop_area(std::span<const double> rows, const LoopFrame& frame) {
-    double polygon = 0.0;   // twice the polygon part, when summed in floating point
-    ExactSum exact_polygon; // the polygon and segment terms, doubled, on the exact path
-    double segments = 0.0;
+    double polygon = 0.0; // twice the polygon part, when summed in floating point
+    ExactSum exact_sum;   // twice the segment terms; on the exact path the polygon terms too
     double length = 0.0;
     for (std::size_t start = 0; start < rows.size(); start += row_width) {
         const CurveRow row = unpack_row(rows.subspan(start, row_width));
@@ -26,7 +26,7 @@ LoopSums loop_area(std::span<const double> rows, const LoopFrame& frame) {
                              .c = row.x1 - frame.centre_x,
                              .d = row.y0 - frame.centre_y};
         if (frame.exact) {
-            exact_polygon.add(term);
+            exact_sum.add(term);
         } else {
             polygon += term.a * term.b - term.c * term.d;
         }
@@ -38,19 +38,12 @@ LoopSums loop_area(std::span<const double> rows, const LoopFrame& frame) {
             const double ax = row.x0 - row.cx;
             const double ay = row.y0 - row.cy;
             const double r2 = ax * ax + ay * ay;
-            const double segment = r2 * phi_minus_sin(row.sweep) / 2;
-            if (frame.exact) { // twice the segment, like the polygon terms
-                exact_polygon.add({.a = segment + segment, .b = 1.0, .c = 0.0, .d = 0.0});
-            } else {
-                segments += segment;
-            }
+            // r²·(φ − sin φ), the product formed exactly too (DEC-G2D-016).
+            exact_sum.add({.a = r2, .b = phi_minus_sin(row.sweep), .c = 0.0, .d = 0.0});
             length += std::sqrt(r2) * std::abs(row.sweep);
         }
     }
-    if (frame.exact) {
-        polygon = exact_polygon.value();
-    }
-    return {.area = polygon / 2 + segments, .length = length};
+    return {.area = (polygon + exact_sum.value()) / 2, .length = length};
 }
 
 } // namespace splintercam::geometry2d
