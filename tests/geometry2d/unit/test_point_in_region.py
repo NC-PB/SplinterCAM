@@ -8,7 +8,7 @@ import pytest
 
 from geometry2d_checks import loop, polygon, reversed_loop
 from splintercam.foundation import Context
-from splintercam.geometry2d import CurveRows, PointLocation, point_in_region
+from splintercam.geometry2d import CurveRows, PointLocation
 from splintercam.geometry2d._region import point_in_region_exact
 
 IN, OUT, ON = PointLocation.IN, PointLocation.OUT, PointLocation.ON
@@ -41,10 +41,6 @@ def _exact(q: list[tuple[float, float]], loops: CurveRows) -> list[PointLocation
     return [PointLocation(v) for v in point_in_region_exact(np.array(q), loops)]
 
 
-def _located(q: list[tuple[float, float]], loops: CurveRows, ctx: Context) -> list[PointLocation]:
-    return [PointLocation(v) for v in point_in_region(np.array(q), loops, ctx)]
-
-
 @pytest.mark.req("REQ-G2D-135", "REQ-G2D-139", "REQ-G2D-143", "REQ-G2D-145", "REQ-G2D-150")
 def test_research_test_5_exact_layer(ctx: Context) -> None:
     q = [(15.0, 5.0), (15.0 - TINY, 5.0), (15.0 + TINY, 5.0), (10.0, 5.0), (5.0, 5.0)]
@@ -52,23 +48,10 @@ def test_research_test_5_exact_layer(ctx: Context) -> None:
         assert _exact(q, loops) == [ON, IN, OUT, IN, IN]
 
 
-@pytest.mark.req("REQ-G2D-134", "REQ-G2D-148", "REQ-G2D-149", "REQ-G2D-150")
-def test_research_test_5_tolerance_layer(ctx: Context) -> None:
-    q = [
-        (15.0, 5.0),
-        (15.0 - TINY, 5.0),
-        (15.0 + TINY, 5.0),
-        (15.0 - 2e-6, 5.0),
-        (15.0 + 2e-6, 5.0),
-    ]
-    for loops in _both_orientations(BULGED, ctx):
-        assert _located(q, loops, ctx) == [ON, ON, ON, IN, OUT]
-
-
 @pytest.mark.req("REQ-G2D-135", "REQ-G2D-149", "REQ-G2D-150")
 def test_research_test_5_inward_semicircle(ctx: Context) -> None:
     for loops in _both_orientations(BITTEN, ctx):
-        assert _located([(10.0, 5.0), (4.0, 5.0), (6.0, 5.0)], loops, ctx) == [OUT, IN, OUT]
+        assert _exact([(10.0, 5.0), (4.0, 5.0), (6.0, 5.0)], loops) == [OUT, IN, OUT]
 
 
 @pytest.mark.req("REQ-G2D-135", "REQ-G2D-143", "REQ-G2D-150")
@@ -77,15 +60,13 @@ def test_research_test_6_full_circle(ctx: Context) -> None:
     for loops in _both_orientations(CIRCLE, ctx):
         expected = [IN, ON, OUT, ON, IN, ON, ON]
         assert _exact(q, loops) == expected
-        assert _located(q, loops, ctx) == expected
 
 
-@pytest.mark.req("REQ-G2D-135", "REQ-G2D-139", "REQ-G2D-143", "REQ-G2D-148", "REQ-G2D-150")
+@pytest.mark.req("REQ-G2D-135", "REQ-G2D-139", "REQ-G2D-143", "REQ-G2D-150")
 def test_shewchuk_note_test_6_square(ctx: Context) -> None:
     q = [(10.0, 5.0), (10.0, 10.0), (10.0 - TINY, 5.0), (10.0 + TINY, 5.0)]
     for loops in [polygon(SQUARE, ctx), polygon(SQUARE[::-1], ctx)]:
         assert _exact(q, loops) == [ON, ON, IN, OUT]
-        assert _located(q, loops, ctx) == [ON, ON, ON, ON]
 
 
 @pytest.mark.req("REQ-G2D-135")
@@ -132,7 +113,7 @@ def test_arcs_split_at_their_top_and_bottom(ctx: Context, start: float) -> None:
         assert _exact(q, loops) == [IN, IN, OUT, OUT, IN]
 
 
-@pytest.mark.req("REQ-G2D-134", "REQ-G2D-149")
+@pytest.mark.req("REQ-G2D-135", "REQ-G2D-149")
 def test_winding_sums_over_all_loops(ctx: Context) -> None:
     # A square with a square hole of the opposite orientation: inside the hole the winding is 0.
     outer = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]
@@ -143,7 +124,7 @@ def test_winding_sums_over_all_loops(ctx: Context) -> None:
         np.arange(8, dtype=np.int64),
         np.array([0, 4], dtype=np.int64),
     )
-    assert _located([(1.0, 1.0), (5.0, 5.0), (3.0, 5.0), (11.0, 5.0)], loops, ctx) == [
+    assert _exact([(1.0, 1.0), (5.0, 5.0), (3.0, 5.0), (11.0, 5.0)], loops) == [
         IN,
         OUT,
         ON,
@@ -151,21 +132,22 @@ def test_winding_sums_over_all_loops(ctx: Context) -> None:
     ]
 
 
-@pytest.mark.req("REQ-G2D-134")
-def test_results_are_int8_and_one_per_point(ctx: Context) -> None:
-    result = point_in_region(np.zeros((3, 2)), polygon(SQUARE, ctx), ctx)
+@pytest.mark.req("REQ-G2D-135", "REQ-G2D-201")
+def test_results_are_int8_read_only_and_one_per_point(ctx: Context) -> None:
+    result = point_in_region_exact(np.zeros((3, 2)), polygon(SQUARE, ctx))
     assert result.dtype == np.int8
+    assert not result.flags.writeable
     assert result.tolist() == [ON, ON, ON]
     with pytest.raises(ValueError, match="finite"):
-        point_in_region(np.array([[math.nan, 1.0]]), polygon(SQUARE, ctx), ctx)
+        point_in_region_exact(np.array([[math.nan, 1.0]]), polygon(SQUARE, ctx))
 
 
 @pytest.mark.req("REQ-G2D-231")
 def test_results_are_bit_identical_when_repeated(ctx: Context) -> None:
     q = np.random.default_rng(3).uniform(-2.0, 17.0, size=(500, 2))
     loops = loop(BULGED, ctx)
-    first = point_in_region(q, loops, ctx)
-    assert point_in_region(q, loops, ctx).tobytes() == first.tobytes()
+    first = point_in_region_exact(q, loops)
+    assert point_in_region_exact(q, loops).tobytes() == first.tobytes()
 
 
 @pytest.mark.req("REQ-G2D-135", "REQ-G2D-150")
@@ -189,9 +171,7 @@ def test_an_arc_whose_p1_lies_past_the_top_leaves_no_gap(ctx: Context) -> None:
 def _loop_or_reversed_answers(
     rows: list[list[float]], q: list[tuple[float, float]], ctx: Context
 ) -> list[list[PointLocation]]:
-    return [_exact(q, loops) for loops in _both_orientations(rows, ctx)] + [
-        _located(q, loops, ctx) for loops in _both_orientations(rows, ctx)
-    ]
+    return [_exact(q, loops) for loops in _both_orientations(rows, ctx)]
 
 
 @pytest.mark.req("REQ-G2D-143", "REQ-G2D-145", "REQ-G2D-150")
@@ -261,20 +241,3 @@ def test_the_radial_connector_to_p1_is_part_of_the_boundary(ctx: Context) -> Non
     loops = loop(rows, ctx)
     q = [(0.0, 5.0), (0.0, 5.0 + 2.0**-41), (2.0**-60, 5.0 + 2.0**-41), (1.0, 4.0)]
     assert _exact(q, loops) == [ON, ON, OUT, IN]  # the third lies above the circle's top
-
-
-@pytest.mark.req("REQ-G2D-148", "REQ-G2D-150")
-def test_the_tolerance_layer_measures_to_the_nearer_radius(ctx: Context) -> None:
-    # P1 lies 7e-7 inside the circle of radius |P0 - C| = 5: q at radius 5 + 0.5e-6 is within
-    # eps_len of that circle and 1.2e-6 from |P1 - C|; both orientations say ON (Peter,
-    # 2026-10-03).
-    p1 = (0.0, 5.0 - 7e-7)
-    rows = [
-        [5.0, 0.0, *p1, 0.0, 0.0, math.pi / 2],
-        [*p1, 0.0, 0.0, NAN, NAN, 0.0],
-        [0.0, 0.0, 5.0, 0.0, NAN, NAN, 0.0],
-    ]
-    r = 5.0 + 0.5e-6
-    q = [(r * math.cos(0.7), r * math.sin(0.7))]
-    for loops in _both_orientations(rows, ctx):
-        assert _located(q, loops, ctx) == [ON]

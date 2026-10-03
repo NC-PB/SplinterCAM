@@ -2,7 +2,6 @@
 // Point in region (research 01, Point in region; ours, from the SRC-032 note's mapping), decided by
 // exact predicates only. An arc runs on the circle of radius |P0 − C| to the ray from C through P1
 // and on along that ray to P1, a radial connector when P1 lies off the circle (Peter, 2026-10-03).
-// The tolerance layer uses the distances of research 01, Distances and closest points.
 #include "region.hpp"
 
 #include "arcs.hpp"
@@ -215,53 +214,21 @@ bool on_arc(Point2 q, const Arc& arc) {
            circle * arc_circle_sign(q, {arc.c, arc.p1}) <= 0;
 }
 
-double length(double dx, double dy) {
-    return std::sqrt(dx * dx + dy * dy); // correctly rounded operations: the same everywhere
-}
-
-double line_distance(Point2 q, Point2 a, Point2 b) {
-    const double dx = x(b) - x(a);
-    const double dy = y(b) - y(a);
-    const double length2 = dx * dx + dy * dy;
-    const double t =
-        length2 == 0.0 ? 0.0
-                       : std::clamp(((x(q) - x(a)) * dx + (y(q) - y(a)) * dy) / length2, 0.0, 1.0);
-    const Point2 foot = t == 0.0 ? a : (t == 1.0 ? b : Point2{x(a) + t * dx, y(a) + t * dy});
-    return length(x(q) - x(foot), y(q) - y(foot));
-}
-
-// The distance to the nearer of the circles of radius |P0 − C| and |P1 − C| in the sweep, so both
-// orientations agree (Peter, 2026-10-03), else to the nearer end point.
-double arc_distance(Point2 q, const Arc& arc) {
-    const double r0 = length(x(arc.p0) - x(arc.c), y(arc.p0) - y(arc.c));
-    const double r1 = length(x(arc.p1) - x(arc.c), y(arc.p1) - y(arc.c));
-    if (q == arc.c) {
-        return std::min(r0, r1);
-    }
-    if (in_sweep(q, arc)) {
-        const double d = length(x(q) - x(arc.c), y(q) - y(arc.c));
-        return std::min(std::abs(d - r0), std::abs(d - r1));
-    }
-    return std::min(length(x(q) - x(arc.p0), y(q) - y(arc.p0)),
-                    length(x(q) - x(arc.p1), y(q) - y(arc.p1)));
-}
-
-Location locate(Point2 q, const RegionQuery& query) {
-    const double eps = query.length_eps_mm; // 0: the exact layer alone
+Location locate(Point2 q, std::span<const double> rows) {
     int winding = 0;
-    for (std::size_t start = 0; start < query.rows.size(); start += row_width) {
-        const CurveRow row = unpack_row(query.rows.subspan(start, row_width));
+    for (std::size_t start = 0; start < rows.size(); start += row_width) {
+        const CurveRow row = unpack_row(rows.subspan(start, row_width));
         const Point2 a{row.x0, row.y0};
         const Point2 b{row.x1, row.y1};
         if (row.sweep == 0.0) {
-            if (on_line(q, a, b) || (eps > 0.0 && line_distance(q, a, b) <= eps)) {
+            if (on_line(q, a, b)) {
                 return Location::on;
             }
             winding += line_winding(q, a, b);
             continue;
         }
         const Arc arc{a, b, {row.cx, row.cy}, row.sweep};
-        if (on_arc(q, arc) || (eps > 0.0 && arc_distance(q, arc) <= eps)) {
+        if (on_arc(q, arc)) {
             return Location::on;
         }
         winding += arc_winding(q, arc);
@@ -277,7 +244,7 @@ void point_locations(std::span<const double> points, const RegionQuery& query,
     for (std::int8_t& location : out) {
         Point2 q{};
         std::ranges::copy(points.subspan(2 * row, 2), q.begin());
-        location = static_cast<std::int8_t>(locate(q, query));
+        location = static_cast<std::int8_t>(locate(q, query.rows));
         ++row;
     }
 }

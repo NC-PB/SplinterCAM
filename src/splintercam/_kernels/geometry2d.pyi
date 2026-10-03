@@ -41,9 +41,9 @@ def phi_minus_sin(phi: Annotated[NDArray[numpy.float64], dict(shape=(None,), ord
     Write phi - sin(phi) per value, from basic operations only (REQ-G2D-018).
     """
 
-def point_locations(q: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], rows: Annotated[NDArray[numpy.float64], dict(shape=(None, 7), order='C', device='cpu', writable=False)], length_eps_mm: float, out: Annotated[NDArray[numpy.int8], dict(shape=(None,), order='C', device='cpu')]) -> None:
+def point_locations(q: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], rows: Annotated[NDArray[numpy.float64], dict(shape=(None, 7), order='C', device='cpu', writable=False)], out: Annotated[NDArray[numpy.int8], dict(shape=(None,), order='C', device='cpu')]) -> None:
     """
-    Write per point 0 (OUT), 1 (IN) or 2 (ON) against the loops' rows (REQ-G2D-134 to 150).
+    Write per point 0 (OUT), 1 (IN) or 2 (ON) against the loops' rows (REQ-G2D-135 to 145).
     """
 
 def check_arcs(rows: Annotated[NDArray[numpy.float64], dict(shape=(None, 7), order='C', device='cpu', writable=False)], length_eps_mm: float, out: Annotated[NDArray[numpy.int8], dict(shape=(None,), order='C', device='cpu')]) -> None:
