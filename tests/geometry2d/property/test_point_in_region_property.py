@@ -2,11 +2,12 @@
 """Property tests: point in region against an exact winding oracle, against a fine flattening and
 against the distances of closest_point (research 01, Point in region)."""
 
+import itertools
 import math
 
 import numpy as np
 import pytest
-from hypothesis import HealthCheck, assume, given, settings
+from hypothesis import HealthCheck, assume, given, reject, settings
 from hypothesis import strategies as st
 
 import geometry2d_oracles as oracle
@@ -215,16 +216,16 @@ def test_both_orientations_agree_for_a_short_arc_with_p1_behind_and_off(  # noqa
     tail = [(p1[0], -1.0), (-1.0, -1.0), (-1.0, 0.0)]
     corners = [p1, *tail, p0]
     rows = [[*p0, *p1, 0.0, 0.0, sweep]] + [
-        [*a, *b, math.nan, math.nan, 0.0] for a, b in zip(corners, corners[1:], strict=False)
+        [*a, *b, math.nan, math.nan, 0.0] for a, b in itertools.pairwise(corners)
     ]
     reversed_rows = [[x1, y1, x0, y0, cx, cy, -s] for x0, y0, x1, y1, cx, cy, s in rows[::-1]]
     built = [
         curve_rows(np.array(r), np.arange(len(r)), np.zeros(1, np.int64), ctx).value
         for r in (rows, reversed_rows)
     ]
-    assume(built[0] is not None and built[1] is not None)
     forward, backward = built
-    assert forward is not None and backward is not None
+    if forward is None or backward is None:  # only one orientation is valid input
+        reject()
     low, high = min(r0, r1), max(r0, r1)
     q = np.array(
         [
