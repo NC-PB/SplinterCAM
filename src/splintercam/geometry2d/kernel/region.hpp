@@ -13,8 +13,7 @@ struct RegionQuery {
     std::span<const double> rows; // the curve rows of all loops, row_width doubles each
 };
 
-// Per query point (x, y pairs) its location against all loops: ON on an edge, else IN where the
-// winding number is not 0 (REQ-G2D-135 to 145).
+// Per query point (x, y pairs): ON on an edge, else IN where the winding number is not 0.
 void point_locations(std::span<const double> points, const RegionQuery& query,
                      std::span<std::int8_t> out);
 

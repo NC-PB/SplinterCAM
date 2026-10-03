@@ -144,8 +144,7 @@ void bind_area(nb::module_& m) {
         [](double q_y, const Pair& centre, const Pair& p0, const Pair& toward) {
             return ray_height_sign(q_y, {centre, p0}, toward);
         },
-        "The exact sign of q_y minus the height where the ray from centre through toward meets the "
-        "circle about centre through p0 (REQ-G2D-005, 135).");
+        "Sign of q_y minus where the ray centre -> toward meets the circle through p0 (exact).");
     m.def(
         "point_locations",
         [](const PointRows& q, const Rows& rows, const Int8Out& out) {

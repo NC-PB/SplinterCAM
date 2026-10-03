@@ -43,8 +43,7 @@ int line_winding(Point2 q, Point2 a, Point2 b) {
     return y(a) < y(b) ? static_cast<int>(side > 0) : -static_cast<int>(side < 0);
 }
 
-// The direction of p − c as an octant, as in _box.py: 0 on +x, odd inside a quadrant, even on an
-// axis, counter-clockwise; mirrored in y for a clockwise arc, so its sweep runs counter-clockwise.
+// The octant of p − c as in _box.py, mirrored in y for a clockwise arc.
 int octant(Point2 p, Point2 c, bool mirrored) {
     const int sx = sign(x(p), x(c));
     const int sy = mirrored ? -sign(y(p), y(c)) : sign(y(p), y(c));
@@ -65,7 +64,6 @@ struct End {
     double y; // for a point
 };
 
-// The sign of height − end's height, exactly.
 int compare(double height, const End& end, const Arc& arc) {
     switch (end.kind) {
     case EndKind::point:
@@ -80,8 +78,7 @@ int compare(double height, const End& end, const Arc& arc) {
     return 0;
 }
 
-// Top above the ray's end above bottom; the ray's end is the top or bottom only straight above or
-// below C.
+// Top above the ray's end above bottom; the ray's end is an extreme only straight above or below C.
 int rank(const End& end, const Arc& arc) {
     if (end.kind == EndKind::ray) {
         return x(arc.p1) == x(arc.c) ? sign(y(arc.p1), y(arc.c)) : 0;
@@ -89,7 +86,6 @@ int rank(const End& end, const Arc& arc) {
     return end.kind == EndKind::top ? 1 : -1;
 }
 
-// The sign of a's height minus b's.
 int compare(const End& a, const End& b, const Arc& arc) {
     if (a.kind == EndKind::point) {
         return compare(a.y, b, arc);
@@ -109,8 +105,7 @@ int piece_winding(double q_y, const std::array<End, 2>& ends, const Arc& arc) {
     return rise != 0 && compare(q_y, low, arc) >= 0 && compare(q_y, high, arc) < 0 ? rise : 0;
 }
 
-// Where the arc is split, in travel order: the octants 2 and 6 the sweep passes, by the rules of
-// _box.py (the sweep governs near 0 and near a full turn, REQ-G2D-043).
+// The octants 2 and 6 the sweep passes, in travel order, by the rules of _box.py (REQ-G2D-043).
 struct Splits {
     std::array<int, 2> octant{};
     std::size_t count = 0;
