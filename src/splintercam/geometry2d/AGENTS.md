@@ -1,6 +1,6 @@
 # AGENTS.md: geometry2d
 
-Layer 1. Implements docs/research/01 (slice 1; the rest is under "Later parts" in the SPEC). Contract: `./SPEC.md`. Public API: `./__init__.py`. C++ part: `./kernel/`. Depends on: foundation. Slice 1 is complete; its plan, decisions and open questions: `docs/plans/active/0003-geometry2d-slice-1.md` (Handover).
+Layer 1. Implements docs/research/01 (slice 1; the rest is under "Later parts" in the SPEC). Contract: `./SPEC.md`. Why it is built this way: `./DECISIONS.md` (read it before changing behaviour). Public API: `./__init__.py`. C++ part: `./kernel/`. Depends on: foundation. Slice 1 is complete; its plan and open questions: `docs/plans/active/0003-geometry2d-slice-1.md` (Handover).
 
 ## Commands
 

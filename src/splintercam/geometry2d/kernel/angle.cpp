@@ -5,7 +5,7 @@
 // leave an truncation error below 0.268^29 / 29 < 1e-18; the rounding of the reductions and of the
 // constants π/2, π/6 and π adds a few rounding units (the tests allow 4). Every step is a correctly
 // rounded IEEE operation, compiled without contraction (CMakeLists.txt), so the result is the same
-// everywhere.
+// everywhere. Why not std::atan2 or NumPy: DEC-G2D-003 and DEC-G2D-011 in ../DECISIONS.md.
 #include "angle.hpp"
 
 #include <cmath>

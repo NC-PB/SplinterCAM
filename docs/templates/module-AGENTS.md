@@ -2,7 +2,7 @@
 
 <!-- Keep under 60 lines. Copy of the most important facts only; the contract is SPEC.md. -->
 
-Layer <n>. Implements docs/research/<NN>. Contract: `./SPEC.md`. Public API: `./__init__.py`. C++ part: `./kernel/` (if any). Depends on: <modules>.
+Layer <n>. Implements docs/research/<NN>. Contract: `./SPEC.md`. Why it is built this way: `./DECISIONS.md` (read it before changing behaviour). Public API: `./__init__.py`. C++ part: `./kernel/` (if any). Depends on: <modules>.
 
 ## Commands
 

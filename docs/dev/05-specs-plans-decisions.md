@@ -12,7 +12,8 @@ Agents are good at implementing a clear contract and bad at inventing one. This 
 | Module spec | `src/splintercam/<m>/SPEC.md` | What must this module guarantee? | Agent drafts, person approves | With every behaviour change |
 | Feature or change spec | `docs/specs/NNNN-slug/` | What changes across several modules, and in which steps? | Agent drafts, person approves | Archived after merge |
 | Execution plan | `docs/plans/active/NNNN-slug.md` | Where are we, what is next? | Agent, every session | Moved to `completed/` |
-| Decision record | `docs/adr/NNNN-slug.md` | Why was this chosen? | Agent drafts, person decides | Superseded, never edited after acceptance |
+| Decision record | `docs/adr/NNNN-slug.md` | Why was this chosen (across modules)? | Agent drafts, person decides | Superseded, never edited after acceptance |
+| Module decisions | `src/splintercam/<m>/DECISIONS.md` | Why is this module built this way, and what was rejected? | Agent, in the commit that makes the decision | Superseded by a new entry, never edited after merge |
 | Code and tests | `src/`, `tests/`, `testdata/` | What actually happens | Agent, reviewed by a person | Always |
 
 Code and tests are the truth. Specs state the contract the code must meet; they are not a second copy of the implementation. Keep a module spec to one to three pages and link to RESEARCH instead of repeating pseudo-code.
@@ -45,7 +46,40 @@ Work that touches several modules gets a folder in `docs/specs/NNNN-slug/` using
 
 ## Execution plans
 
-Any task longer than one session gets a plan in `docs/plans/active/` using [templates/EXEC-PLAN.md](../templates/EXEC-PLAN.md): goal, links to specs, a checklist of steps, a decisions log, a dated progress log, the next step and open questions. The agent updates it at the end of every session, before stopping. A new session, or a different agent, starts by reading it. This is the project's replacement for chat memory.
+Any task longer than one session gets a plan in `docs/plans/active/` using [templates/EXEC-PLAN.md](../templates/EXEC-PLAN.md): goal, links to specs, a checklist of steps, a decisions log, a dated progress log, the next step and open questions. The agent updates it as the work goes, and checks it at the end of every session, before stopping. A new session, or a different agent, starts by reading it. This is the project's replacement for chat memory. The plan's Decisions list holds decisions about the plan itself (step order, splits); decisions about a module go into that module's `DECISIONS.md`.
+
+## Module decision records
+
+Every module keeps `src/splintercam/<m>/DECISIONS.md` ([templates/MODULE-DECISIONS.md](../templates/MODULE-DECISIONS.md)): the permanent record of why it is built the way it is. Plans move to `completed/` and chat sessions end; this file stays next to the code.
+
+- **What goes in:** every choice between alternatives that a later reader could undo by accident: an algorithm, a numeric method, an order of steps, a limit, a rule for edge cases, a test strategy, a build exception. Also every answer of Peter's that shapes the module. Not: names and formatting.
+- **What an entry says:** date, who decided (Peter, with the D-number when registered, or "ours"), the decision, why, what was rejected and why, and where it shows (REQ IDs, files, tests). The "Rejected" line matters most: it is what stops the next agent from "simplifying" back to the alternative that failed.
+- **IDs:** `DEC-<MOD>-NNN`, never reused. After merge only the Status line changes; a changed decision is a new entry that supersedes the old one, and the old one's Status names it.
+- **In the code:** where code follows a decision a reader would not expect (a hand-written arctangent instead of `std::atan2`, a spare buffer element), the comment cites the ID.
+- **Peter's decisions** (D-160) are also registered as D-numbers in Project Spike until the handover; the module entry cites the D-number.
+
+## Keep the record as you go
+
+Agents record what they learn when it happens, in the same commit as the change, not at the end of a session and not when asked. A pull request without its record is incomplete.
+
+| When this happens | Write it here |
+| --- | --- |
+| You choose between alternatives, or a test, review or measurement forces a choice | the module's `DECISIONS.md` |
+| Peter answers a question | the module's `DECISIONS.md` (Peter, date); the SPEC and its change log if the contract changes |
+| Something cost time or surprised you, and could trip the next agent | the module's `AGENTS.md`, Known pitfalls (one or two lines) |
+| A rule every change in the module must follow | the module's `AGENTS.md`, Local rules |
+| A gap in the SPEC or the research | the plan's open questions or backlog |
+| A new domain term | `docs/glossary.md` |
+| A step is done, or the session stops | the plan's progress log and next step |
+
+## Before changing existing behaviour
+
+Code that looks needlessly complicated is often the answer to a problem that is no longer visible. Before an agent changes or removes existing behaviour, it:
+
+1. reads the module's `DECISIONS.md`, `AGENTS.md` and the SPEC requirements of the code it touches, and runs `git log -L` or `git blame` on the lines to find the commit, plan step and pull request that made them;
+2. names the decisions it found in the pull request ("Touches DEC-G2D-003: …");
+3. if the change contradicts a decision, writes a new entry that supersedes it, with the reason. A decision of Peter's is not superseded without asking him;
+4. if it finds no reason for the code, asks instead of removing it.
 
 ## Decision records
 

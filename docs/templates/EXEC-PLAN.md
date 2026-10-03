@@ -30,7 +30,8 @@
 
 ## Decisions
 
-<!-- Small decisions made along the way, with the reason. Big ones become ADRs. -->
+<!-- Decisions about the plan itself (step order, splits), with the reason. Decisions about a module go into its
+     DECISIONS.md, cross-module ones into an ADR (docs/dev/05). -->
 
 - <date>: <decision>, because <reason>.
 
