@@ -4,11 +4,11 @@
      Add a Gotcha when an agent makes the same mistake twice. Placeholders are in <angle brackets>. -->
 
 SplinterCAM is an open-source CAM system for CNC milling and turning, licensed Apache-2.0.
-Status: early start of release 1 (D-156): `foundation` first, then the topic 01 part of `geometry2d`. The stack test app runs in a separate repository. Stack: a Python application (PySide6 GUI, OCCT through OCP) with C++20 compute kernels built with nanobind (docs/adr/0004-tech-stack.md).
+Status: early start of release 1 (D-156): `foundation` done; `geometry2d` slice 1 (topic 01: exact predicates, lines and arcs, flattening, area, point in region, cleanup) done, in review. The stack test app runs in a separate repository. Stack: a Python application (PySide6 GUI, OCCT through OCP) with C++20 compute kernels built with nanobind (docs/adr/0004-tech-stack.md).
 
 ## Start here
 
-- Current work: `docs/plans/active/0003-geometry2d-slice-1.md` (geometry2d, slice 1). Continue at the first unchecked step; plan 0002 waits on Peter.
+- Current work: none. geometry2d slice 1 is complete and waits for Peter's review; read the Handover section of `docs/plans/active/0003-geometry2d-slice-1.md` first (state, decisions, open questions). Do not start slice 2 or other new work without Peter's answers and a new plan. Plan 0002 step 2 waits on Peter.
 - Work one plan step at a time. At the end of each step, tick it, write a progress-log entry in the plan, run `tools/check`, and open one pull request per step. The plan says where to stop for the user's review.
 - Decisions (D-nnn) and sources (SRC-nnn) are registered in Project Spike until the handover; `docs/spike/` holds dated snapshots. Never edit them. If a decision seems wrong or missing, stop and write the question in the progress log.
 
