@@ -32,7 +32,7 @@ Open questions for Peter (each also under Backlog with its details):
 
 1. Research 01, Area and orientation: its bound n·u·(√2·E·L + 3E²) has no term for arc segments, so the sign invariant of `signed_area` is proven for polygons only (step 7).
 2. Research 01, Point in region, still states the chord-side ON rule and has no radial connector; the SPEC carries Peter's answers of 2026-10-03 (step 8). Agents may not edit `docs/research/`; Peter updates it or registers the decision in Project Spike.
-3. Decisions of 2026-10-02 and 2026-10-03 below are recorded here and in the SPEC change log, not yet as D-nnn in Project Spike.
+3. Done 2026-10-03: the module decisions are in `src/splintercam/geometry2d/DECISIONS.md`; Peter's answers of 2026-10-02 and 2026-10-03 are registered as D-161 in Project Spike.
 4. `cleanup` stops its collinear and spike passes at three vertices (ours, step 9); confirm.
 5. Plan 0002, step 2: whether the label `large-change` exists and whether `change-size` is a required check.
 6. Spec gaps found by reviews, listed under Backlog (steps 2, 3, 4, 6, 7): rule order in `make_arc` for r ≤ eps_len, huge-radius bulges, a lower bound on t in `flatten`, the arctangent without a requirement of its own, limits not in the SPEC (segment rounding for r ≳ 1e10 mm, translation for E ≳ 1e9 mm).
@@ -71,21 +71,10 @@ Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
 
 ## Decisions
 
+- 2026-10-03: the module decisions of this plan moved to `src/splintercam/geometry2d/DECISIONS.md` (DEC-G2D-001 to 015), with their reasons and rejected alternatives; new module decisions go there directly (docs/dev/05). This list keeps the decisions about the plan itself.
 - 2026-10-02: requirement IDs keep the draft's numbers; merged and moved IDs are listed in the SPEC's change log, so no ID is reused (docs/dev/05).
-- 2026-10-02: decisions and counts that need an angle (the arc angle check, the flattening count) use our own arctangent from IEEE basic operations in the kernel, so they are the same on every platform, as D-055 tier 1 and REQ-G2D-232's equal counts need (spec review of step 1). Sign decisions use exact predicates or exact comparisons of doubles (Peter's answer 5). Constructions use the platform's libm in C++, never NumPy's float64 ufuncs, which may pick SIMD code by CPU (tier 2).
-- 2026-10-02: a bulge whose sagitta is at most eps_len gives a line (ours): such an arc lies within eps_len of its chord, and its far centre would fail the radial check by rounding alone.
 - 2026-10-02: requirements moved between steps, slice 1 unchanged: REQ-G2D-044 to step 3 (no arc is built from end points before the bulge conversion), 201 and 203 to step 3 (the first arrays from callers reach the kernel through `curve_rows`; step 2's kernel only sees arrays its own module builds), 230 to step 4 (its parameter, the step limit, serves flattening). The test audit of step 2 asked for this to be recorded.
-- 2026-10-03: the sanitizer build turns ASan off for `kernel/shewchuk.c` alone (approved by Peter on 2026-10-03): `predicates.c`'s expansion sums read one element past an input array (`enow = e[++eindex]`) and use it only while `eindex < elen`; ASan reported it as a stack-buffer-overflow in `orient2dadapt` on CI. The vendored file stays unchanged; UBSan stays on.
 - 2026-10-03: step 5 split in two, 5 and 5b: with the review fixes it came to about 440 added lines of non-test code, over the limit of 400 per pull request (docs/dev/12, section 3); the arc predicates go next, from `main` after this step's merge.
-- 2026-10-03: the predicates' input range is a precondition, not a check: SRC-032 guarantees exact signs only for nonzero inputs with exponents in [−142, 201] (p. 308), and the first property run found 5e-324 (a nudged 0) giving the wrong sign, in Shewchuk's orient2d as in ours. Real coordinates in mm never come near 1.8e-43; the property generators stay inside the range with `assume`, so their oracle comparison stays strict. Peter confirmed on 2026-10-03: no check outside the range.
-- 2026-10-02: the largest flattening step π/2 is an entry of foundation's `tolerance_defaults.toml` (REQ-G2D-230), so geometry2d reads no file of its own (docs/dev/03, rule 5).
-- 2026-10-03: the area's float limits (10^6 vertices, 3355 mm) are named constants in `_area.py`, not declared parameters: they choose a path in Python and never reach the kernel (SPEC, Tolerance budget). Beyond them the polygon and segment terms are summed exactly by `ExactSum` (two_product, `fast_expansion_sum_zeroelim`, `compress` above 64 components, a speed setting).
-- 2026-10-03: decisions that need φ − sin φ (the degenerate test of `signed_area`) use `phi_minus_sin` from basic operations in `angle.cpp`, like the arctangent (REQ-G2D-018); libm `sin` gave platform-dependent `LOOP_DEGENERATE`.
-- 2026-10-03: `predicates.c` reads past its inputs (`e[elen]`, and `e[0]` and `e[1]` for an empty expansion): every buffer handed to it has two spare elements (`ExactSum`, `Expansion` capacity 24).
-- 2026-10-03, Peter's answers on point in region: (1) ON on an arc means an end point, a point of the circle in the sweep by the exact signs of `closest_point`, or a point of the radial connector, not the chord-side rule; (2) an arc whose P1 lies off its circle runs on the circle of radius |P0 − C| to the ray from C through P1 and then radially to P1; (3) the tolerance layer measures an arc to the nearer of the circles of radius |P0 − C| and |P1 − C|. SPEC REQ-G2D-135, 143, 148.
-- 2026-10-03: line distances in the tolerance layer are taken in both directions and the smaller kept (ours): the feet a + t·(b − a) and b + t'·(a − b) round differently, which made an edge's orientation decide ON at eps_len.
-- 2026-10-03: `cleanup` runs merge, collinear, spike in that order (research 01, Helpers); a kept vertex carries the vertices merged into it, so a later round merges it only where all of them lie within eps_len (REQ-G2D-205, 206); the collinear and spike passes stop at three vertices (ours).
-- 2026-10-03: property tests draw coordinates on a grid (2^-20 mm) or filter to the predicates' input range: values far below 2^-142 are outside the precondition and Hypothesis draws them often.
 
 ## Progress log
 

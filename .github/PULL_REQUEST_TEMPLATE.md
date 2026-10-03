@@ -26,6 +26,7 @@
 - Dependencies: <none / which, with ADR>
 - Tolerances or algorithm versions: <none / which>
 - Docs updated: <SPEC, plan, glossary, research links>
+- Decisions: <DEC-… added or superseded; existing decisions this change touches; "none" if none>
 
 ## Sources
 

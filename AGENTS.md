@@ -8,7 +8,7 @@ Status: early start of release 1 (D-156): `foundation` done; `geometry2d` slice 
 
 ## Start here
 
-- Current work: none. geometry2d slice 1 is complete and waits for Peter's review; read the Handover section of `docs/plans/active/0003-geometry2d-slice-1.md` first (state, decisions, open questions). Do not start slice 2 or other new work without Peter's answers and a new plan. Plan 0002 step 2 waits on Peter.
+- Current work: none. Work continues in local sessions. geometry2d slice 1 is complete and waits for Peter's review; read the Handover section of `docs/plans/active/0003-geometry2d-slice-1.md` first (state, decisions, open questions). Do not start slice 2 or other new work without Peter's answers and a new plan. Plan 0002 step 2 waits on Peter.
 - Work one plan step at a time. At the end of each step, tick it, write a progress-log entry in the plan, run `tools/check`, and open one pull request per step. The plan says where to stop for the user's review.
 - Decisions (D-nnn) and sources (SRC-nnn) are registered in Project Spike until the handover; `docs/spike/` holds dated snapshots. Never edit them. If a decision seems wrong or missing, stop and write the question in the progress log.
 
@@ -22,7 +22,8 @@ Status: early start of release 1 (D-156): `foundation` done; `geometry2d` slice 
 | What you may import | `architecture/modules.yaml` |
 | Another module's interface | `docs/generated/api/<module>.md` (not its source) |
 | Work in progress | `docs/plans/active/` |
-| Why things are as they are | `docs/adr/`, and the decisions in `docs/spike/decisions-snapshot.md` |
+| Why a module is built as it is, and what was rejected | `src/splintercam/<name>/DECISIONS.md` |
+| Why things are as they are across modules | `docs/adr/`, and the decisions in `docs/spike/decisions-snapshot.md` |
 | The right name for a domain term | `docs/glossary.md` |
 | Code, test and workflow rules in full | `docs/dev/` |
 
@@ -43,12 +44,20 @@ After cloning, run `tools/bootstrap`; on Windows, run the `tools/` scripts from 
 ## How to work
 
 1. Find the requirement IDs for your task in the module's `SPEC.md`. If there are none, draft them and ask for approval before coding. Implement only requirements marked `Reviewed`, or those the active plan releases explicitly.
-2. Read that `SPEC.md`, the module's `AGENTS.md` and the one research section it cites. Check `docs/plans/active/` for a plan.
+2. Read that `SPEC.md`, the module's `AGENTS.md` and `DECISIONS.md`, and the one research section it cites. Check `docs/plans/active/` for a plan.
 3. Write or extend the tests first, tagged with the requirement ID. Run `tools/test-one` and see them fail for the expected reason.
 4. Implement in small steps. Run `tools/test-one` after each step.
 5. Run `tools/check`. For geometry or toolpath changes run `tools/render` on the affected cases and look at the images.
-6. Update the SPEC's "Verified by" column, the plan's progress log, and the glossary if you introduced a term.
+6. Update the SPEC's "Verified by" column, the plan's progress log, and the glossary if you introduced a term. Decisions and pitfalls are already recorded (see Keep the record).
 7. Report: files changed, tests added, commands run with their results, open questions.
+
+## Keep the record
+
+Record as you go, in the same commit as the change, without being asked (docs/dev/05, "Keep the record as you go"):
+
+- A choice between alternatives, or an answer from Peter: an entry in the module's `DECISIONS.md` with why and what was rejected.
+- Something that cost time or could trip the next agent: one line in the module's `AGENTS.md`, Known pitfalls.
+- Before changing or removing existing behaviour: find why it is there (`DECISIONS.md`, SPEC, `git log -L`), name it in the pull request, and ask if you find no reason or the decision is Peter's.
 
 ## Rules
 
@@ -80,7 +89,7 @@ After cloning, run `tools/bootstrap`; on Windows, run the `tools/` scripts from 
 
 - `tools/check` passes, with no new warnings.
 - New behaviour has tests tagged with requirement IDs; no test was weakened.
-- SPEC, plan and glossary are updated.
+- SPEC, plan and glossary are updated; every decision of the change is in the module's `DECISIONS.md`.
 - The change is reviewable: about 400 lines of non-test code at most, one module.
 
 ## Stop and ask when

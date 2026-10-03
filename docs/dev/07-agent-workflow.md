@@ -47,9 +47,11 @@ flowchart TD
 
 ## Session protocol
 
-**At the start:** read `AGENTS.md` (loaded automatically), the active plan if there is one, the module's `SPEC.md` and `AGENTS.md`, and the one RESEARCH section the task needs.
+**At the start:** read `AGENTS.md` (loaded automatically), the active plan if there is one (its Handover section first, if it has one), the module's `SPEC.md`, `AGENTS.md` and `DECISIONS.md`, and the one RESEARCH section the task needs.
 
-**At the end, always, even when unfinished:** run `tools/check` and record the result, update the plan's progress log (done, next step, open questions), commit the work in progress on the task branch. The next session, or another agent, must be able to continue from the files alone.
+**During the session:** record decisions, Peter's answers, pitfalls and open questions when they happen, in the same commit as the change ([05](05-specs-plans-decisions.md), "Keep the record as you go"). Before changing existing behaviour, look up why it is there ([05](05-specs-plans-decisions.md), "Before changing existing behaviour").
+
+**At the end, always, even when unfinished:** run `tools/check` and record the result, update the plan's progress log (done, next step, open questions), check that every decision of the session is in `DECISIONS.md`, commit the work in progress on the task branch. When a plan or a slice ends, or work stops for longer than a few days, the plan gets a Handover section: what exists, what is in flight, open questions for Peter, how the work ran. The next session, or another agent, must be able to continue from the files alone.
 
 ## When an agent must stop and ask
 
