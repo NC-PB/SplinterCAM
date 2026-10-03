@@ -27,7 +27,8 @@
 - [x] 5b. **Arc predicates.** `in_arc_circle` and the (q_y − c_y)² comparison by expansion arithmetic, from the branch `step-5b-draft` (reviewed with step 5). REQ-G2D-022, 023. Size: about 110 + 120.
 - [x] 6. **Distances and circles.** `closest_point`, `circle_through`. REQ-G2D-091 to 101. Size: about 150 + 250.
 - [x] 7. **Area and orientation.** `signed_area` (`area.cpp`), with the exact sum. REQ-G2D-001, 002, 128 to 133. Size: about 180 + 250.
-- [ ] 8. **Point in region.** `point_in_region`, `point_in_region_exact` (`region.cpp`). REQ-G2D-134 to 150. Size: about 350 + 350.
+- [x] 8. **Point in region, exact layer.** `PointLocation`, `point_in_region_exact` (`region.cpp`), the radial connector and its exact height comparison. REQ-G2D-135, 139, 143, 145. Size: about 380 + 400.
+- [ ] 8b. **Point in region, tolerance layer.** `point_in_region`: ON within eps_len by the distances of REQ-G2D-091 to 096, measured to the nearer of the two radii (Peter, 2026-10-03), from the branch's saved full version. REQ-G2D-134, 148 to 150. Size: about 60 + 120.
 - [ ] 9. **Cleanup.** `cleanup` (`cleanup.cpp`). REQ-G2D-020, 204 to 212. Size: about 180 + 250.
 
 Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
@@ -56,6 +57,20 @@ Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
 - CI on pull request 16: the sanitizer found `predicates.c`'s one-past-end read (ASan off for that code, approved by Peter); Windows needed the vendored C code in a C-only library target of its own, because the Visual Studio generators do not apply per-language options and include directories in a mixed C and C++ target.
 - `tools/check`: PASS (11 of 14 steps). Property tests pass with 10 000 cases each.
 - Next step: 5b.
+
+### 2026-10-03, session 1, step 8
+
+- Done so far (branch `claude/cool-ramanujan-evgci4-step-8`, no pull request yet): `point_in_region`, `point_in_region_exact`, `PointLocation` (`_region.py`, kernel `region.cpp`); research tests 5 and 6, note test 6, rays through vertices and tangent at extremes, properties against an exact winding oracle, a fine flattening and `closest_point`'s distances. The flattening property found an arc whose P1 lies 2^-126 mm past the top of its circle leaving a height gap; pieces now rise or fall by their ends' heights.
+- Stopped: the spec review found wrong results on `curve_rows`-valid input, all reproduced, each also breaking REQ-G2D-150 (the reversed loop answers differently). They come from the SPEC and research 01, not only from the code (AGENTS.md: stop when the spec contradicts the research):
+  1. REQ-G2D-143's ON rule for arcs, "on the arc's side of the chord P_0P_1", contradicts REQ-G2D-145 when the chord line meets the circle again far from the arc: a tiny arc whose P1 lies just clockwise of P0 (`[5, 0, 5, -1e-8, 0, 0, 1e-9]`) makes (3, 4) ON, 4.5 mm from the boundary; an arc whose P1 lies 7e-7 off the circle makes (4, -3) ON. Proposal: ON when q is an end point, or on the circle and in the sweep by the exact signs of `closest_point` (REQ-G2D-093).
+  2. Research 01's ray rules assume P1 lies on the circle. With P1 off it by up to eps_len (REQ-G2D-042) near the top or bottom, the arc and the next row leave a gap about sqrt(2·r·δ) wide: r = 1000 mm and δ = 5e-7 give IN at (0.01, 1000.0000002), 0.01 mm outside. Proposal: close each arc to P1 along the ray C → P1 (a radial connector), decided by exact signs.
+  3. REQ-G2D-150 cannot hold at eps_len when P1 is off the circle: reversing an arc changes its radius |P0 − C| by up to eps_len, so a point 5e-7 from one radius is ON in one orientation and 1.2e-6 from the other, OUT, in the other. Proposal: the tolerance layer measures to the nearer of |P0 − C| and |P1 − C|.
+- Peter's answers (2026-10-03): 1. ON in the sweep; 2. the radial connector; 3. the nearer of both radii. Done: ON on an arc is an end point, a point of the circle in the sweep (`in_sweep`, as `closest_point`) or a point of the connector; the last piece of an arc ends where the ray through P1 meets the circle, compared with q_y by a new exact `ray_height_sign` ((q_y − c_y)²·|P1 − C|² against r²·(P1_y − c_y)², products of expansions by `predicates.c`'s `scale_expansion_zeroelim`), and the connector counts like a straight edge. The four failing inputs of the review are tests; a property compares arcs with P1 off the circle against their flattened arc and connector.
+- Simplifier, taken: `RowResult` folded into `locate`, no separate flag for the exact layer, a shorter `line_winding`, no full-circle branch in `in_sweep`. The 10 000-case runs also found coordinates far below the predicates' input range; the properties now draw from a 2^-20 mm grid.
+- Split: with the answers the step came to 472 lines of non-test code; the tolerance layer (distances, `point_in_region`) moves to step 8b, saved on the branch's history (commit of the full version).
+- Reviews: simplifier and spec-reviewer as above, one round each (D-159); test-auditor (fixed: `ray_height_sign` had no test next to the ray's end, so a rounded comparison would have passed; it now has a scalar binding, unit tests at the double nearest the end and one unit either side, straight above and below C, both sides of c_y, and a property against exact rationals; the connector's ON rule tested both ways, beyond P1, on the opposite ray, inward and slanted; REQ-149 and 150 tags removed from exact-layer tests, they come with step 8b; optional, taken: a nearly full arc's missing part).
+- `tools/check`: PASS (11 of 14 steps). Property tests pass with 10 000 cases each.
+- Next step: 8b.
 
 ### 2026-10-03, session 1, step 7
 
@@ -118,6 +133,9 @@ Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
 - For Peter: vendor `predicates.c` (from <https://www.cs.cmu.edu/~quake/robust.html>) into `src/splintercam/geometry2d/kernel/vendor/` on the step 5 branch, or allow `www.cs.cmu.edu` in the environment's network settings; accept or change ADR 0009 and apply `0003-notice.patch`.
 
 ## Backlog
+
+- Step 8: research 01's Point in region section still states the chord-side ON rule and has no radial connector; the SPEC carries Peter's answers of 2026-10-03 (REQ-G2D-135, 143). Exact ON on a circle depends on the orientation when P1 lies off it (the radius is |P0 - C|); the tolerance layer of step 8b covers it with the nearer radius. The kernel's sweep logic exists twice besides `_box.py` and `_distances.py` (octants and halves); a shared kernel for `bounding_box` and `closest_point` would stop them drifting apart. The region kernel holds the interpreter lock for n points × m rows (SPEC, Later parts).
+
 
 - Step 7 test audit, optional: the eps_len·L boundary is tested 1 % on either side, not at equality; the `ValueError` for more than one loop carries the tag REQ-G2D-128, though the rule is in the Public interface; the 10^6-row exact path holds the interpreter lock without a cancellation check (SPEC, Later parts).
 

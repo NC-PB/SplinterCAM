@@ -6,11 +6,13 @@
 #include "area.hpp"
 #include "exact.hpp"
 #include "flatten.hpp"
+#include "region.hpp"
 
 #include <algorithm>
 #include <initializer_list>
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
+#include <nanobind/stl/array.h>
 #include <nanobind/stl/pair.h>
 #include <span>
 #include <utility>
@@ -26,6 +28,7 @@ using DoubleOut = nb::ndarray<double, nb::shape<-1>, nb::c_contig, nb::device::c
 using PointsOut = nb::ndarray<double, nb::shape<-1, 2>, nb::c_contig, nb::device::cpu>;
 using PointRows = nb::ndarray<const double, nb::shape<-1, 2>, nb::c_contig, nb::device::cpu>;
 using Int8Out = nb::ndarray<std::int8_t, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
+using Pair = std::array<double, 2>;
 
 std::span<const double> view(const Rows& rows) {
     return {rows.data(), rows.size()};
@@ -136,6 +139,20 @@ void bind_area(nb::module_& m) {
         },
         nb::arg("phi"), nb::arg("out"),
         "Write phi - sin(phi) per value, from basic operations only (REQ-G2D-018).");
+    m.def(
+        "ray_height_sign",
+        [](double q_y, const Pair& centre, const Pair& p0, const Pair& toward) {
+            return ray_height_sign(q_y, {centre, p0}, toward);
+        },
+        "Sign of q_y minus where the ray centre -> toward meets the circle through p0 (exact).");
+    m.def(
+        "point_locations",
+        [](const PointRows& q, const Rows& rows, const Int8Out& out) {
+            check_rows(q.shape(0), {out.shape(0)});
+            point_locations({q.data(), q.size()}, {.rows = view(rows)}, view(out));
+        },
+        nb::arg("q"), nb::arg("rows"), nb::arg("out"),
+        "Write per point 0 (OUT), 1 (IN) or 2 (ON) against the loops' rows (REQ-G2D-135 to 145).");
 }
 
 } // namespace

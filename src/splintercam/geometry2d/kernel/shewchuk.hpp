@@ -9,4 +9,5 @@ double orient2d(double* pa, double* pb, double* pc);
 double incircle(double* pa, double* pb, double* pc, double* pd);
 int fast_expansion_sum_zeroelim(int elen, double* e, int flen, double* f, double* h);
 int compress(int elen, double* e, double* h);
+int scale_expansion_zeroelim(int elen, double* e, double b, double* h);
 }

@@ -14,6 +14,7 @@ namespace splintercam::geometry2d {
 using Points = std::span<const double>;
 using Scalars = std::span<const double>;
 using Signs = std::span<std::int8_t>;
+using Point2 = std::array<double, 2>;
 
 struct ValuePairs { // a and b, one value per row
     Scalars a;
@@ -38,6 +39,18 @@ struct HeightQueries { // per row a query height and the circle about centre thr
 // Batches for the build guard of REQ-G2D-016: they compile with the kernel's strict float flags.
 void two_sums(const ValuePairs& in, const ErrorFreePairs& out);
 void two_products(const ValuePairs& in, const ErrorFreePairs& out);
+
+// Single points, for kernels that loop themselves: the signs of the batches below.
+struct CircleAt { // the circle about centre through p0
+    Point2 centre;
+    Point2 p0;
+};
+[[nodiscard]] int orient_sign(Point2 a, Point2 b, Point2 c);
+[[nodiscard]] int arc_circle_sign(Point2 q, const CircleAt& circle);
+[[nodiscard]] int vertical_extent_sign(double q_y, const CircleAt& circle);
+// The sign of q_y − Q_y, Q where the ray from the centre through `toward` meets the circle (no
+// double): the end of an arc's radial connector (Peter, 2026-10-03).
+[[nodiscard]] int ray_height_sign(double q_y, const CircleAt& circle, Point2 toward);
 
 // Per row, the exact sign of orient2d(a, b, c): +1 when c lies left of a → b (REQ-G2D-007).
 void orient2d_signs(const std::array<Points, 3>& abc, Signs out);
@@ -69,6 +82,8 @@ struct CrossTerm { // a·b − c·d
 class ExactSum {
 public:
     void add(const CrossTerm& term);
+    // Adds an expansion of `count` components, smallest first, with one readable element past it.
+    void add(double* parts, int count);
     // The components summed smallest first: the exact sum within a rounding unit, its sign exact.
     [[nodiscard]] double value() const;
 
