@@ -11,8 +11,8 @@ import pytest
 import geometry2d_oracles as oracle
 from geometry2d_checks import codes, loop, polygon, reversed_loop
 from splintercam import _kernels
-from splintercam.foundation import Context
-from splintercam.geometry2d import CurveRows, signed_area
+from splintercam.foundation import Context, Severity
+from splintercam.geometry2d import Arc, CurveRows, arc_from_bulge, signed_area
 
 NAN = math.nan
 # The square [0, 10]² with its right side replaced by an outward semicircle about (10, 5).
@@ -63,6 +63,7 @@ def test_research_test_19_degenerate_loop(ctx: Context, width: float, kept: bool
     else:
         assert result.value is None
         assert codes(result) == ["LOOP_DEGENERATE"]
+        assert result.diagnostics[0].severity is Severity.WARNING
 
 
 @pytest.mark.req("REQ-G2D-133")
@@ -74,6 +75,19 @@ def test_the_degenerate_limit_is_eps_len_times_the_length(
     assert ctx.tolerances.length_eps_mm == 1e-6
     strip = polygon([(0.0, 0.0), (1.0, 0.0), (1.0, width), (0.0, width)], ctx)
     assert (signed_area(strip, ctx).value is not None) is kept
+
+
+@pytest.mark.req("REQ-G2D-133")
+@pytest.mark.parametrize(("sagitta", "kept"), [(2.25e-6, False), (3.75e-6, True)])
+def test_arc_lengths_count_in_the_degenerate_limit(
+    ctx: Context, sagitta: float, kept: bool
+) -> None:
+    # The chord (0, 0)-(2, 0) and a shallow arc back: A ≈ (4/3)·sagitta, L ≈ 4, so eps_len·L ≈
+    # 4e-6. A = 3e-6 is degenerate only if the arc's length counts; A = 5e-6 is kept.
+    arc = arc_from_bulge((2.0, 0.0), (0.0, 0.0), sagitta, ctx).value
+    assert isinstance(arc, Arc)
+    rows = [[0.0, 0.0, 2.0, 0.0, NAN, NAN, 0.0], [*arc.p0, *arc.p1, *arc.centre, arc.sweep_rad]]
+    assert (signed_area(loop(rows, ctx), ctx).value is not None) is kept
 
 
 @pytest.mark.req("REQ-G2D-128")
@@ -88,18 +102,21 @@ def test_more_than_one_loop_is_a_programming_error(ctx: Context) -> None:
         signed_area(two, ctx)
 
 
-def _exact_flag(ctx: Context, loop_rows: CurveRows, monkeypatch: pytest.MonkeyPatch) -> bool:
-    seen: list[bool] = []
+def _kernel_call(
+    ctx: Context, loop_rows: CurveRows, monkeypatch: pytest.MonkeyPatch
+) -> tuple[float, float, bool]:
+    """The centre and the exact flag `signed_area` passes to the kernel."""
+    seen: list[tuple[float, float, bool]] = []
     kernel = _kernels.geometry2d.loop_area
 
     def spy(*args: Any) -> tuple[float, float]:
-        seen.append(bool(args[3]))  # loop_area(rows, centre_x, centre_y, exact)
+        seen.append((args[1], args[2], bool(args[3])))  # rows, centre_x, centre_y, exact
         return kernel(*args)
 
     monkeypatch.setattr(_kernels.geometry2d, "loop_area", spy)
     signed_area(loop_rows, ctx)
-    (flag,) = seen
-    return flag
+    (call,) = seen
+    return call
 
 
 @pytest.mark.req("REQ-G2D-131", "REQ-G2D-132")
@@ -109,7 +126,24 @@ def test_a_loop_just_above_the_extent_limit_sums_exactly(
 ) -> None:
     e = half_extent
     square = polygon([(-e, -e), (e, -e), (e, e), (-e, e)], ctx)
-    assert _exact_flag(ctx, square, monkeypatch) is exact
+    assert _kernel_call(ctx, square, monkeypatch)[2] is exact
+
+
+@pytest.mark.req("REQ-G2D-131", "REQ-G2D-132")
+@pytest.mark.parametrize("wide_in_x", [True, False])
+def test_either_axis_beyond_the_extent_limit_sums_exactly(
+    ctx: Context, monkeypatch: pytest.MonkeyPatch, wide_in_x: bool
+) -> None:
+    a, b = (3356.0, 1.0) if wide_in_x else (1.0, 3356.0)
+    rectangle = polygon([(-a, -b), (a, -b), (a, b), (-a, b)], ctx)
+    assert _kernel_call(ctx, rectangle, monkeypatch)[2]
+
+
+def test_the_float_limits_keep_research_01s_bound_below_eps_len() -> None:
+    # n·u·(√2·E·L + 3E²) <= eps_len·L at the limits, for the shortest closed loop L = 4E.
+    n, e, eps = 10**6, 3355.0, 1e-6
+    length = 4 * e
+    assert n * 2.0**-53 * (math.sqrt(2) * e * length + 3 * e * e) <= eps * length
 
 
 @pytest.mark.req("REQ-G2D-131", "REQ-G2D-132")
@@ -121,7 +155,7 @@ def test_a_loop_just_above_the_vertex_limit_sums_exactly(
     points = np.column_stack((np.cos(angles), np.sin(angles)))
     rows = np.column_stack((points, np.roll(points, -1, axis=0), np.full((n, 2), NAN), np.zeros(n)))
     loop_rows = CurveRows(rows, np.arange(n, dtype=np.int64), np.zeros(1, np.int64))
-    assert _exact_flag(ctx, loop_rows, monkeypatch) is exact
+    assert _kernel_call(ctx, loop_rows, monkeypatch)[2] is exact
 
 
 @pytest.mark.req("REQ-G2D-130", "REQ-G2D-132")
@@ -139,7 +173,9 @@ def test_the_exact_sum_is_the_area_of_the_translated_loop(
     cx, cy = (xs.min() + xs.max()) / 2, (ys.min() + ys.max()) / 2
     translated = [(x - cx, y - cy) for x, y in points]
     exact = oracle.polygon_area(translated)
-    area = _area(polygon(points, ctx), ctx)
+    loop_rows = polygon(points, ctx)
+    assert _kernel_call(ctx, loop_rows, monkeypatch)[:2] == (cx, cy)  # REQ-G2D-130
+    area = _area(loop_rows, ctx)
     assert abs(Fraction(area) - exact) <= Fraction(math.ulp(float(exact)))
 
 
@@ -155,7 +191,9 @@ def test_the_exact_path_sums_arcs_too(ctx: Context) -> None:
 
 
 @pytest.mark.req("REQ-G2D-231")
-def test_the_area_is_bit_identical_when_repeated(ctx: Context) -> None:
-    bulged = loop(BULGED_SQUARE, ctx)
+@pytest.mark.parametrize("scale", [1.0, 400.0])  # the float and the exact path
+def test_the_area_is_bit_identical_when_repeated(ctx: Context, scale: float) -> None:
+    rows = [[v * scale if i < 6 else v for i, v in enumerate(row)] for row in BULGED_SQUARE]
+    bulged = loop(rows, ctx)
     first = signed_area(bulged, ctx)
     assert signed_area(bulged, ctx) == first

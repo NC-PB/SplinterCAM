@@ -35,6 +35,11 @@ PHIS = [
     1.0 + 2.0**-52,
     math.pi,
     -math.pi,
+    0.001,
+    0.5,
+    1.5,
+    3.0,
+    -6.0,
 ]
 
 
@@ -42,7 +47,8 @@ PHIS = [
 def test_within_a_few_rounding_units_of_the_exact_series() -> None:
     for phi, got in zip(PHIS, _kernel(PHIS), strict=True):
         exact = _exact(phi)
-        # Relative near 0, where the series has no cancellation; absolute in φ beyond |φ| = 1.
+        # Relative near 0, where the series has no cancellation, absolute beyond |φ| = 1; 16u is
+        # an observed margin, not a derived bound (the output is pinned below).
         scale = max(abs(float(exact)), 1.0 if abs(phi) > 1.0 else 0.0)
         assert abs(Fraction(got) - exact) <= Fraction(16 * U * scale), phi
 
@@ -52,7 +58,7 @@ def test_odd_and_exact_at_the_full_turn() -> None:
     phis = [0.3, 2.0, 5.0, math.tau]
     assert _kernel([-p for p in phis]) == [-v for v in _kernel(phis)]
     assert _kernel([0.0]) == [0.0]
-    assert _kernel([math.tau])[0] == pytest.approx(math.tau, abs=4 * U * math.tau)
+    assert _kernel([math.tau]) == [math.tau]  # reduced to 0 exactly
 
 
 # Computed on Linux x86-64 when the function was written: every platform must give these bits.

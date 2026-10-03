@@ -26,7 +26,7 @@
 - [x] 5. **Exact predicates** (`predicates.c` vendored by Peter, pull request 15). The C build of the vendored file through our own wrapper, strict float flags, `exactinit` at load; `orient2d`, `incircle`, `two_sum`, `two_product`; the build guard. REQ-G2D-005 to 011, 013 to 018, 021, 024. Size: about 300 + 350.
 - [x] 5b. **Arc predicates.** `in_arc_circle` and the (q_y − c_y)² comparison by expansion arithmetic, from the branch `step-5b-draft` (reviewed with step 5). REQ-G2D-022, 023. Size: about 110 + 120.
 - [x] 6. **Distances and circles.** `closest_point`, `circle_through`. REQ-G2D-091 to 101. Size: about 150 + 250.
-- [ ] 7. **Area and orientation.** `signed_area` (`area.cpp`), with the exact sum. REQ-G2D-001, 002, 128 to 133. Size: about 180 + 250.
+- [x] 7. **Area and orientation.** `signed_area` (`area.cpp`), with the exact sum. REQ-G2D-001, 002, 128 to 133. Size: about 180 + 250.
 - [ ] 8. **Point in region.** `point_in_region`, `point_in_region_exact` (`region.cpp`). REQ-G2D-134 to 150. Size: about 350 + 350.
 - [ ] 9. **Cleanup.** `cleanup` (`cleanup.cpp`). REQ-G2D-020, 204 to 212. Size: about 180 + 250.
 
@@ -56,6 +56,15 @@ Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
 - CI on pull request 16: the sanitizer found `predicates.c`'s one-past-end read (ASan off for that code, approved by Peter); Windows needed the vendored C code in a C-only library target of its own, because the Visual Studio generators do not apply per-language options and include directories in a mixed C and C++ target.
 - `tools/check`: PASS (11 of 14 steps). Property tests pass with 10 000 cases each.
 - Next step: 5b.
+
+### 2026-10-03, session 1, step 7
+
+- Done: `signed_area` (`_area.py`, kernel `area.cpp`): the polygon sum about the centre of the end points' bounding box plus each arc's segment ½ r² (φ − sin φ); beyond 10^6 vertices or a half-extent of 3355 mm (named constants, as the SPEC's Tolerance budget says) the polygon and segment terms are summed exactly by an `ExactSum` (two_product and `predicates.c`'s `fast_expansion_sum_zeroelim`, compressed by its `compress` above 64 components); |A| <= eps_len·L gives `LOOP_DEGENERATE` (warning). φ − sin φ comes from basic operations (`angle.cpp`, `phi_minus_sin`), so the degenerate decision is the same on every platform. Tests first, they failed on the missing names: research tests 3 and 19, the limits on both sides, the exact path with arcs, run twice on both paths; properties against exact rationals and for reversal.
+- The first exact path took 366 s for 10^6 + 1 vertices (the expansion grew and was copied on every add): two buffers in turn and `compress` brought it to 0.2 s.
+- Reviews: simplifier (taken: the kernel returns its two sums, no copy of `curve_rows`' arrays, repeated comments; the limits back to named constants, which keeps foundation out of this step); spec-reviewer (fixed: an out-of-bounds read of `predicates.c` on an empty sum, two elements past, now padded; libm `sin` in the degenerate decision, now `phi_minus_sin`; the foundation change; arc segments now in the exact sum too); test-auditor (fixed: the translation test could not fail, it now checks the centre the kernel gets; arc lengths in L tested; the warning severity; a reversal property on both paths; one-axis extents; the limits checked against research 01's bound; the pinned segment values checked for accuracy).
+- For Peter: research 01's bound n·u·(√2·E·L + 3E²) has no term for the arc segments, so the invariant "the sign of `signed_area` is right whenever |A| > eps_len·L" is proven for polygons only; the property test covers polygons only and no bound was invented (test audit). A term for the segments, or a statement that they stay within the margin, would close it.
+- `tools/check`: PASS (11 of 14 steps). Property tests pass with 10 000 cases each.
+- Next step: 8.
 
 ### 2026-10-03, session 1, step 6
 
@@ -109,6 +118,11 @@ Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
 - For Peter: vendor `predicates.c` (from <https://www.cs.cmu.edu/~quake/robust.html>) into `src/splintercam/geometry2d/kernel/vendor/` on the step 5 branch, or allow `www.cs.cmu.edu` in the environment's network settings; accept or change ADR 0009 and apply `0003-notice.patch`.
 
 ## Backlog
+
+- Step 7 test audit, optional: the eps_len·L boundary is tested 1 % on either side, not at equality; the `ValueError` for more than one loop carries the tag REQ-G2D-128, though the rule is in the Public interface; the 10^6-row exact path holds the interpreter lock without a cancellation check (SPEC, Later parts).
+
+- Step 7 spec review: φ − sin φ cancels no more (series for |φ| <= 1), but research 01's bound does not mention the segment term; for r ≳ 1e10 mm its rounding could reach eps_len·L. The exact path is exact for the rounded translated coordinates; when the box straddles 0 the translation moves A by about u·E·L, below eps_len·L for E up to about 1e9 mm. Neither limit is in the SPEC.
+
 
 - Step 6 simplifier: `bounding_box` could use `_distances._in_sweep` on its four axis points and drop `_octant` and `_axes_in_sweep` (about 25 lines), once REQ-G2D-214's tests confirm the same answers; its own step, since it changes `_box.py`.
 
