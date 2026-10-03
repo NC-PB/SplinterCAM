@@ -11,9 +11,11 @@ import pytest
 from geometry2d_checks import codes, with_length_eps
 from splintercam import _kernels
 from splintercam.foundation import Context, Severity
-from splintercam.geometry2d import Arc, Curve, Line, make_arc, make_line
+from splintercam.geometry2d import Arc, Curve, Line, curve_rows, make_arc, make_line
 
 EPS = 1e-6  # the default length epsilon of the test Context (REQ-FND-008)
+
+NAN = math.nan
 
 
 def _one_curve(result_value: tuple[Curve, ...] | None) -> Curve:
@@ -149,6 +151,36 @@ def test_arc_with_radius_within_eps_len_becomes_its_chord(ctx: Context) -> None:
     result = make_arc((5e-7, 0.0), (-5e-7, 0.0), (0.0, 0.0), math.pi, ctx)
     assert result.ok
     assert result.value == (Line((5e-7, 0.0), (-5e-7, 0.0)),)
+
+
+@pytest.mark.req("REQ-G2D-042", "REQ-G2D-047")
+def test_a_tiny_circle_with_p1_far_off_it_is_inconsistent(ctx: Context) -> None:
+    # DEC-G2D-018: the radial check comes before r <= eps_len, so this is no 100 mm line.
+    result = make_arc((5e-7, 0.0), (100.0, 0.0), (0.0, 0.0), math.pi, ctx)
+    assert result.value is None
+    assert codes(result) == ["ARC_INCONSISTENT"]
+
+
+@pytest.mark.req("REQ-G2D-042", "REQ-G2D-047")
+def test_a_tiny_circle_with_p1_within_eps_len_of_it_is_its_chord(ctx: Context) -> None:
+    result = make_arc((5e-7, 0.0), (-1.4e-6, 0.0), (0.0, 0.0), math.pi, ctx)  # 9e-7 off
+    assert result.value == (Line((5e-7, 0.0), (-1.4e-6, 0.0)),)
+
+
+@pytest.mark.req("REQ-G2D-042", "REQ-G2D-047")
+@pytest.mark.parametrize(("p1_x", "kept"), [(-1.4e-6, True), (-1.6e-6, False), (1.6e-6, False)])
+def test_a_tiny_circle_and_curve_rows_agree_on_the_radial_check(
+    ctx: Context, p1_x: float, kept: bool
+) -> None:
+    # r = 5e-7: P1 0.9e-6 or 1.1e-6 off the circle. make_arc's own check (DEC-G2D-018) and the
+    # kernel's check of curve rows must give the same verdict.
+    tiny = make_arc((5e-7, 0.0), (p1_x, 0.0), (0.0, 0.0), math.pi, ctx)
+    rows = np.array(
+        [[5e-7, 0.0, p1_x, 0.0, 0.0, 0.0, math.pi], [p1_x, 0.0, 5e-7, 0.0, NAN, NAN, 0.0]]
+    )
+    built = curve_rows(rows, np.arange(2, dtype=np.int64), np.zeros(1, np.int64), ctx)
+    assert (tiny.value is not None) is kept
+    assert ("ARC_INCONSISTENT" in codes(built)) is not kept
 
 
 @pytest.mark.req("REQ-G2D-048")
