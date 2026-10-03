@@ -1,0 +1,60 @@
+# Plan 0004: geometry2d, slice 2 (proposal)
+
+<!-- Lives in docs/plans/active/ while work is ongoing, then moves to docs/plans/completed/.
+     The agent updates the progress log at the end of every session, before stopping. -->
+
+- Goal: `geometry2d` turns closed loops of lines and arcs into the machining region of an operation. It builds the loop tree (degenerate, duplicate and crossing loops reported; parents, depths and normalised orientation), the side-correct flattening, and the Clipper2 PolyTree with source IDs and fixed nodes. It also flattens open chains for profiles.
+- Specs: `src/splintercam/geometry2d/SPEC.md` (slice 2, cut in step 1 from the drafted requirements under Later parts)
+- Research: `docs/research/01-foundations.md`: Loop tree, Kernel arrays (polygon region), Tolerances (resolution chain), Flattening (side rule); tests 7, 16, 19, 21 and 24
+- Branch: one branch and one pull request per step, from `main` after the previous step's merge; never stacked (plan 0003, Branch)
+- Owner: Peter Burgener; agents: Claude Code sessions
+- Status (2026-10-03): **proposed, not started.** Waiting for Peter's approval and his answers to the questions below.
+
+## Questions for Peter before step 1
+
+1. **Scope: offsets in a plan of their own?** The SPEC's Later parts put "the topic 02 offsets and the D-132 kernel changes" into slice 2, and `architecture/modules.yaml` gives geometry2d research 02 and 03. But `docs/research/` holds only 01, so there is no research for the offsets to cite. Proposal: this plan builds regions only (topic 01). The offsets follow in plan 0005, once research 02 is in the repository (through `/research-to-spec`, your review).
+2. **Ellipse and spline edges stay in Later parts.** Proposal: slice 2 handles loops of lines and arcs only. The rules for spline and ellipse edges (REQ-G2D-120 to 123; the t/2 parts of 124 and 125; the u band of replaced edges) wait until those curve types exist. Here `build_region` and `build_chain` return an extra clearance of 0.
+3. **Clipper2 enters with this plan.** `build_region` needs the PolyTree (REQ-G2D-176) and the rule 5 fallback needs a Clipper2 difference (169). So the grid bridge (re-centre, round to u, the 2^26 span refusal; REQ-G2D-029, 030, 031, 033, 034) comes here, without the offset itself. Agreed?
+4. **REQ-G2D-019 (same decisions for any thread count)** stays in Later parts: release 1 kernels are single-threaded (DEC-G2D-001).
+5. **Module budget:** slice 2 is estimated at about 1300 NLOC. Proposal: raise the geometry2d budget from 1700 to 3000 NLOC in step 1. The reason is the loop tree, the Clipper2 bridge and the region arrays; see the estimates below.
+6. **The interface names of research 01, Interfaces** (`loop_tree`, `build_region(loops, kind, ctx)`, `flatten_loops`, `build_chain`) are proposals (ours). Shall step 1 keep them?
+
+## Steps
+
+<!-- Each step has a size estimate (kept code and tests). At 50 % over it, stop and ask, as for a timebox
+     (docs/dev/12, section 3). Every step: at most 400 added lines of non-test code per pull request. -->
+
+- [ ] 1. **SPEC cut for slice 2.** Release the drafted requirements chosen by the answers above, with their tests from research 01. Mark the rest Later parts. Record the interface, failure modes and diagnostics (`LOOP_DUPLICATE`, `LOOPS_CROSS`, a span refusal); raise the budget in `modules.yaml`; spec-reviewer round. Size: docs only.
+- [ ] 2. **Polygon region arrays and the flattening of curve-row loops.** `points`, `loop_starts`, `source_ids` and fixed-node flags, checked before any kernel work (REQ-G2D-183 to 187). The flattening of a loop of curve rows holds each joint once and gives each vertex its row's ID (199, 200). The side rule for regions of each kind, material or air (115, 116, 119, 127). Research 01 test 16. Size: about 250 lines of code + 350 of tests.
+- [ ] 3. **Topology flattening and batched distances.** The two-sided flattening within u, for topology only (152). u and t_topo come from the `Context` (026, 029). A kernel for point-to-polyline distances in batches, which the loop tree and the probes need; it replaces Python loops (backlog of plan 0003, step 6). Size: about 250 + 300.
+- [ ] 4. **Loop tree I: cleaning and the pair tests.** Per loop: cleanup, the area test and the 1.5·t_topo·L test (155 to 157). Duplicates within t_topo, the first in input order kept (158, 159). Crossings by exact segment tests with their points, and touching loops accepted (160 to 163). Research 01 tests 7 and 19. Size: about 300 + 400.
+- [ ] 5. **Loop tree II: parents, depths, normalisation.** The containment probes in their order (164 to 168), depth and orientation (174, 175), a winding of 1 inside normalised regions (151), and independence of tol (154). Research 01 test 7. Size: about 250 + 350.
+- [ ] 6. **The Clipper2 bridge.** Re-centre on the bounding box and round to u (033); refuse a span of 2^26 grid units or more with an error diagnostic (034); the resolution chain property, no point moved by more than 2.83 grid units and point in region unchanged beyond t_topo (030, 031). Research 01 test 21. Size: about 200 + 300.
+- [ ] 7. **The rule 5 fallback.** The Clipper2 difference with NonZero, and the tie rules for loops tested both ways (166, 169 to 173). Research 01 test 24. Size: about 150 + 300.
+- [ ] 8. **`build_region`.** The PolyTree of the side-correct flattened, normalised loops (118, 176, 177); compared with the loop tree as point sets and by depth parity (178, 179); topology from the integer result only (032); source IDs by the nearest input edge (180); pinch points split by exact integer tests and marked as fixed nodes (181); an extra clearance of 0 (124, lines and arcs). Size: about 350 + 400; split into 8 and 8b if the review fixes push it past 400.
+- [ ] 9. **`build_chain` for open chains.** The tool's side as the air side of every arc (117), and an extra clearance of 0 (125, lines and arcs). Size: about 100 + 150.
+
+Total: about 1850 added lines of code (about 1300 NLOC) and 2550 of tests, in nine pull requests.
+
+## Decisions
+
+- 2026-10-03: proposed order: arrays and flattening first (everything else consumes them), the loop tree before Clipper2 (its float rules are the contract the PolyTree is checked against), `build_region` last. Each step is independently testable on `main`.
+
+## Progress log
+
+<!-- Newest first. What was done, what tools/check reported, what is next. At most about 30 lines per session;
+     numbers go into tables. Above 300 lines, older entries move to an archive file next to the plan. -->
+
+### 2026-10-03, proposal
+
+- Drafted from the SPEC's Later parts, the draft requirements of commit d1a0949 (REQ-G2D-019, 026, 029 to 034, 115 to 127, 151 to 187, 198 to 200) and research 01, Loop tree. Nothing implemented.
+- Next step: Peter's answers and approval, then step 1.
+
+## Backlog
+
+- From plan 0003: the sweep test exists four times (`_box.py`, `_distances.py`, `region.cpp` twice); a shared kernel would stop them drifting apart. Worth doing before step 3 adds distance code.
+- From plan 0003: the region kernel holds the interpreter lock for n points × m rows; long kernels of this plan (loop tree, Clipper2 calls) need the release and the cancellation check of the kernel rules.
+
+## Blockers
+
+- Approval of this plan, and the answers to the questions above.
