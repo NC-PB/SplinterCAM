@@ -6,7 +6,7 @@
 - Goal: `geometry2d` turns closed loops of lines and arcs into the machining region of an operation. It builds the loop tree (degenerate, duplicate and crossing loops reported; parents, depths and normalised orientation), the side-correct flattening, and the Clipper2 PolyTree with source IDs and fixed nodes. It also flattens open chains for profiles.
 - Specs: `src/splintercam/geometry2d/SPEC.md` (slice 2, cut in step 1 from the drafted requirements under Later parts)
 - Research: `docs/research/01-foundations.md`: Loop tree, Kernel arrays (polygon region), Tolerances (resolution chain), Flattening (side rule); tests 7, 16, 19, 21 and 24
-- Branch: one branch and one pull request per step, from `main` after the previous step's merge; never stacked (plan 0003, Branch)
+- Branch: one pull request per session (docs/dev/07); a step with a new algorithm or over about 100 lines of non-test code gets its own, from `main` after the previous merge, never stacked
 - Owner: Peter Burgener; agents: Claude Code sessions
 - Status (2026-10-03): **proposed, not started.** Waiting for Peter's approval and his answers to the questions below.
 
@@ -34,7 +34,7 @@
 - [ ] 8. **`build_region`.** The PolyTree of the side-correct flattened, normalised loops (118, 176, 177); compared with the loop tree as point sets and by depth parity (178, 179); topology from the integer result only (032); source IDs by the nearest input edge (180); pinch points split by exact integer tests and marked as fixed nodes (181); an extra clearance of 0 (124, lines and arcs). Size: about 350 + 400; split into 8 and 8b if the review fixes push it past 400.
 - [ ] 9. **`build_chain` for open chains.** The tool's side as the air side of every arc (117), and an extra clearance of 0 (125, lines and arcs). Size: about 100 + 150.
 
-Total: about 1850 added lines of code (about 1300 NLOC) and 2550 of tests, in nine pull requests.
+Total: about 1850 added lines of code (about 1300 NLOC) and 2550 of tests, in nine steps; the steps with a new algorithm get a pull request each, the rest share session pull requests (docs/dev/07).
 
 ## Decisions
 
