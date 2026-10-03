@@ -147,12 +147,13 @@ void bind_area(nb::module_& m) {
         "Sign of q_y minus where the ray centre -> toward meets the circle through p0 (exact).");
     m.def(
         "point_locations",
-        [](const PointRows& q, const Rows& rows, const Int8Out& out) {
+        [](const PointRows& q, const Rows& rows, double length_eps_mm, const Int8Out& out) {
             check_rows(q.shape(0), {out.shape(0)});
-            point_locations({q.data(), q.size()}, {.rows = view(rows)}, view(out));
+            point_locations({q.data(), q.size()},
+                            {.rows = view(rows), .length_eps_mm = length_eps_mm}, view(out));
         },
-        nb::arg("q"), nb::arg("rows"), nb::arg("out"),
-        "Write per point 0 (OUT), 1 (IN) or 2 (ON) against the loops' rows (REQ-G2D-135 to 145).");
+        nb::arg("q"), nb::arg("rows"), nb::arg("length_eps_mm"), nb::arg("out"),
+        "Write per point 0 (OUT), 1 (IN) or 2 (ON) against the loops' rows (REQ-G2D-134 to 150).");
 }
 
 } // namespace

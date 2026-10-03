@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Property tests: the exact layer of point in region against an exact winding oracle and against
-a fine flattening (research 01, Point in region)."""
+"""Property tests: point in region against an exact winding oracle, against a fine flattening and
+against the distances of closest_point (research 01, Point in region)."""
 
 import math
 
@@ -22,6 +22,7 @@ from splintercam.geometry2d import (
     closest_point,
     curve_rows,
     flatten,
+    point_in_region,
 )
 from splintercam.geometry2d._region import point_in_region_exact
 
@@ -139,3 +140,41 @@ def test_p1_off_the_circle_matches_arc_and_connector_flattened(
     exact = point_in_region_exact(np.array(far), built.value)
     flattened = point_in_region_exact(np.array(far), polygon(flat, ctx))
     assert exact.tolist() == flattened.tolist()
+
+
+@pytest.mark.req("REQ-G2D-148")
+@shared_ctx
+@given(
+    bulges=st.lists(st.floats(-2.0, 2.0), min_size=4, max_size=4),
+    along=st.floats(0.0, 1.0),
+    edge=st.integers(0, 3),
+    offset=st.sampled_from([0.0, 2.0**-30, 0.5e-6, 0.99e-6, 1.01e-6, 2e-6, 1e-3]),
+    direction=st.floats(0.0, math.tau),
+)
+def test_the_tolerance_layer_is_on_within_eps_len(  # noqa: PLR0913 (Hypothesis draws)
+    ctx: Context,
+    bulges: list[float],
+    along: float,
+    edge: int,
+    offset: float,
+    direction: float,
+) -> None:
+    corners = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]
+    curves = _bulged_loop(corners, bulges, ctx)
+    # A point near the chosen edge: a flattened point moved by `offset` in some direction.
+    flat = flatten(curves[edge], 1e-9, None, ctx)
+    base = flat[min(int(along * (len(flat) - 1)), len(flat) - 1)]
+    q = (
+        float(base[0]) + offset * math.cos(direction),
+        float(base[1]) + offset * math.sin(direction),
+    )
+    loops = _rows(curves, ctx)
+    eps = ctx.tolerances.length_eps_mm
+    distance = min(closest_point(c, q, ctx).distance_mm for c in curves)
+    found = PointLocation(point_in_region(np.array([q]), loops, ctx)[0])
+    exact = PointLocation(point_in_region_exact(np.array([q]), loops)[0])
+    if distance <= eps * (1 - 1e-9):
+        assert found is ON
+    elif distance > eps * (1 + 1e-9):
+        assert found is exact
+        assert found is not ON
