@@ -8,6 +8,42 @@
 - Research: `docs/research/01-foundations.md`
 - Branch: one branch and one pull request per step, based on `main` after the previous step's merge. Stacked pull requests (based on the previous step's branch) were tried in steps 2 and 3: merging with "delete branch" closed the next one (pull request 9) or merged it into a branch instead of `main` (12, then repeated as 10). Do not stack
 - Owner: Peter Burgener; agents: Claude Code cloud sessions
+- Status (2026-10-03): all steps done and merged (pull requests 11 to 22); `tools/check` passes on `main`. Waiting for Peter's review of slice 1. See Handover.
+
+## Handover
+
+For the next agent. Slice 1 is complete on `main`; nothing is in flight, no branch or pull request is open.
+
+**Do not start new geometry2d work** until Peter has reviewed slice 1 and answered the questions below. Slice 2 (loop tree, `build_region`, PolyTree, topic 02 offsets) needs its own plan; the SPEC lists it under Later parts.
+
+What exists (public API in `src/splintercam/geometry2d/__init__.py`; contract in its `SPEC.md`):
+
+| Area | Python | Kernel |
+| --- | --- | --- |
+| Exact signs | `orient2d`, `incircle`, `in_arc_circle`, `are_parallel` | `exact.cpp` (vendored `predicates.c` via `shewchuk.c`; expansions, `ExactSum`, `ray_height_sign`) |
+| Curves | `Line`, `Arc`, `make_line`, `make_arc`, `CurveRows`, `curve_rows`, `arc_from_bulge`, `bulges_from_arc` | `arcs.cpp`, `angle.cpp` (`basic_atan2`, `phi_minus_sin`) |
+| Distances, circles | `closest_point`, `circle_through` | `exact.cpp` (`circles_through`) |
+| Flattening, boxes | `flatten`, `AirSide`, `bounding_box`, `Box` | `flatten.cpp` |
+| Area | `signed_area` | `area.cpp` |
+| Point in region | `point_in_region`, `PointLocation`; internal `point_in_region_exact` | `region.cpp` |
+| Cleanup | `cleanup` | `cleanup.cpp` |
+
+Open questions for Peter (each also under Backlog with its details):
+
+1. Research 01, Area and orientation: its bound n·u·(√2·E·L + 3E²) has no term for arc segments, so the sign invariant of `signed_area` is proven for polygons only (step 7).
+2. Research 01, Point in region, still states the chord-side ON rule and has no radial connector; the SPEC carries Peter's answers of 2026-10-03 (step 8). Agents may not edit `docs/research/`; Peter updates it or registers the decision in Project Spike.
+3. Decisions of 2026-10-02 and 2026-10-03 below are recorded here and in the SPEC change log, not yet as D-nnn in Project Spike.
+4. `cleanup` stops its collinear and spike passes at three vertices (ours, step 9); confirm.
+5. Plan 0002, step 2: whether the label `large-change` exists and whether `change-size` is a required check.
+6. Spec gaps found by reviews, listed under Backlog (steps 2, 3, 4, 6, 7): rule order in `make_arc` for r ≤ eps_len, huge-radius bulges, a lower bound on t in `flatten`, the arctangent without a requirement of its own, limits not in the SPEC (segment rounding for r ≳ 1e10 mm, translation for E ≳ 1e9 mm).
+7. The geometry2d module budget: the SPEC proposes 1700 NLOC; `tools/size-check` reports 1561 on 2026-10-03; `architecture/modules.yaml` has none yet.
+
+How the work ran (keep doing it this way):
+
+- One branch and one pull request per step, from `main` after the previous merge; never stack. At most 400 added lines of non-test code per pull request (`tools/size-check --change origin/main` counts raw added lines, comments included); a step that grows past it is split (5/5b, 8/8b), not labelled.
+- Tests first, tagged with requirement IDs; then `tools/check`; then the simplifier (over about 100 lines), the spec-reviewer and the test-auditor, one round each (D-159). Must-fix findings are fixed or, where they come from the SPEC or research, put to Peter before coding on (step 8). Reproduce every reviewer counterexample before acting on it: one in step 8b did not hold for valid input.
+- Property tests run with `HYPOTHESIS_PROFILE=thorough` (10 000 cases) before each pull request; they found real bugs in steps 7, 8 and 9.
+- Read `tools/check`'s result before committing or pushing.
 
 ## Context
 
@@ -43,6 +79,13 @@ Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
 - 2026-10-03: step 5 split in two, 5 and 5b: with the review fixes it came to about 440 added lines of non-test code, over the limit of 400 per pull request (docs/dev/12, section 3); the arc predicates go next, from `main` after this step's merge.
 - 2026-10-03: the predicates' input range is a precondition, not a check: SRC-032 guarantees exact signs only for nonzero inputs with exponents in [−142, 201] (p. 308), and the first property run found 5e-324 (a nudged 0) giving the wrong sign, in Shewchuk's orient2d as in ours. Real coordinates in mm never come near 1.8e-43; the property generators stay inside the range with `assume`, so their oracle comparison stays strict. Peter confirmed on 2026-10-03: no check outside the range.
 - 2026-10-02: the largest flattening step π/2 is an entry of foundation's `tolerance_defaults.toml` (REQ-G2D-230), so geometry2d reads no file of its own (docs/dev/03, rule 5).
+- 2026-10-03: the area's float limits (10^6 vertices, 3355 mm) are named constants in `_area.py`, not declared parameters: they choose a path in Python and never reach the kernel (SPEC, Tolerance budget). Beyond them the polygon and segment terms are summed exactly by `ExactSum` (two_product, `fast_expansion_sum_zeroelim`, `compress` above 64 components, a speed setting).
+- 2026-10-03: decisions that need φ − sin φ (the degenerate test of `signed_area`) use `phi_minus_sin` from basic operations in `angle.cpp`, like the arctangent (REQ-G2D-018); libm `sin` gave platform-dependent `LOOP_DEGENERATE`.
+- 2026-10-03: `predicates.c` reads past its inputs (`e[elen]`, and `e[0]` and `e[1]` for an empty expansion): every buffer handed to it has two spare elements (`ExactSum`, `Expansion` capacity 24).
+- 2026-10-03, Peter's answers on point in region: (1) ON on an arc means an end point, a point of the circle in the sweep by the exact signs of `closest_point`, or a point of the radial connector, not the chord-side rule; (2) an arc whose P1 lies off its circle runs on the circle of radius |P0 − C| to the ray from C through P1 and then radially to P1; (3) the tolerance layer measures an arc to the nearer of the circles of radius |P0 − C| and |P1 − C|. SPEC REQ-G2D-135, 143, 148.
+- 2026-10-03: line distances in the tolerance layer are taken in both directions and the smaller kept (ours): the feet a + t·(b − a) and b + t'·(a − b) round differently, which made an edge's orientation decide ON at eps_len.
+- 2026-10-03: `cleanup` runs merge, collinear, spike in that order (research 01, Helpers); a kept vertex carries the vertices merged into it, so a later round merges it only where all of them lie within eps_len (REQ-G2D-205, 206); the collinear and spike passes stop at three vertices (ours).
+- 2026-10-03: property tests draw coordinates on a grid (2^-20 mm) or filter to the predicates' input range: values far below 2^-142 are outside the precondition and Hypothesis draws them often.
 
 ## Progress log
 
@@ -151,21 +194,17 @@ Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
 
 - Step 9 simplifier: the point accessor exists three times in the kernel (`exact.cpp`'s `point`, `region.cpp`, `cleanup.cpp`); one declaration in `exact.hpp` would serve all.
 
-
 - Step 8: research 01's Point in region section still states the chord-side ON rule and has no radial connector; the SPEC carries Peter's answers of 2026-10-03 (REQ-G2D-135, 143). Exact ON on a circle depends on the orientation when P1 lies off it (the radius is |P0 - C|); the tolerance layer of step 8b covers it with the nearer radius. The kernel's sweep logic exists twice besides `_box.py` and `_distances.py` (octants and halves); a shared kernel for `bounding_box` and `closest_point` would stop them drifting apart. The region kernel holds the interpreter lock for n points × m rows (SPEC, Later parts).
-
 
 - Step 7 test audit, optional: the eps_len·L boundary is tested 1 % on either side, not at equality; the `ValueError` for more than one loop carries the tag REQ-G2D-128, though the rule is in the Public interface; the 10^6-row exact path holds the interpreter lock without a cancellation check (SPEC, Later parts).
 
 - Step 7 spec review: φ − sin φ cancels no more (series for |φ| <= 1), but research 01's bound does not mention the segment term; for r ≳ 1e10 mm its rounding could reach eps_len·L. The exact path is exact for the rounded translated coordinates; when the box straddles 0 the translation moves A by about u·E·L, below eps_len·L for E up to about 1e9 mm. Neither limit is in the SPEC.
-
 
 - Step 6 simplifier: `bounding_box` could use `_distances._in_sweep` on its four axis points and drop `_octant` and `_axes_in_sweep` (about 25 lines), once REQ-G2D-214's tests confirm the same answers; its own step, since it changes `_box.py`.
 
 - Step 6 spec review, for steps 7 and 8: the ON rule of REQ-G2D-148 needs point-to-edge distances for every point and edge; calling `closest_point` in a Python loop would break the split rule, so plan a batched kernel there. `_in_sweep` assumes r > eps_len, which `make_arc` ensures but `curve_rows` does not (`check_arcs` accepts any sweep when r ≤ eps_len/π).
 
 - Step 6 test audit, optional: a line whose squared length underflows (|P1 − P0| below about 1.5e-154, outside the predicates' input range) counts as zero length; `_arc_parameter` uses Python's `math.atan2` (libm, only for the returned parameter, no decision on a sign); `test_bounding_box` has no REQ-G2D-231 run-twice test (from step 4); non-finite tests cover NaN in one position only; the clamp branch of `_arc_parameter` has no targeted test.
-
 
 - Step 4 spec review, spec gap for Peter: no lower bound on t and no declared maximum step count; today only a count beyond an int is refused (`ValueError`). Operation tolerances give at most about 55 000 steps per circle (t_flat >= 1.1e-5 mm, r < 6711 mm).
 
