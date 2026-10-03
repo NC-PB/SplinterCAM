@@ -7,7 +7,7 @@ import math
 import pytest
 
 from splintercam.foundation import Context
-from splintercam.geometry2d import Arc, ClosestPoint, Line, closest_point
+from splintercam.geometry2d import Arc, ClosestPoint, Line, closest_point, make_arc
 
 QUARTER = Arc((5.0, 0.0), (0.0, 5.0), (0.0, 0.0), math.pi / 2)  # CCW, from +x to +y
 QUARTER_CW = Arc((0.0, 5.0), (5.0, 0.0), (0.0, 0.0), -math.pi / 2)  # the same points, CW
@@ -109,6 +109,14 @@ def test_arc_outside_the_sweep_gives_the_nearer_end(
     assert found.distance_mm == math.dist(q, point)
 
 
+@pytest.mark.req("REQ-G2D-094")
+def test_the_nearer_end_is_decided_exactly(ctx: Context) -> None:
+    # P1 is 2^-53 inside the unit circle: from q, P1 is nearer by about 2^-51 in squared
+    # distance, below a rounding unit of the distances themselves (spec review of step 6).
+    arc = Arc((1.0, 0.0), (0.0, 1.0 - 2.0**-53), (0.0, 0.0), math.pi / 2)
+    assert closest_point(arc, (-1.0, -1.0), ctx).point == arc.p1
+
+
 @pytest.mark.req("REQ-G2D-093", "REQ-G2D-094")
 def test_the_sweep_governs_when_p1_lies_just_beyond_p0(ctx: Context) -> None:
     # REQ-G2D-043 lets P1 lie up to eps_len / r past where the sweep ends (ours, as in
@@ -116,8 +124,25 @@ def test_the_sweep_governs_when_p1_lies_just_beyond_p0(ctx: Context) -> None:
     # full one whose P1 is just past P0 passes every direction.
     tiny = Arc((5.0, 0.0), (5.0, -1e-7), (0.0, 0.0), 1e-12)
     assert closest_point(tiny, (-7.0, 0.0), ctx).point == (5.0, 0.0)
-    nearly_full = Arc((5.0, 0.0), (5.0, 1e-7), (0.0, 0.0), math.tau - 1e-12)
+    made = make_arc((5.0, 0.0), (5.0 + 9e-7, 5e-7), (0.0, 0.0), math.tau - 1e-12, ctx).value
+    assert made is not None
+    (nearly_full,) = made
+    assert isinstance(nearly_full, Arc)
+    assert nearly_full.sweep_rad != math.tau  # not turned into a full circle
     _close(closest_point(nearly_full, (-7.0, 0.0), ctx), (-5.0, 0.0), math.pi, 2.0)
+
+
+@pytest.mark.req("REQ-G2D-093")
+def test_a_query_on_the_start_ray_has_parameter_plus_zero(ctx: Context) -> None:
+    found = closest_point(QUARTER_CW, (0.0, 7.0), ctx)
+    assert found.parameter == 0.0
+    assert math.copysign(1.0, found.parameter) == 1.0
+
+
+@pytest.mark.parametrize("curve", [QUARTER, Line((0.0, 0.0), (1.0, 0.0))])
+def test_a_non_finite_query_is_a_programming_error(ctx: Context, curve: Line | Arc) -> None:
+    with pytest.raises(ValueError, match="finite"):
+        closest_point(curve, (math.nan, 1.0), ctx)
 
 
 @pytest.mark.req("REQ-G2D-096")

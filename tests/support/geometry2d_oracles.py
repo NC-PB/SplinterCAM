@@ -21,8 +21,7 @@ def sign(value: Fraction) -> int:
 
 
 def orient2d(a: P, b: P, c: P) -> int:
-    ax, ay, bx, by, cx, cy = (Fraction(v) for v in (*a, *b, *c))
-    return sign((ax - cx) * (by - cy) - (ay - cy) * (bx - cx))
+    return sign(twice_area(a, b, c))
 
 
 def incircle(a: P, b: P, c: P, d: P) -> int:

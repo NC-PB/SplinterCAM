@@ -5,6 +5,8 @@
 // expanded exactly from two_diff and two_product (Theorems 7, 17, 18) and the terms are summed by
 // predicates.c's fast_expansion_sum_zeroelim (Theorem 13), whose largest component has the sign of
 // the exact sum. Exact within the input range of the SPEC's precondition (SRC-032, p. 308).
+// circles_through: the circle through three points (research 01; SRC-032, p. 359), decided by
+// orient2d's exact sign.
 #include "exact.hpp"
 
 #include "shewchuk.hpp"
@@ -182,9 +184,11 @@ void circles_through(const std::array<Points, 3>& p123, double length_eps_mm,
         const auto [x3, y3] = p3;
         const double ux = x1 - x3;
         const double uy = y1 - y3;
-        // |D| / |p3 − p1| is p2's distance from the line p1p3, compared without a division.
+        // |D| / |p3 − p1| is p2's distance from the line p1p3, compared without a division; false
+        // when D = 0. Lengths are sqrt of a sum of squares, correctly rounded on every platform
+        // (D-055 tier 1), as in arcs.cpp.
         found =
-            static_cast<std::int8_t>(d != 0.0 && std::abs(d) > length_eps_mm * std::hypot(ux, uy));
+            static_cast<std::int8_t>(std::abs(d) > length_eps_mm * std::sqrt(ux * ux + uy * uy));
         if (found != 0) {
             const double vx = x2 - x3;
             const double vy = y2 - y3;
@@ -193,7 +197,9 @@ void circles_through(const std::array<Points, 3>& p123, double length_eps_mm,
             const double cx = x3 - (uy * v2 - vy * u2) / (d + d);
             const double cy = y3 + (ux * v2 - vx * u2) / (d + d);
             std::ranges::copy(std::array{cx, cy}, out.centres.subspan(2 * row, 2).begin());
-            out.radii.subspan(row, 1).front() = std::hypot(x1 - cx, y1 - cy);
+            const double rx = x1 - cx;
+            const double ry = y1 - cy;
+            out.radii.subspan(row, 1).front() = std::sqrt(rx * rx + ry * ry);
         }
         ++row;
     }

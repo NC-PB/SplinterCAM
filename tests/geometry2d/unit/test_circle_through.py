@@ -39,6 +39,9 @@ def test_eps_len_is_the_boundary(ctx: Context) -> None:
     # P2 at 2·eps_len, then at eps_len / 2, from the line y = 0 through P1 and P3.
     assert circle_through((0.0, 0.0), (1.0, 2 * eps), (2.0, 0.0), ctx) is not None
     assert circle_through((0.0, 0.0), (1.0, eps / 2), (2.0, 0.0), ctx) is None
+    # Exactly at it: |D| = 2·eps_len = eps_len·|P3 - P1| (REQ-G2D-003, the boundary belongs to
+    # "no circle").
+    assert circle_through((0.0, 0.0), (1.0, eps), (2.0, 0.0), ctx) is None
 
 
 @pytest.mark.req("REQ-G2D-100")
@@ -74,7 +77,9 @@ def test_radius_is_the_distance_to_p1(ctx: Context) -> None:
     p1 = (0.3, 0.1)
     circle = circle_through(p1, (4.7, 0.2), (0.4, 2.9), ctx)
     assert circle is not None
-    assert circle.radius_mm == math.dist(p1, circle.centre)
+    # The module's length, sqrt of a sum of squares: correctly rounded on every platform.
+    dx, dy = p1[0] - circle.centre[0], p1[1] - circle.centre[1]
+    assert circle.radius_mm == math.sqrt(dx * dx + dy * dy)
 
 
 def test_a_non_finite_point_is_a_programming_error(ctx: Context) -> None:

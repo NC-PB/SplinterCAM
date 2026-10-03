@@ -21,8 +21,7 @@ class Circle:
 
 
 def circle_through(p1: Point, p2: Point, p3: Point, ctx: Context) -> Circle | None:
-    """The circle through three points, or None when they are collinear, P2 lies within eps_len
-    of the line P1P3 or P1 = P3. The radius is |P1 - C| (ours); no radius limit of its own.
+    """The circle through three points, or None (research 01, Circle through three points).
 
     Implements: REQ-G2D-097 to 101.
     """

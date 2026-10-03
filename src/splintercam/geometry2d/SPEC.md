@@ -231,7 +231,7 @@ The budget is foundation's (REQ-FND-009). Slice 1 spends none of it: `flatten` t
 | Zero-width spike | vertex dropped | `CLEANUP_SPIKE` (info), one per spike |
 | `cleanup` keeps fewer than 3 vertices | those indices; the area test reports the loop | none (ours) |
 | Collinear points, P_2 within eps_len of P_1P_3, or P_1 = P_3, in `circle_through` | `None` | none |
-| A NaN or infinite point given to an exact predicate | programming error | `ValueError` (ours) |
+| A NaN or infinite point given to an exact predicate, `circle_through` or `closest_point` | programming error | `ValueError` (ours) |
 | t not positive and finite, or so small that the step count exceeds an int; `signed_area` given more than one loop | programming error | `ValueError` (ours) |
 
 ## Algorithms and design inputs
