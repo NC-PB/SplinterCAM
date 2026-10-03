@@ -28,7 +28,8 @@ def flatten(curve: Curve, t_mm: float, side: AirSide | None, ctx: Context) -> ND
 
     An arc is flattened inscribed when its centre lies on the air side (left of the arc for a
     positive sweep) or no side is given, circumscribed otherwise. A non-positive or non-finite
-    `t_mm` is a programming error, `ValueError`. Expects a curve from `make_line` or `make_arc`.
+    `t_mm` is a programming error, `ValueError`. Precondition, not checked: t_mm >= eps_len
+    (DEC-G2D-020). Expects a curve from `make_line` or `make_arc`.
 
     Implements: REQ-G2D-102 to 106, REQ-G2D-109, REQ-G2D-110, REQ-G2D-112, REQ-G2D-113,
     REQ-G2D-126, REQ-G2D-230.
