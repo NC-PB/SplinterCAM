@@ -29,7 +29,7 @@
 - [x] 7. **Area and orientation.** `signed_area` (`area.cpp`), with the exact sum. REQ-G2D-001, 002, 128 to 133. Size: about 180 + 250.
 - [x] 8. **Point in region, exact layer.** `PointLocation`, `point_in_region_exact` (`region.cpp`), the radial connector and its exact height comparison. REQ-G2D-135, 139, 143, 145. Size: about 380 + 400.
 - [x] 8b. **Point in region, tolerance layer.** `point_in_region`: ON within eps_len by the distances of REQ-G2D-091 to 096, measured to the nearer of the two radii (Peter, 2026-10-03), from the branch's saved full version. REQ-G2D-134, 148 to 150. Size: about 60 + 120.
-- [ ] 9. **Cleanup.** `cleanup` (`cleanup.cpp`). REQ-G2D-020, 204 to 212. Size: about 180 + 250.
+- [x] 9. **Cleanup.** `cleanup` (`cleanup.cpp`). REQ-G2D-020, 204 to 212. Size: about 180 + 250.
 
 Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
 
@@ -57,6 +57,14 @@ Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
 - CI on pull request 16: the sanitizer found `predicates.c`'s one-past-end read (ASan off for that code, approved by Peter); Windows needed the vendored C code in a C-only library target of its own, because the Visual Studio generators do not apply per-language options and include directories in a mixed C and C++ target.
 - `tools/check`: PASS (11 of 14 steps). Property tests pass with 10 000 cases each.
 - Next step: 5b.
+
+### 2026-10-03, session 1, step 9
+
+- Done: `cleanup` (`_cleanup.py`, kernel `cleanup.cpp`): merge runs within eps_len of the run's first vertex and a last run within eps_len of vertex 0, then drop exactly collinear vertices strictly between their neighbours, then zero-width spikes (`CLEANUP_SPIKE`, info, one per spike), repeated until nothing changes; one status array per vertex. Tests first, they failed on the missing name: research test 12, two spikes, the last-run join both ways, the passes repeating, eps_len itself, eps_len from the `Context`; properties in exact rationals with random spikes and on clusters within eps_len.
+- Reviews: simplifier (taken: one status array instead of two masks, which also fixes a `spike` output the kernel never cleared; no Python guard for empty input; no redundant equality tests; `std::iota`; shorter comments; the shared point accessor in the backlog). Spec-reviewer (fixed: later rounds merged kept vertices again without the vertices already merged into them, so a refused last run was joined a round later and a vertex could move 1.5 eps_len; a kept vertex now carries its merged vertices; both inputs are tests). Test-auditor (fixed: REQ-G2D-020 had no test telling the order apart; the last-run join with the far vertex second; the stop at three vertices, now stated in the SPEC (ours) and tested; the spike count in the repeat test; NaN; eps_len itself and from the `Context`; a structural check in the spike property).
+- The property search found my cluster property wrong twice: a dropped spike tip, and a collinear vertex whose segment a later spike drop removes, may lie far from what stays without having moved. The property now draws corners with no three consecutive ones collinear, so only merges drop vertices, and checks that every vertex lies within eps_len of a kept one, one per cluster.
+- `tools/check`: PASS (11 of 14 steps). Property tests pass with 10 000 cases each.
+- Next: stop for Peter's review of slice 1.
 
 ### 2026-10-03, session 1, step 8b
 
@@ -140,6 +148,9 @@ Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
 - For Peter: vendor `predicates.c` (from <https://www.cs.cmu.edu/~quake/robust.html>) into `src/splintercam/geometry2d/kernel/vendor/` on the step 5 branch, or allow `www.cs.cmu.edu` in the environment's network settings; accept or change ADR 0009 and apply `0003-notice.patch`.
 
 ## Backlog
+
+- Step 9 simplifier: the point accessor exists three times in the kernel (`exact.cpp`'s `point`, `region.cpp`, `cleanup.cpp`); one declaration in `exact.hpp` would serve all.
+
 
 - Step 8: research 01's Point in region section still states the chord-side ON rule and has no radial connector; the SPEC carries Peter's answers of 2026-10-03 (REQ-G2D-135, 143). Exact ON on a circle depends on the orientation when P1 lies off it (the radius is |P0 - C|); the tolerance layer of step 8b covers it with the nearer radius. The kernel's sweep logic exists twice besides `_box.py` and `_distances.py` (octants and halves); a shared kernel for `bounding_box` and `closest_point` would stop them drifting apart. The region kernel holds the interpreter lock for n points × m rows (SPEC, Later parts).
 

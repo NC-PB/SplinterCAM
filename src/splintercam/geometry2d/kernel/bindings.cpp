@@ -4,6 +4,7 @@
 #include "angle.hpp"
 #include "arcs.hpp"
 #include "area.hpp"
+#include "cleanup.hpp"
 #include "exact.hpp"
 #include "flatten.hpp"
 #include "region.hpp"
@@ -154,6 +155,15 @@ void bind_area(nb::module_& m) {
         },
         nb::arg("q"), nb::arg("rows"), nb::arg("length_eps_mm"), nb::arg("out"),
         "Write per point 0 (OUT), 1 (IN) or 2 (ON) against the loops' rows (REQ-G2D-134 to 150).");
+    m.def(
+        "cleanup_loop",
+        [](const PointRows& points, double length_eps_mm, const Int8Out& status) {
+            check_rows(points.shape(0), {status.shape(0)});
+            cleanup_loop({points.data(), points.size()}, length_eps_mm, view(status));
+        },
+        nb::arg("points"), nb::arg("length_eps_mm"), nb::arg("status"),
+        "Mark per vertex whether cleanup keeps it and where it dropped a spike (REQ-G2D-204 to "
+        "212).");
 }
 
 } // namespace

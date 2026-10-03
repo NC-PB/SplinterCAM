@@ -67,7 +67,7 @@ def cleanup(points, ctx) -> Result[NDArray[np.int64]]: ...                    # 
 - Loops cross module boundaries as `CurveRows`, single curves as `Line` and `Arc` (ours). A `Line` or `Arc` built directly is unchecked; `make_line`, `make_arc`, `arc_from_bulge` and `curve_rows` are the validating entries, and the other functions expect their output.
 - `make_arc` applies its rules in this order (ours, the draft's proposal): non-finite values, sweep range, r ≤ eps_len, nearly closed, radial check, angle check. 2π is the double nearest 2π (ours).
 - `closest_point`'s parameter is t ∈ [0, 1] on a line and the angle from P_0 in the sense of φ on an arc (ours). `circle_through`'s radius is |P_1 − C| (ours).
-- `cleanup` takes a closed polyline (n, 2) and returns the indices of the vertices it keeps, in order, so callers carry source IDs along (ours).
+- `cleanup` takes a closed polyline (n, 2) and returns the indices of the vertices it keeps, in order, so callers carry source IDs along (ours). Its passes run in the order merge, collinear, spike (research 01, Helpers); a kept vertex carries the vertices merged into it, so no vertex moves twice; the collinear and spike passes stop at three vertices, a loop that would lose more encloses nothing and the area test reports it (ours).
 - The exact predicates are exact for coordinates that are 0 or have a magnitude in [2^−142, 2^201], about 1.8e-43 to 3e60 mm: SRC-032 (p. 308) proves this range for orient2d and incircle, and our expansions of the arc predicates stay inside it (ours). A precondition, not checked (Peter); outside it products underflow or overflow. A NaN or infinite coordinate is a programming error, `ValueError` (ours), since it would read as sign 0.
 - Internal entries for tests, not in `__all__`: `two_sum`, `two_product` (exact.cpp) and `point_in_region_exact`, the exact layer alone.
 
@@ -94,7 +94,7 @@ def cleanup(points, ctx) -> Result[NDArray[np.int64]]: ...                    # 
 | REQ-G2D-018 | THE geometry2d module SHALL make the same decisions for the same input doubles on macOS, Windows and Linux: predicate signs, point locations, kept vertices and diagnostic codes and severities (D-055, tier 1). | cross-platform CI: tests 1, 2, 5 and 6 (test 23), and test 12 (ours) | Released |
 | REQ-G2D-231 | THE geometry2d module SHALL return bit-identical results (arrays, curves, diagnostics and their order) for the same input and `Context` on one platform under the pinned build profile (D-055, tier 2; Peter, 2026-10-02). | tests 3, 4, 8, 9, 12, 17 and 18 run twice, compared byte for byte | Released |
 | REQ-G2D-232 | THE geometry2d module SHALL return outputs with equal counts on macOS, Windows and Linux, their geometry within 0.001 mm of each other (D-055, tier 3; Peter, 2026-10-02). | cross-platform CI on the tests of REQ-G2D-231 | Released |
-| REQ-G2D-020 | WHEN `cleanup` takes sign decisions, THE function SHALL first merge vertices within eps_len and then apply the exact predicates to the merged vertices (D-097). | test 12 | Released |
+| REQ-G2D-020 | WHEN `cleanup` takes sign decisions, THE function SHALL first merge vertices within eps_len and then apply the exact predicates to the merged vertices (D-097). | test 12; vertices merged before the exact tests | Released |
 | REQ-G2D-021 | THE exact predicates SHALL take no tolerance and compare only with zero. | note test 1 (offsets of 2^−53); test 2 | Released |
 | REQ-G2D-022 | THE `in_arc_circle(q, c, p0)` predicate SHALL return the exact sign of \|p0 − c\|² − \|q − c\|²: +1 inside the circle, 0 on it, −1 outside (Peter, 2026-10-02). | test 2, exact rationals as oracle | Released |
 | REQ-G2D-023 | THE geometry2d kernel SHALL decide the sign of (q_y − c_y)² − \|p0 − c\|² exactly, so point in region compares q_y with c_y ± r without computing it (kernel `vertical_extent_signs`, used by `point_in_region`). | test 6; property against exact rationals | Released |
@@ -195,11 +195,11 @@ Release 1 kernels are single-threaded (Peter, 2026-10-02). Decisions and counts 
 | REQ-G2D-149 | WHEN q is not ON, THE `point_in_region` function SHALL classify q as IN where the winding number is not 0 and OUT where it is 0. | tests 5 and 6; the winding over two loops | Released |
 | REQ-G2D-150 | WHERE one loop is given, THE `point_in_region` function SHALL give the same result for both orientations. | the reversed loops of tests 5 and 6; arcs whose P_1 lies off the circle | Released |
 | REQ-G2D-204 | WHEN cleaning a loop, THE `cleanup` function SHALL replace each run of consecutive vertices within eps_len of the run's first vertex by that vertex, walking from the first vertex. | test 12 (nine vertices, off a line) | Released |
-| REQ-G2D-205 | WHEN every vertex of the last run lies within eps_len of the first vertex (ours), THE `cleanup` function SHALL join the last run to the first. | new test | Released |
-| REQ-G2D-206 | THE `cleanup` function SHALL move no vertex by more than eps_len. | property: test 12 | Released |
+| REQ-G2D-205 | WHEN every vertex of the last run lies within eps_len of the first vertex (ours), THE `cleanup` function SHALL join the last run to the first. | a last run within eps_len joins, one with a vertex beyond stays, also in a later round | Released |
+| REQ-G2D-206 | THE `cleanup` function SHALL move no vertex by more than eps_len. | test 12; property on clusters within eps_len | Released |
 | REQ-G2D-207 | THE `cleanup` function SHALL drop a vertex strictly between its neighbours with orient2d exactly 0, and keep one whose orient2d is not 0. | test 12 | Released |
-| REQ-G2D-209 | WHEN a loop turns back exactly onto itself at a vertex, THE `cleanup` function SHALL drop that vertex and report one `CLEANUP_SPIKE` (info) per spike (ours). | test 12 | Released |
-| REQ-G2D-211 | WHEN `cleanup` drops a spike, THE function SHALL leave the loop's region and signed area unchanged. | test 12; property in exact rationals | Released |
+| REQ-G2D-209 | WHEN a loop turns back exactly onto itself at a vertex, THE `cleanup` function SHALL drop that vertex and report one `CLEANUP_SPIKE` (info) per spike (ours). | test 12; two spikes, two diagnostics | Released |
+| REQ-G2D-211 | WHEN `cleanup` drops a spike, THE function SHALL leave the loop's region and signed area unchanged. | test 12; property in exact rationals with random spikes | Released |
 | REQ-G2D-212 | THE `cleanup` function SHALL repeat its three passes, in a fixed order, until none changes the loop (ours). | test 12; cleaning twice equals once | Released |
 
 ## Invariants
@@ -231,7 +231,7 @@ The budget is foundation's (REQ-FND-009). Slice 1 spends none of it: `flatten` t
 | Zero-width spike | vertex dropped | `CLEANUP_SPIKE` (info), one per spike |
 | `cleanup` keeps fewer than 3 vertices | those indices; the area test reports the loop | none (ours) |
 | Collinear points, P_2 within eps_len of P_1P_3, or P_1 = P_3, in `circle_through` | `None` | none |
-| A NaN or infinite point given to an exact predicate, `circle_through`, `closest_point` or `point_in_region` | programming error | `ValueError` (ours) |
+| A NaN or infinite point given to an exact predicate, `circle_through`, `closest_point`, `point_in_region` or `cleanup` | programming error | `ValueError` (ours) |
 | t not positive and finite, or so small that the step count exceeds an int; `signed_area` given more than one loop | programming error | `ValueError` (ours) |
 
 ## Algorithms and design inputs

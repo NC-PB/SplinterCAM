@@ -5,6 +5,7 @@ from ._area import signed_area
 from ._box import Box, bounding_box
 from ._bulge import arc_from_bulge, bulges_from_arc
 from ._circle import Circle, circle_through
+from ._cleanup import cleanup
 from ._curves import Arc, Curve, Line, Point, make_arc, make_line
 from ._distances import ClosestPoint, closest_point
 from ._flatten import AirSide, flatten
@@ -28,6 +29,7 @@ __all__ = [
     "bounding_box",
     "bulges_from_arc",
     "circle_through",
+    "cleanup",
     "closest_point",
     "curve_rows",
     "flatten",

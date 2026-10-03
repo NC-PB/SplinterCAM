@@ -52,6 +52,11 @@ def point_locations(q: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), o
     Write per point 0 (OUT), 1 (IN) or 2 (ON) against the loops' rows (REQ-G2D-134 to 150).
     """
 
+def cleanup_loop(points: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], length_eps_mm: float, status: Annotated[NDArray[numpy.int8], dict(shape=(None,), order='C', device='cpu')]) -> None:
+    """
+    Mark per vertex whether cleanup keeps it and where it dropped a spike (REQ-G2D-204 to 212).
+    """
+
 def check_arcs(rows: Annotated[NDArray[numpy.float64], dict(shape=(None, 7), order='C', device='cpu', writable=False)], length_eps_mm: float, out: Annotated[NDArray[numpy.int8], dict(shape=(None,), order='C', device='cpu')]) -> None:
     """
     Write per curve row 0 (consistent), 1 (P1 off the circle) or 2 (sweep does not fit).
