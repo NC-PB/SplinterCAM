@@ -122,8 +122,10 @@ if(SPLINTERCAM_KERNEL_SOURCES)
                         C_VISIBILITY_PRESET hidden)
   if(MSVC)
     target_compile_options(splintercam_kernel_code PRIVATE $<$<COMPILE_LANGUAGE:C>:/w /fp:precise>)
+    # Not per language: the Visual Studio generators do not take $<COMPILE_LANGUAGE> in include
+    # directories of a target that mixes C and C++. Only predicates.c includes <sys/time.h>.
     target_include_directories(splintercam_kernel_code PRIVATE
-                               $<$<COMPILE_LANGUAGE:C>:${PROJECT_SOURCE_DIR}/cmake/msvc-shim>)
+                               ${PROJECT_SOURCE_DIR}/cmake/msvc-shim)
   else()
     target_compile_options(splintercam_kernel_code PRIVATE
                            $<$<COMPILE_LANGUAGE:C>:-w -ffp-contract=off -fno-fast-math>)
