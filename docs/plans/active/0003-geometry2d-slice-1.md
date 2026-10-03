@@ -57,6 +57,15 @@ Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
 - `tools/check`: PASS (11 of 14 steps). Property tests pass with 10 000 cases each.
 - Next step: 5b.
 
+### 2026-10-03, session 1, step 8 (stopped for Peter)
+
+- Done so far (branch `claude/cool-ramanujan-evgci4-step-8`, no pull request yet): `point_in_region`, `point_in_region_exact`, `PointLocation` (`_region.py`, kernel `region.cpp`); research tests 5 and 6, note test 6, rays through vertices and tangent at extremes, properties against an exact winding oracle, a fine flattening and `closest_point`'s distances. The flattening property found an arc whose P1 lies 2^-126 mm past the top of its circle leaving a height gap; pieces now rise or fall by their ends' heights.
+- Stopped: the spec review found wrong results on `curve_rows`-valid input, all reproduced, each also breaking REQ-G2D-150 (the reversed loop answers differently). They come from the SPEC and research 01, not only from the code (AGENTS.md: stop when the spec contradicts the research):
+  1. REQ-G2D-143's ON rule for arcs, "on the arc's side of the chord P_0P_1", contradicts REQ-G2D-145 when the chord line meets the circle again far from the arc: a tiny arc whose P1 lies just clockwise of P0 (`[5, 0, 5, -1e-8, 0, 0, 1e-9]`) makes (3, 4) ON, 4.5 mm from the boundary; an arc whose P1 lies 7e-7 off the circle makes (4, -3) ON. Proposal: ON when q is an end point, or on the circle and in the sweep by the exact signs of `closest_point` (REQ-G2D-093).
+  2. Research 01's ray rules assume P1 lies on the circle. With P1 off it by up to eps_len (REQ-G2D-042) near the top or bottom, the arc and the next row leave a gap about sqrt(2·r·δ) wide: r = 1000 mm and δ = 5e-7 give IN at (0.01, 1000.0000002), 0.01 mm outside. Proposal: close each arc to P1 along the ray C → P1 (a radial connector), decided by exact signs.
+  3. REQ-G2D-150 cannot hold at eps_len when P1 is off the circle: reversing an arc changes its radius |P0 − C| by up to eps_len, so a point 5e-7 from one radius is ON in one orientation and 1.2e-6 from the other, OUT, in the other. Proposal: the tolerance layer measures to the nearer of |P0 − C| and |P1 − C|.
+- Also found: 420 lines of non-test code against the limit of 400; the simplifier's cuts bring it to about 381.
+
 ### 2026-10-03, session 1, step 7
 
 - Done: `signed_area` (`_area.py`, kernel `area.cpp`): the polygon sum about the centre of the end points' bounding box plus each arc's segment ½ r² (φ − sin φ); beyond 10^6 vertices or a half-extent of 3355 mm (named constants, as the SPEC's Tolerance budget says) the polygon and segment terms are summed exactly by an `ExactSum` (two_product and `predicates.c`'s `fast_expansion_sum_zeroelim`, compressed by its `compress` above 64 components); |A| <= eps_len·L gives `LOOP_DEGENERATE` (warning). φ − sin φ comes from basic operations (`angle.cpp`, `phi_minus_sin`), so the degenerate decision is the same on every platform. Tests first, they failed on the missing names: research tests 3 and 19, the limits on both sides, the exact path with arcs, run twice on both paths; properties against exact rationals and for reversal.
