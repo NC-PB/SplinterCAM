@@ -115,11 +115,9 @@ if(SPLINTERCAM_KERNEL_SOURCES)
   set_target_properties(splintercam_kernel_code PROPERTIES POSITION_INDEPENDENT_CODE ON)
   target_compile_options(splintercam_kernel_code PRIVATE
                          $<$<COMPILE_LANGUAGE:CXX>:${SPLINTERCAM_CXX_OPTIONS}>)
-  # The C sources are wrappers of vendored files (ADR 0009, Peter): C99 for their old-style
-  # definitions, compiler warnings off for that third-party code only, the strict float flags of
-  # D-097 like every kernel source, and hidden symbols so their global names stay in the module.
-  # MSVC lacks <sys/time.h>, which predicates.c includes for its test-data generators: an empty
-  # stand-in comes from cmake/msvc-shim/.
+  # C wrappers of vendored files (ADR 0009): C99, warnings off for that code only, the strict float
+  # flags of D-097, hidden symbols; an empty <sys/time.h> for MSVC from cmake/msvc-shim/. 64-bit
+  # targets only (x86-64 SSE2, ARM64), so no x87 extended precision (REQ-G2D-015).
   set_target_properties(splintercam_kernel_code PROPERTIES C_STANDARD 99 C_EXTENSIONS ON
                         C_VISIBILITY_PRESET hidden)
   if(MSVC)

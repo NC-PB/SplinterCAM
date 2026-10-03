@@ -46,14 +46,26 @@ def test_orient2d_is_exact_antisymmetric_and_cyclic(
 
 
 @pytest.mark.req("REQ-G2D-011")
-@given(point, point, point, near_collinear())
-def test_incircle_is_exact(
-    a: tuple[float, float],
-    b: tuple[float, float],
-    c: tuple[float, float],
-    extra: tuple[tuple[float, float], ...],
+@given(
+    point,
+    st.floats(0.0, 6.3),
+    st.floats(0.0, 6.3),
+    st.floats(0.0, 6.3),
+    st.floats(0.01, 50.0),
+    nudge,
+    nudge,
+)
+def test_incircle_is_exact(  # noqa: PLR0913 (Hypothesis draws)
+    centre: tuple[float, float], ta: float, tb: float, td: float, r: float, nx: int, ny: int
 ) -> None:
-    d = extra[2]
+    # Four points on one circle up to rounding, d then nudged by a few rounding units: nearly
+    # cocircular, so the adaptive stages beyond the first are reached.
+    def on_circle(t: float) -> tuple[float, float]:
+        return (float(centre[0] + r * np.cos(t)), float(centre[1] + r * np.sin(t)))
+
+    a, b, c = on_circle(ta), on_circle(tb), on_circle(ta + tb)
+    dx, dy = on_circle(td)
+    d = (float(dx + nx * np.spacing(dx)), float(dy + ny * np.spacing(dy)))
     assume(oracle.in_safe_range(*a, *b, *c, *d))
     assert int(incircle(*_one(a, b, c, d))[0]) == oracle.incircle(a, b, c, d)
 

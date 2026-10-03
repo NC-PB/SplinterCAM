@@ -4,8 +4,7 @@
 // evaluated every time with SRC-032's expansion arithmetic: each squared difference (a − b)² is
 // expanded exactly from two_diff and two_product (Theorems 7, 17, 18) and the terms are summed by
 // predicates.c's fast_expansion_sum_zeroelim (Theorem 13), whose largest component has the sign of
-// the exact sum. Exact while no product underflows or overflows: input exponents within SRC-032's
-// range [−142, 201] (p. 308).
+// the exact sum. Exact within the input range of the SPEC's precondition (SRC-032, p. 308).
 #include "exact.hpp"
 
 #include "shewchuk.hpp"
@@ -17,7 +16,9 @@ namespace splintercam::geometry2d {
 namespace {
 
 // An expansion: nonoverlapping components, smallest first (SRC-032, section 2).
-// A sum of four squared differences has at most 4 · 6 = 24 components.
+// A sum of four squared differences has at most 4 · 6 = 24 components. fast_expansion_sum_zeroelim
+// reads one element past the end of an input (predicates.c, its e[++eindex]); the largest input,
+// 12 components, leaves that element inside the zeroed array.
 constexpr std::size_t expansion_capacity = 24;
 
 struct Expansion {
@@ -35,10 +36,6 @@ Pair two_sum(double a, double b) { // Theorem 7
     const double b_virtual = x - a;
     const double a_virtual = x - b_virtual;
     return {x, (a - a_virtual) + (b - b_virtual)};
-}
-
-Pair two_diff(double a, double b) {
-    return two_sum(a, -b);
 }
 
 Pair split(double a) { // Theorem 17: two halves of at most 26 significant bits each
@@ -73,17 +70,18 @@ Expansion of(Pair pair) {
 
 // (a − b)², exactly: with a − b = x + y, it is x² + 2xy + y².
 Expansion squared_difference(double a, double b, bool negate) {
-    const auto [x, y] = two_diff(a, b);
+    const auto [x, y] = two_sum(a, -b); // a − b = x + y
     const double sign = negate ? -1.0 : 1.0;
-    const Expansion square =
-        sum(sum(of(two_product(sign * x, x)), of(two_product(sign * 2 * x, y))),
-            of(two_product(sign * y, y)));
-    return square;
+    return sum(sum(of(two_product(sign * x, x)), of(two_product(sign * 2 * x, y))),
+               of(two_product(sign * y, y)));
+}
+
+std::int8_t sign_of(double value) {
+    return static_cast<std::int8_t>((value > 0.0) - (value < 0.0));
 }
 
 std::int8_t sign_of(const Expansion& e) {
-    const double top = e.parts.at(static_cast<std::size_t>(std::max(e.size - 1, 0)));
-    return static_cast<std::int8_t>((top > 0.0) - (top < 0.0));
+    return sign_of(e.parts.at(static_cast<std::size_t>(std::max(e.size - 1, 0))));
 }
 
 std::array<double, 2> point(Points points, std::size_t row) {
@@ -94,10 +92,6 @@ std::array<double, 2> point(Points points, std::size_t row) {
 
 double value(Scalars values, std::size_t row) {
     return values.subspan(row, 1).front();
-}
-
-std::int8_t sign_of(double value) {
-    return static_cast<std::int8_t>((value > 0.0) - (value < 0.0));
 }
 
 } // namespace

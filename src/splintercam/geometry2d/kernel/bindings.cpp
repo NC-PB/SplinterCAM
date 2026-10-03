@@ -21,7 +21,6 @@ using Values = nb::ndarray<const double, nb::shape<-1>, nb::c_contig, nb::device
 using DoubleOut = nb::ndarray<double, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
 using PointsOut = nb::ndarray<double, nb::shape<-1, 2>, nb::c_contig, nb::device::cpu>;
 using PointRows = nb::ndarray<const double, nb::shape<-1, 2>, nb::c_contig, nb::device::cpu>;
-using DoubleOut1 = nb::ndarray<double, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
 using Int8Out = nb::ndarray<std::int8_t, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
 
 std::span<const double> view(const Rows& rows) {
@@ -47,7 +46,7 @@ Points points(const PointRows& rows) {
 void bind_exact(nb::module_& m) {
     m.def(
         "two_sums",
-        [](const Values& a, const Values& b, const DoubleOut1& x, const DoubleOut1& y) {
+        [](const Values& a, const Values& b, const DoubleOut& x, const DoubleOut& y) {
             check_rows(a.shape(0), {b.shape(0), x.shape(0), y.shape(0)});
             two_sums({.a = {a.data(), a.size()}, .b = {b.data(), b.size()}},
                      {.x = {x.data(), x.size()}, .y = {y.data(), y.size()}});
@@ -56,7 +55,7 @@ void bind_exact(nb::module_& m) {
         "Write x + y = a + b exactly (REQ-G2D-016).");
     m.def(
         "two_products",
-        [](const Values& a, const Values& b, const DoubleOut1& x, const DoubleOut1& y) {
+        [](const Values& a, const Values& b, const DoubleOut& x, const DoubleOut& y) {
             check_rows(a.shape(0), {b.shape(0), x.shape(0), y.shape(0)});
             two_products({.a = {a.data(), a.size()}, .b = {b.data(), b.size()}},
                          {.x = {x.data(), x.size()}, .y = {y.data(), y.size()}});

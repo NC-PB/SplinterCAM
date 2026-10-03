@@ -13,7 +13,6 @@ import pytest
 import geometry2d_oracles as oracle
 from splintercam import _kernels
 from splintercam.geometry2d import in_arc_circle, incircle, orient2d
-from splintercam.geometry2d._predicates import two_product, two_sum
 
 ULP_AT_HALF = 2.0**-53  # one rounding unit at 0.5 (note test 1)
 
@@ -121,35 +120,72 @@ def test_q_y_against_a_top_that_is_not_a_double() -> None:
     assert _vertical_extent_sign([below, above], [[0.0, 0.0]] * 2, [[1.0, 1.0]] * 2) == [-1, 1]
 
 
+def _kernel_pairs(name: str, a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    x, y = np.empty_like(a), np.empty_like(a)
+    function = _kernels.geometry2d.two_sums if name == "sum" else _kernels.geometry2d.two_products
+    function(np.ascontiguousarray(a), np.ascontiguousarray(b), x, y)
+    return x, y
+
+
+def _reference_two_sum(a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    # SRC-032, Theorem 7, in NumPy: each ufunc call is one correctly rounded IEEE operation, with
+    # no contraction, so this is an independent exact reference.
+    x = a + b
+    b_virtual = x - a
+    return x, (a - (x - b_virtual)) + (b - b_virtual)
+
+
+def _reference_two_product(a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    # SRC-032, Theorems 17 and 18 (Dekker's split with 2^27 + 1), in NumPy.
+    def split(v: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        c = (2.0**27 + 1.0) * v
+        high = c - (c - v)
+        return high, v - high
+
+    x = a * b
+    (ah, al), (bh, bl) = split(a), split(b)
+    return x, al * bl - (((x - ah * bh) - al * bh) - ah * bl)
+
+
 @pytest.mark.req("REQ-G2D-016", "REQ-G2D-014", "REQ-G2D-015")
 def test_two_product_example_of_note_test_7() -> None:
-    x, y = two_product(np.array([1 + 2.0**-30]), np.array([1 + 2.0**-30]))
+    a = np.array([1 + 2.0**-30])
+    x, y = _kernel_pairs("product", a, a)
     assert (x.tolist(), y.tolist()) == ([1 + 2.0**-29], [2.0**-60])
 
 
 @pytest.mark.req("REQ-G2D-016", "REQ-G2D-014", "REQ-G2D-015", "REQ-G2D-017")
 @pytest.mark.parametrize("spread", [False, True])
 def test_build_guard_error_free_transformations(spread: bool) -> None:
-    # Note test 7, the build guard: x + y equals a + b and a·b exactly on 10^6 random pairs, so a
-    # contracting or reordering compiler setting fails here, in every CI configuration.
+    # Note test 7, the build guard, on every one of 10^6 random pairs: the kernel's pairs equal an
+    # independent reference bit for bit, and that reference is exact (checked in rationals on a
+    # sample). A contracting or reordering compiler setting changes the kernel's pairs and fails.
     rng = np.random.default_rng(7)
     a, b = rng.uniform(-1.0, 1.0, (2, 1_000_000))
-    if spread:  # exponents spread over a wide range, inside the predicates' safe range
+    if spread:  # exponents spread over a wide range, inside the predicates' range
         a *= 2.0 ** rng.integers(-60, 60, a.size)
         b *= 2.0 ** rng.integers(-60, 60, b.size)
-    sx, sy = two_sum(a, b)
-    px, py = two_product(a, b)
-    # Exact check without a Python loop over 10^6 rationals: x is the rounded result, and y the
-    # rounding error, which numpy's own correctly rounded operations reproduce for sums.
-    np.testing.assert_array_equal(sx, a + b)
-    np.testing.assert_array_equal(px, a * b)
-    for k in rng.choice(a.size, 2000, replace=False):  # exact rationals on a sample
-        ak, bk = Fraction(float(a[k])), Fraction(float(b[k]))
-        assert Fraction(float(sx[k])) + Fraction(float(sy[k])) == ak + bk
-        assert Fraction(float(px[k])) + Fraction(float(py[k])) == ak * bk
-    # And on all pairs: |y| is at most half a rounding unit of x, as an error-free pair needs.
-    assert (np.abs(sy) <= np.spacing(np.abs(sx)) / 2).all()
-    assert (np.abs(py) <= np.spacing(np.abs(px)) / 2).all()
+    for name, reference in (("sum", _reference_two_sum), ("product", _reference_two_product)):
+        x, y = _kernel_pairs(name, a, b)
+        ref_x, ref_y = reference(a, b)
+        np.testing.assert_array_equal(x, ref_x)
+        np.testing.assert_array_equal(y, ref_y)
+        for k in rng.choice(a.size, 2000, replace=False):
+            ak, bk = Fraction(float(a[k])), Fraction(float(b[k]))
+            exact = ak + bk if name == "sum" else ak * bk
+            assert Fraction(float(x[k])) + Fraction(float(y[k])) == exact
+
+
+@pytest.mark.req("REQ-G2D-007", "REQ-G2D-011", "REQ-G2D-022")
+@pytest.mark.parametrize("bad", [math.nan, math.inf])
+def test_a_non_finite_point_is_a_programming_error(bad: float) -> None:
+    good = np.zeros((1, 2))
+    with pytest.raises(ValueError, match="finite"):
+        orient2d(np.array([[bad, 0.0]]), good, good)
+    with pytest.raises(ValueError, match="finite"):
+        incircle(good, good, good, np.array([[0.0, bad]]))
+    with pytest.raises(ValueError, match="finite"):
+        in_arc_circle(good, np.array([[bad, bad]]), good)
 
 
 @pytest.mark.req("REQ-G2D-024")

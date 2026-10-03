@@ -18,11 +18,9 @@ def _rows(*arrays: ArrayLike) -> list[NDArray[np.float64]]:
         raise ValueError(
             f"points must be (n, 2) arrays of one shape, got {[c.shape for c in copies]}"
         )
+    if not all(np.isfinite(c).all() for c in copies):
+        raise ValueError("points must be finite: a NaN would read as sign 0")
     return copies
-
-
-def _signs(count: int) -> NDArray[np.int8]:
-    return np.empty(count, dtype=np.int8)
 
 
 def orient2d(a: ArrayLike, b: ArrayLike, c: ArrayLike) -> NDArray[np.int8]:
@@ -32,7 +30,7 @@ def orient2d(a: ArrayLike, b: ArrayLike, c: ArrayLike) -> NDArray[np.int8]:
     Implements: REQ-G2D-007 to 010, REQ-G2D-021, REQ-G2D-024.
     """
     pa, pb, pc = _rows(a, b, c)
-    out = _signs(pa.shape[0])
+    out = np.empty(pa.shape[0], dtype=np.int8)
     _kernels.geometry2d.orient2d_signs(pa, pb, pc, out)
     return out
 
@@ -44,7 +42,7 @@ def incircle(a: ArrayLike, b: ArrayLike, c: ArrayLike, d: ArrayLike) -> NDArray[
     Implements: REQ-G2D-011, REQ-G2D-021, REQ-G2D-024.
     """
     pa, pb, pc, pd = _rows(a, b, c, d)
-    out = _signs(pa.shape[0])
+    out = np.empty(pa.shape[0], dtype=np.int8)
     _kernels.geometry2d.incircle_signs(pa, pb, pc, pd, out)
     return out
 
@@ -56,37 +54,9 @@ def in_arc_circle(q: ArrayLike, centre: ArrayLike, p0: ArrayLike) -> NDArray[np.
     Implements: REQ-G2D-022, REQ-G2D-024.
     """
     pq, pc, p0_rows = _rows(q, centre, p0)
-    out = _signs(pq.shape[0])
+    out = np.empty(pq.shape[0], dtype=np.int8)
     _kernels.geometry2d.in_arc_circle_signs(pq, pc, p0_rows, out)
     return out
-
-
-def _pairs(
-    kernel_function: str, a: ArrayLike, b: ArrayLike
-) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-    a_copy = np.array(a, dtype=np.float64, order="C", copy=True).ravel()
-    b_copy = np.array(b, dtype=np.float64, order="C", copy=True).ravel()
-    if a_copy.shape != b_copy.shape:
-        raise ValueError(f"a and b need one shape, got {a_copy.shape} and {b_copy.shape}")
-    x, y = np.empty_like(a_copy), np.empty_like(a_copy)
-    getattr(_kernels.geometry2d, kernel_function)(a_copy, b_copy, x, y)
-    return x, y
-
-
-def two_sum(a: ArrayLike, b: ArrayLike) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-    """The kernel's error-free sum, x + y = a + b exactly; internal, for the build guard.
-
-    Implements: REQ-G2D-016.
-    """
-    return _pairs("two_sums", a, b)
-
-
-def two_product(a: ArrayLike, b: ArrayLike) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-    """The kernel's error-free product, x + y = a·b exactly; internal, for the build guard.
-
-    Implements: REQ-G2D-016.
-    """
-    return _pairs("two_products", a, b)
 
 
 def are_parallel(a: ArrayLike, b: ArrayLike, ctx: Context) -> NDArray[np.bool_]:
