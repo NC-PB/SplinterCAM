@@ -125,7 +125,7 @@
 ## DEC-G2D-014: cleanup order and its three-vertex stop
 
 - Date: 2026-10-03; decided by: ours; the three-vertex stop waits for Peter's confirmation (plan 0003, Handover, question 4)
-- Status: Active
+- Status: Active; the three-vertex stop confirmed by Peter on 2026-10-03 (answer 3)
 - Decision: `cleanup` runs merge, collinear, spike in that order (research 01, Helpers). A kept vertex carries the vertices merged into it, so a later round merges it only where all of them lie within eps_len. The collinear and spike passes stop at three vertices.
 - Why: merging a merged vertex again would let points drift by more than eps_len in total.
 - Rejected: merging against the kept vertex alone.
@@ -139,3 +139,40 @@
 - Why: Hypothesis draws floats far below 2^-142 often, which is input outside the contract.
 - Rejected: loosening the oracle comparison.
 - Where: `tests/` of geometry2d, `tests/support/geometry2d_oracles.py`.
+
+## DEC-G2D-018: a tiny circle gets its radial check before it becomes a line
+
+- Date: 2026-10-03; decided by: ours, on Peter's answer 5 of 2026-10-03 (spec gap of plan 0003, step 2)
+- Status: Active
+- Decision: when r ≤ eps_len, `make_arc` first checks ||P1 − C| − r| ≤ eps_len (REQ-G2D-042) and returns `ARC_INCONSISTENT` if it fails. Only then does it return the line P0P1, or nothing when P0 = P1. For r > eps_len the order is unchanged: nearly closed, radial check, angle check.
+- Why: before this change, an arc with r ≈ 0 and P1 100 mm away became a 100 mm line. Research 01's "within 2r of the segment" assumes P1 on the circle; with the check, the line it returns is at most 3·eps_len long.
+- The angle check (REQ-G2D-043) stays skipped for r ≤ eps_len: with any sweep such an arc stays within 2r of P0, so its chord is a faithful replacement.
+- Rejected: moving the radial check before the nearly closed rule for every radius (no gain: a nearly closed arc passes it anyway, up to rounding, and it would change the order of a rule that works); a check that P1 lies within 2·eps_len of C (another number for the same thing).
+- Where: REQ-G2D-047; SPEC, Public interface (rule order); `_curves.py` (`_tiny_arc`); `tests/geometry2d/unit/test_curves.py`.
+
+## DEC-G2D-019: arcs are valid input up to a radius of 10^9 mm
+
+- Date: 2026-10-03; decided by: ours, on Peter's answer 5 of 2026-10-03 (spec gap of plan 0003, step 3)
+- Status: Active
+- Decision: arcs, from `make_arc`, `arc_from_bulge` or `curve_rows`, are valid input up to r = 10^9 mm, as a documented precondition with no run-time check. Beyond it a valid arc may come back `ARC_INCONSISTENT`.
+- Why: two checks carry rounding that grows with r. The radial check compares |P1 − C| with r, both rounded by about u·r: 1.1e-7 mm at 10^9 mm, 1.1e-6 mm (above eps_len) at 10^10 mm. The angle check binds first for large sweeps: its limit is eps_len/r, 1e-15 rad at 10^9 mm, while one rounding step of a sweep above 4 rad is 2^−50 = 8.9e-16 rad, so a sweep and the kernel's angle one step apart fail beyond 1.13·10^9 mm (spec review; a valid arc from the bulge 4000001090 on a 2 mm chord, r = 2·10^9 mm, is rejected). Measured, coordinates within ±3000 mm: random minor arcs from bulges (chords 0.1 to 2000 mm) none rejected up to 3·10^9 mm, 180 of 549 at 10^10 mm; 4000 random major arcs none rejected at 10^9 mm. Peter named 10^10 mm; the measurement refutes it. We state 10^9 mm. The margin is thin for large sweeps: it holds while `basic_atan2` stays within about 2 rounding units, as measured; REQ-G2D-233's 4 units alone would prove only about 2.8·10^8 mm.
+- Rejected: 10^10 mm (a third of valid bulges fail there); 2.8·10^8 mm, the limit REQ-G2D-233 alone proves (Peter may choose it over the measured one); a run-time check or a bulge limit (Peter: documented preconditions only); a radial check scaled by r (it would loosen the eps_len contract of REQ-G2D-042). The tighter limit of `signed_area`, r·min(1, φ²) ≤ 10^7 mm, is DEC-G2D-016.
+- Where: SPEC, Public interface; `tests/geometry2d/property/test_bulge_arcs.py` (minor and major arcs up to 10^9 mm never inconsistent).
+
+## DEC-G2D-020: `flatten` expects t ≥ eps_len
+
+- Date: 2026-10-03; decided by: ours, on Peter's answer 5 of 2026-10-03 (spec gap of plan 0003, step 4)
+- Status: Active
+- Decision: t ≥ eps_len is a documented precondition of `flatten`, not checked. The existing `ValueError` for a step count beyond an int stays.
+- Why: below eps_len a flattening is finer than the module can tell apart, and only memory limits the step count. Callers pass t_flat ≥ 1.1e-5 mm or 0.001 mm (research 01, Flattening). At t = eps_len and r = 10^9 mm (DEC-G2D-019) a full circle needs fewer than 2^31 steps, so the int check fires only outside the preconditions.
+- Rejected: a `ValueError` for t < eps_len (it would make the int check unreachable and replace a working test's error for no caller's benefit); a declared largest step count (a new foundation parameter that no caller needs yet).
+- Where: SPEC, Public interface; `_flatten.py`; `tests/geometry2d/unit/test_flatten.py` (the count at the corner of the preconditions).
+
+## DEC-G2D-021: the arctangent has a requirement of its own
+
+- Date: 2026-10-03; decided by: ours, on Peter's answer 5 of 2026-10-03 (spec gap of plan 0003, step 2)
+- Status: Active
+- Decision: REQ-G2D-233 states what `basic_atan2` promises: within 4 rounding units of atan2, exact on the axes, the same bits everywhere. The existing tests carry its ID next to REQ-G2D-018 and 043.
+- Why: the angle check and the flattening count rest on it, but it was tested only under the requirements that use it, so a change to it had no contract to fail against.
+- Rejected: leaving it under REQ-G2D-018 and 043 (the gap); a correctly rounded arctangent (more code, and nothing needs it: the decisions only need the same bits everywhere and a known error).
+- Where: REQ-G2D-233; `kernel/angle.cpp`; `tests/geometry2d/unit/test_angle.py`. See DEC-G2D-003.
