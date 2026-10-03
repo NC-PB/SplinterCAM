@@ -100,7 +100,7 @@ def cleanup(points, ctx) -> Result[NDArray[np.int64]]: ...                    # 
 | REQ-G2D-023 | THE geometry2d kernel SHALL decide the sign of (q_y − c_y)² − \|p0 − c\|² exactly, so point in region compares q_y with c_y ± r without computing it (kernel `vertical_extent_signs`, used by `point_in_region`). | test 6; property against exact rationals | Released |
 | REQ-G2D-024 | THE predicates SHALL take arrays of points and return one sign per row, with no Python loop per point. | review; a batch gives the signs of single rows | Released |
 
-Release 1 kernels are single-threaded (Peter, 2026-10-02). Decisions and counts that need an angle (the arc angle check, the flattening count, the sweep of an arc) use our own arctangent, built from IEEE 754 basic operations in the kernel (`angle.cpp`), so they are the same on every platform (D-055, tier 1; ours). Constructed points (flattened vertices, centres) use the platform's libm and may differ in the last bit across platforms (tier 3).
+Release 1 kernels are single-threaded (Peter, 2026-10-02). Decisions and counts that need an angle (the arc angle check, the flattening count, the sweep of an arc) use our own arctangent, built from IEEE 754 basic operations in the kernel (`angle.cpp`), so they are the same on every platform (D-055, tier 1; ours). So does the circular segment term φ − sin φ of the signed area, which decides `LOOP_DEGENERATE` (ours). Constructed points (flattened vertices, centres) use the platform's libm and may differ in the last bit across platforms (tier 3).
 
 ### Tolerances and curves ([research 01, Tolerances][tol] and [Curves][curves])
 
@@ -182,10 +182,10 @@ Release 1 kernels are single-threaded (Peter, 2026-10-02). Decisions and counts 
 | REQ-G2D-001 | THE geometry2d module SHALL treat CCW as the positive sense, so a CCW loop has positive signed area. | test 3 | Released |
 | REQ-G2D-002 | WHEN a loop is reversed, THE `signed_area` function SHALL return the negated area within the rounding bound of research 01 (ours). | test 3 | Released |
 | REQ-G2D-128 | THE `signed_area` function SHALL return the area A of research 01 (polygon sum plus each arc's circular segment), in mm². | test 3 | Released |
-| REQ-G2D-130 | THE `signed_area` function SHALL evaluate its sums after translating the loop so the centre of its end points' bounding box is the origin (ours). | property against exact rationals | Released |
+| REQ-G2D-130 | THE `signed_area` function SHALL evaluate its sums after translating the loop so the centre of its end points' bounding box is the origin (ours). | property against exact rationals; the exact sum equals the translated loop's area within a rounding unit | Released |
 | REQ-G2D-131 | WHERE a loop has n ≤ 10^6 vertices and a half-extent E ≤ 3355 mm, THE `signed_area` function SHALL decide the orientation from the floating-point sums. | property against exact rationals | Released |
-| REQ-G2D-132 | WHERE a loop has more than 10^6 vertices or E > 3355 mm (ours), THE `signed_area` function SHALL sum the polygon part exactly. | a loop just above each limit | Released |
-| REQ-G2D-133 | IF \|A\| ≤ eps_len·L, with L the loop length, THEN THE `signed_area` function SHALL return no value and `LOOP_DEGENERATE` (warning). | test 19 (widths 1e-7 and 1e-5 mm) | Released |
+| REQ-G2D-132 | WHERE a loop has more than 10^6 vertices or E > 3355 mm (ours), THE `signed_area` function SHALL sum the polygon part exactly. | a loop just above each limit; the exact path with arcs | Released |
+| REQ-G2D-133 | IF \|A\| ≤ eps_len·L, with L the loop length, THEN THE `signed_area` function SHALL return no value and `LOOP_DEGENERATE` (warning). | test 19 (widths 1e-7 and 1e-5 mm); strips just below and above the limit | Released |
 | REQ-G2D-134 | THE `point_in_region` function SHALL classify each query point against the given loops as exactly one of IN, OUT and ON. | tests 5 and 6; note test 6 | Released |
 | REQ-G2D-135 | THE exact layer (`point_in_region_exact`) SHALL compute the winding number over all loops by the ray rules of research 01, Point in region: arcs split at π/2 and 3π/2 by exact signs, half-open height ranges, ±1 per crossing edge. | tests 5 and 6 | Released |
 | REQ-G2D-139 | THE exact layer SHALL decide whether a straight edge passes right of q by orient2d alone, and an arc piece by the arc predicate and the sign of q_x − c_x. | tests 5 and 6; note test 6 | Released |

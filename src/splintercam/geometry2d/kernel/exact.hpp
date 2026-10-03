@@ -6,6 +6,7 @@
 #include <array>
 #include <cstdint>
 #include <span>
+#include <vector>
 
 namespace splintercam::geometry2d {
 
@@ -56,6 +57,28 @@ struct CircleOut { // per row the centre (x, y), the radius and 1 when a circle 
 // The circle through p1, p2, p3 (research 01, Circle through three points; SRC-032, p. 359): none
 // when orient2d is 0 or p2 lies within length_eps_mm of the line p1p3 (REQ-G2D-097 to 101).
 void circles_through(const std::array<Points, 3>& p123, double length_eps_mm, const CircleOut& out);
+
+struct CrossTerm { // a·b − c·d
+    double a;
+    double b;
+    double c;
+    double d;
+};
+// A sum of cross terms kept exactly as a nonoverlapping expansion, smallest component first
+// (SRC-032, section 2): two_product (Theorem 18) and fast_expansion_sum_zeroelim (Theorem 13).
+class ExactSum {
+public:
+    void add(const CrossTerm& term);
+    // The components summed smallest first: the exact sum within a rounding unit, its sign exact.
+    [[nodiscard]] double value() const;
+
+private:
+    // Two buffers used in turn, each two longer than its expansion: predicates.c reads past an
+    // input's end, e[0] and e[1] when it is empty.
+    std::vector<double> parts_ = {0.0, 0.0};
+    std::vector<double> next_ = {0.0, 0.0};
+    int size_ = 0;
+};
 
 // Starts predicates.c's error bounds; called once when the kernel module loads (REQ-G2D-013).
 void init_exact_arithmetic();

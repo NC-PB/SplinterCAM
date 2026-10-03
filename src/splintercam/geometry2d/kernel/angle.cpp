@@ -59,4 +59,33 @@ double basic_atan2(double y, double x) {
     return y > 0.0 ? half_pi : -half_pi;
 }
 
+// Taylor series (ours, 2026-10-03), summed until a term no longer changes the sum: for |φ| <= 1 the
+// series of φ − sin φ itself, φ³/3! − φ⁵/5! + …, which has no cancellation; beyond, sin of φ
+// reduced to [−π, π] by a rounded 2π, whose rounding moves the result by a few units of 2π.
+double phi_minus_sin(double phi) {
+    if (std::abs(phi) <= 1.0) {
+        double term = phi * phi * phi / (2 * 3); // φ³/3!
+        double sum = 0.0;
+        for (int k = 1; sum + term != sum; ++k) {
+            sum += term;
+            term = -term * phi * phi / ((2 * k + 2) * (2 * k + 3));
+        }
+        return sum;
+    }
+    constexpr double two_pi = 2 * std::numbers::pi;
+    double x = phi;
+    if (x > std::numbers::pi) {
+        x -= two_pi;
+    } else if (x < -std::numbers::pi) {
+        x += two_pi;
+    }
+    double term = x;
+    double sine = 0.0;
+    for (int k = 0; sine + term != sine; ++k) {
+        sine += term;
+        term = -term * x * x / ((2 * k + 2) * (2 * k + 3));
+    }
+    return phi - sine;
+}
+
 } // namespace splintercam::geometry2d

@@ -65,3 +65,11 @@ def twice_area(a: P, b: P, c: P) -> Fraction:
     """orient2d(a, b, c) as an exact value: twice the signed area of the triangle."""
     ax, ay, bx, by, cx, cy = (Fraction(v) for v in (*a, *b, *c))
     return (ax - cx) * (by - cy) - (ay - cy) * (bx - cx)
+
+
+def polygon_area(points: list[P]) -> Fraction:
+    """The exact signed area of the closed polygon through `points` (shoelace formula)."""
+    total = Fraction(0)
+    for (x0, y0), (x1, y1) in zip(points, points[1:] + points[:1], strict=True):
+        total += Fraction(x0) * Fraction(y1) - Fraction(x1) * Fraction(y0)
+    return total / 2
