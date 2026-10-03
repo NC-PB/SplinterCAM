@@ -195,11 +195,11 @@ Release 1 kernels are single-threaded (Peter, 2026-10-02). Decisions and counts 
 | REQ-G2D-149 | WHEN q is not ON, THE `point_in_region` function SHALL classify q as IN where the winding number is not 0 and OUT where it is 0. | tests 5 and 6; the winding over two loops | Released |
 | REQ-G2D-150 | WHERE one loop is given, THE `point_in_region` function SHALL give the same result for both orientations. | the reversed loops of tests 5 and 6; arcs whose P_1 lies off the circle | Released |
 | REQ-G2D-204 | WHEN cleaning a loop, THE `cleanup` function SHALL replace each run of consecutive vertices within eps_len of the run's first vertex by that vertex, walking from the first vertex. | test 12 (nine vertices, off a line) | Released |
-| REQ-G2D-205 | WHEN every vertex of the last run lies within eps_len of the first vertex (ours), THE `cleanup` function SHALL join the last run to the first. | new test | Released |
-| REQ-G2D-206 | THE `cleanup` function SHALL move no vertex by more than eps_len. | property: test 12 | Released |
+| REQ-G2D-205 | WHEN every vertex of the last run lies within eps_len of the first vertex (ours), THE `cleanup` function SHALL join the last run to the first. | a last run within eps_len joins, one with a vertex beyond stays | Released |
+| REQ-G2D-206 | THE `cleanup` function SHALL move no vertex by more than eps_len. | test 12; property on clusters within eps_len | Released |
 | REQ-G2D-207 | THE `cleanup` function SHALL drop a vertex strictly between its neighbours with orient2d exactly 0, and keep one whose orient2d is not 0. | test 12 | Released |
-| REQ-G2D-209 | WHEN a loop turns back exactly onto itself at a vertex, THE `cleanup` function SHALL drop that vertex and report one `CLEANUP_SPIKE` (info) per spike (ours). | test 12 | Released |
-| REQ-G2D-211 | WHEN `cleanup` drops a spike, THE function SHALL leave the loop's region and signed area unchanged. | test 12; property in exact rationals | Released |
+| REQ-G2D-209 | WHEN a loop turns back exactly onto itself at a vertex, THE `cleanup` function SHALL drop that vertex and report one `CLEANUP_SPIKE` (info) per spike (ours). | test 12; two spikes, two diagnostics | Released |
+| REQ-G2D-211 | WHEN `cleanup` drops a spike, THE function SHALL leave the loop's region and signed area unchanged. | test 12; property in exact rationals with random spikes | Released |
 | REQ-G2D-212 | THE `cleanup` function SHALL repeat its three passes, in a fixed order, until none changes the loop (ours). | test 12; cleaning twice equals once | Released |
 
 ## Invariants
