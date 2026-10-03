@@ -243,7 +243,9 @@ Location locate(Point2 q, const RegionQuery& query) {
         const Point2 a{row.x0, row.y0};
         const Point2 b{row.x1, row.y1};
         if (row.sweep == 0.0) {
-            if (on_line(q, a, b) || (eps > 0.0 && line_distance(q, a, b) <= eps)) {
+            // Both directions: the feet round differently, and both orientations must agree.
+            const double distance = std::min(line_distance(q, a, b), line_distance(q, b, a));
+            if (on_line(q, a, b) || (eps > 0.0 && distance <= eps)) {
                 return Location::on;
             }
             winding += line_winding(q, a, b);

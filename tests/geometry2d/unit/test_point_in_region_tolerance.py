@@ -148,3 +148,15 @@ def test_results_are_bit_identical_when_repeated(ctx: Context) -> None:
     loops = loop(_square_with_semicircle(math.pi), ctx)
     first = point_in_region(q, loops, ctx)
     assert point_in_region(q, loops, ctx).tobytes() == first.tobytes()
+
+
+@pytest.mark.req("REQ-G2D-148", "REQ-G2D-150")
+def test_a_slanted_edge_gives_one_distance_in_both_directions(ctx: Context) -> None:
+    # Spec review of step 8b: the foot a + t·(b - a) and b + t'·(a - b) round differently, so q
+    # was 1.00000000006e-6 from the edge one way and 0.99999999999e-6 the other: ON in only one
+    # orientation. The kernel takes the nearer of the two.
+    a, b = (2.4580338977940386, 4.835739785214589), (5.903871311313933, 8.849005675541008)
+    q = [(4.842273033279506, 7.612594795524758)]  # about eps_len left of a -> b
+    third = ((a[0] + b[0]) / 2 + 5.0, (a[1] + b[1]) / 2 - 5.0)  # right of a -> b
+    for loops in [polygon([a, b, third], ctx), polygon([third, b, a], ctx)]:
+        assert _located(q, loops, ctx) == [ON]

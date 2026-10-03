@@ -191,7 +191,7 @@ Release 1 kernels are single-threaded (Peter, 2026-10-02). Decisions and counts 
 | REQ-G2D-139 | THE exact layer SHALL decide whether a straight edge passes right of q by orient2d alone, and an arc piece by the arc predicate and the sign of q_x − c_x. | tests 5 and 6; note test 6 | Released |
 | REQ-G2D-143 | WHEN q lies on an edge (orient2d 0 within the edge's box, or q on the arc itself: an end point, a point of the circle whose direction from C lies in the sweep by the exact signs of REQ-G2D-093, or a point of the radial connector (Peter, 2026-10-03)), THE exact layer SHALL classify q as ON. | tests 5 and 6; note test 6; a tiny arc and a chord line meeting the circle again; outward, inward and slanted connectors | Released |
 | REQ-G2D-145 | THE exact layer SHALL NOT classify q as ON from a zero of a helper test elsewhere (a chord line, the rest of an arc's circle). | test 5 | Released |
-| REQ-G2D-148 | IF q lies within eps_len of the boundary, by the distances of REQ-G2D-091 to 096, measured on an arc to the nearer of the circles of radius \|P_0 − C\| and \|P_1 − C\| (Peter, 2026-10-03), THEN THE `point_in_region` function SHALL classify q as ON. | test 5; note test 6; eps_len itself; the nearer radius; property against closest_point's distances | Released |
+| REQ-G2D-148 | IF q lies within eps_len of the boundary, by the distances of REQ-G2D-091 to 096, measured on an arc to the nearer of the circles of radius \|P_0 − C\| and \|P_1 − C\| (also for Q = C) and on a line in both directions (Peter, 2026-10-03; ours), THEN THE `point_in_region` function SHALL classify q as ON. | test 5; note test 6; eps_len itself; the nearer radius; property against closest_point's distances | Released |
 | REQ-G2D-149 | WHEN q is not ON, THE `point_in_region` function SHALL classify q as IN where the winding number is not 0 and OUT where it is 0. | tests 5 and 6; the winding over two loops | Released |
 | REQ-G2D-150 | WHERE one loop is given, THE `point_in_region` function SHALL give the same result for both orientations. | the reversed loops of tests 5 and 6; arcs whose P_1 lies off the circle | Released |
 | REQ-G2D-204 | WHEN cleaning a loop, THE `cleanup` function SHALL replace each run of consecutive vertices within eps_len of the run's first vertex by that vertex, walking from the first vertex. | test 12 (nine vertices, off a line) | Released |
@@ -231,7 +231,7 @@ The budget is foundation's (REQ-FND-009). Slice 1 spends none of it: `flatten` t
 | Zero-width spike | vertex dropped | `CLEANUP_SPIKE` (info), one per spike |
 | `cleanup` keeps fewer than 3 vertices | those indices; the area test reports the loop | none (ours) |
 | Collinear points, P_2 within eps_len of P_1P_3, or P_1 = P_3, in `circle_through` | `None` | none |
-| A NaN or infinite point given to an exact predicate, `circle_through` or `closest_point` | programming error | `ValueError` (ours) |
+| A NaN or infinite point given to an exact predicate, `circle_through`, `closest_point` or `point_in_region` | programming error | `ValueError` (ours) |
 | t not positive and finite, or so small that the step count exceeds an int; `signed_area` given more than one loop | programming error | `ValueError` (ours) |
 
 ## Algorithms and design inputs

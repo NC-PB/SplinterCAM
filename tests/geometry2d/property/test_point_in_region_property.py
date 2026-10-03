@@ -186,3 +186,81 @@ def test_the_tolerance_layer_is_on_within_eps_len(  # noqa: PLR0913 (Hypothesis 
     elif distance > eps * (1 + 1e-9):
         assert found is exact
         assert found is not ON
+
+
+@pytest.mark.req("REQ-G2D-150")
+@shared_ctx
+@given(
+    r0=st.floats(2e-6, 1e-3),
+    radial=st.floats(-1e-6, 1e-6),
+    behind=st.floats(0.0, 1.0),
+    sweep=st.floats(1e-9, 1e-3),
+    samples=st.lists(st.tuples(st.floats(0.0, 1.0), st.floats(0.0, 1.0)), min_size=1, max_size=20),
+)
+def test_both_orientations_agree_for_a_short_arc_with_p1_behind_and_off(  # noqa: PLR0913
+    ctx: Context,
+    r0: float,
+    radial: float,
+    behind: float,
+    sweep: float,
+    samples: list[tuple[float, float]],
+) -> None:
+    # Spec review of step 8b: a short arc whose P1 lies both off the circle (REQ-G2D-042) and
+    # just behind P0 (REQ-G2D-043) draws the wedge between P1's and P0's rays on |P0 - C| one
+    # way and on |P1 - C| the other. Where both orientations are valid input, points in the band
+    # between the radii must get one answer.
+    r1 = r0 + radial
+    over = behind * ctx.tolerances.length_eps_mm / max(r0, r1)
+    p0, p1 = (r0, 0.0), (r1 * math.cos(-over), r1 * math.sin(-over))
+    tail = [(p1[0], -1.0), (-1.0, -1.0), (-1.0, 0.0)]
+    corners = [p1, *tail, p0]
+    rows = [[*p0, *p1, 0.0, 0.0, sweep]] + [
+        [*a, *b, math.nan, math.nan, 0.0] for a, b in zip(corners, corners[1:], strict=False)
+    ]
+    reversed_rows = [[x1, y1, x0, y0, cx, cy, -s] for x0, y0, x1, y1, cx, cy, s in rows[::-1]]
+    built = [
+        curve_rows(np.array(r), np.arange(len(r)), np.zeros(1, np.int64), ctx).value
+        for r in (rows, reversed_rows)
+    ]
+    assume(built[0] is not None and built[1] is not None)
+    forward, backward = built
+    assert forward is not None and backward is not None
+    low, high = min(r0, r1), max(r0, r1)
+    q = np.array(
+        [
+            (
+                (low + u * (high - low)) * math.cos(-v * over),
+                (low + u * (high - low)) * math.sin(-v * over),
+            )
+            for u, v in samples
+        ]
+    )
+    assert point_in_region(q, forward, ctx).tolist() == point_in_region(q, backward, ctx).tolist()
+
+
+@pytest.mark.req("REQ-G2D-150")
+@shared_ctx
+@given(
+    angle=st.integers(1, 2**20 - 1).map(lambda k: k * (math.pi / 2) / 2**20),
+    along=st.floats(0.05, 0.95),
+    offset=st.floats(0.9e-6, 1.1e-6),
+    inward=st.booleans(),
+)
+def test_both_orientations_agree_next_to_a_slanted_edge(
+    ctx: Context, angle: float, along: float, offset: float, inward: bool
+) -> None:
+    # A square of side 10 turned by `angle`: the foot a + t·(b - a) and b + t'·(a - b) round
+    # differently on a slanted edge, so a point about eps_len from it must not depend on which
+    # end the edge starts at (spec review of step 8b).
+    c, s = math.cos(angle), math.sin(angle)
+    corners = [
+        (10 * (c * x - s * y), 10 * (s * x + c * y)) for x, y in [(0, 0), (1, 0), (1, 1), (0, 1)]
+    ]
+    (ax, ay), (bx, by) = corners[0], corners[1]
+    normal = (s, -c) if not inward else (-s, c)  # (s, -c) points out of the square
+    q = np.array(
+        [[ax + along * (bx - ax) + offset * normal[0], ay + along * (by - ay) + offset * normal[1]]]
+    )
+    forward = point_in_region(q, polygon(corners, ctx), ctx)
+    backward = point_in_region(q, polygon(corners[::-1], ctx), ctx)
+    assert forward.tolist() == backward.tolist()
