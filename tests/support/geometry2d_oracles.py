@@ -21,8 +21,7 @@ def sign(value: Fraction) -> int:
 
 
 def orient2d(a: P, b: P, c: P) -> int:
-    ax, ay, bx, by, cx, cy = (Fraction(v) for v in (*a, *b, *c))
-    return sign((ax - cx) * (by - cy) - (ay - cy) * (bx - cx))
+    return sign(twice_area(a, b, c))
 
 
 def incircle(a: P, b: P, c: P, d: P) -> int:
@@ -43,3 +42,26 @@ def squared_distance(p: P, q: P) -> Fraction:
 def in_arc_circle(q: P, centre: P, p0: P) -> int:
     """+1 inside the circle about `centre` through `p0`, 0 on it, -1 outside (REQ-G2D-022)."""
     return sign(squared_distance(p0, centre) - squared_distance(q, centre))
+
+
+def circumcentre(p1: P, p2: P, p3: P) -> tuple[Fraction, Fraction]:
+    """The exact centre of the circle through three non-collinear points (SRC-032, p. 359)."""
+    x1, y1, x2, y2, x3, y3 = (Fraction(v) for v in (*p1, *p2, *p3))
+    ux, uy, vx, vy = x1 - x3, y1 - y3, x2 - x3, y2 - y3
+    d = ux * vy - uy * vx
+    u2, v2 = ux * ux + uy * uy, vx * vx + vy * vy
+    return x3 - (uy * v2 - vy * u2) / (2 * d), y3 + (ux * v2 - vx * u2) / (2 * d)
+
+
+def line_foot(q: P, p0: P, p1: P) -> tuple[Fraction, Fraction, Fraction]:
+    """t and the foot of the clamped perpendicular from q onto the segment p0p1, exactly."""
+    qx, qy, ax, ay, bx, by = (Fraction(v) for v in (*q, *p0, *p1))
+    dx, dy = bx - ax, by - ay
+    t = min(max(((qx - ax) * dx + (qy - ay) * dy) / (dx * dx + dy * dy), Fraction(0)), Fraction(1))
+    return t, ax + t * dx, ay + t * dy
+
+
+def twice_area(a: P, b: P, c: P) -> Fraction:
+    """orient2d(a, b, c) as an exact value: twice the signed area of the triangle."""
+    ax, ay, bx, by, cx, cy = (Fraction(v) for v in (*a, *b, *c))
+    return (ax - cx) * (by - cy) - (ay - cy) * (bx - cx)

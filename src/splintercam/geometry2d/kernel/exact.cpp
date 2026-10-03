@@ -5,12 +5,15 @@
 // expanded exactly from two_diff and two_product (Theorems 7, 17, 18) and the terms are summed by
 // predicates.c's fast_expansion_sum_zeroelim (Theorem 13), whose largest component has the sign of
 // the exact sum. Exact within the input range of the SPEC's precondition (SRC-032, p. 308).
+// circles_through: the circle through three points (research 01; SRC-032, p. 359), decided by
+// orient2d's exact sign.
 #include "exact.hpp"
 
 #include "shewchuk.hpp"
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 
 namespace splintercam::geometry2d {
 namespace {
@@ -163,6 +166,41 @@ void vertical_extent_signs(const HeightQueries& in, Signs out) {
         const Expansion radius =
             sum(squared_difference(px, cx, true), squared_difference(py, cy, true));
         sign = sign_of(sum(height, radius));
+        ++row;
+    }
+}
+
+void circles_through(const std::array<Points, 3>& p123, double length_eps_mm,
+                     const CircleOut& out) {
+    std::size_t row = 0;
+    for (std::int8_t& found : out.found) {
+        auto p1 = point(std::get<0>(p123), row);
+        auto p2 = point(std::get<1>(p123), row);
+        auto p3 = point(std::get<2>(p123), row);
+        // D's sign is exact; D = 0 also when p1 = p3, so nothing below divides by a zero chord.
+        const double d = orient2d(p1.data(), p2.data(), p3.data());
+        const auto [x1, y1] = p1;
+        const auto [x2, y2] = p2;
+        const auto [x3, y3] = p3;
+        const double ux = x1 - x3;
+        const double uy = y1 - y3;
+        // |D| / |p3 − p1| is p2's distance from the line p1p3, compared without a division; false
+        // when D = 0. Lengths are sqrt of a sum of squares, correctly rounded on every platform
+        // (D-055 tier 1), as in arcs.cpp.
+        found =
+            static_cast<std::int8_t>(std::abs(d) > length_eps_mm * std::sqrt(ux * ux + uy * uy));
+        if (found != 0) {
+            const double vx = x2 - x3;
+            const double vy = y2 - y3;
+            const double u2 = ux * ux + uy * uy;
+            const double v2 = vx * vx + vy * vy;
+            const double cx = x3 - (uy * v2 - vy * u2) / (d + d);
+            const double cy = y3 + (ux * v2 - vx * u2) / (d + d);
+            std::ranges::copy(std::array{cx, cy}, out.centres.subspan(2 * row, 2).begin());
+            const double rx = x1 - cx;
+            const double ry = y1 - cy;
+            out.radii.subspan(row, 1).front() = std::sqrt(rx * rx + ry * ry);
+        }
         ++row;
     }
 }

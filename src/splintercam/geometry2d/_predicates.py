@@ -10,7 +10,7 @@ from splintercam import _kernels
 from splintercam.foundation import Context
 
 
-def _rows(*arrays: ArrayLike) -> list[NDArray[np.float64]]:
+def point_rows(*arrays: ArrayLike) -> list[NDArray[np.float64]]:
     """C-contiguous float64 copies of (n, 2) point arrays with one n (REQ-G2D-201)."""
     copies = [np.array(a, dtype=np.float64, order="C", copy=True) for a in arrays]
     shape = copies[0].shape
@@ -29,7 +29,7 @@ def orient2d(a: ArrayLike, b: ArrayLike, c: ArrayLike) -> NDArray[np.int8]:
 
     Implements: REQ-G2D-007 to 010, REQ-G2D-021, REQ-G2D-024.
     """
-    pa, pb, pc = _rows(a, b, c)
+    pa, pb, pc = point_rows(a, b, c)
     out = np.empty(pa.shape[0], dtype=np.int8)
     _kernels.geometry2d.orient2d_signs(pa, pb, pc, out)
     return out
@@ -41,7 +41,7 @@ def incircle(a: ArrayLike, b: ArrayLike, c: ArrayLike, d: ArrayLike) -> NDArray[
 
     Implements: REQ-G2D-011, REQ-G2D-021, REQ-G2D-024.
     """
-    pa, pb, pc, pd = _rows(a, b, c, d)
+    pa, pb, pc, pd = point_rows(a, b, c, d)
     out = np.empty(pa.shape[0], dtype=np.int8)
     _kernels.geometry2d.incircle_signs(pa, pb, pc, pd, out)
     return out
@@ -53,7 +53,7 @@ def in_arc_circle(q: ArrayLike, centre: ArrayLike, p0: ArrayLike) -> NDArray[np.
 
     Implements: REQ-G2D-022, REQ-G2D-024.
     """
-    pq, pc, p0_rows = _rows(q, centre, p0)
+    pq, pc, p0_rows = point_rows(q, centre, p0)
     out = np.empty(pq.shape[0], dtype=np.int8)
     _kernels.geometry2d.in_arc_circle_signs(pq, pc, p0_rows, out)
     return out

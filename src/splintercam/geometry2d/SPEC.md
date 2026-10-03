@@ -147,15 +147,15 @@ Release 1 kernels are single-threaded (Peter, 2026-10-02). Decisions and counts 
 
 | ID | Requirement (EARS) | Verified by | Status |
 | --- | --- | --- | --- |
-| REQ-G2D-091 | WHERE the curve is a line with \|P_1 − P_0\| > 0, THE `closest_point` function SHALL return the clamped foot of research 01, its t and its distance. | feet inside, before P_0 and beyond P_1 | Released |
+| REQ-G2D-091 | WHERE the curve is a line with \|P_1 − P_0\| > 0, THE `closest_point` function SHALL return the clamped foot of research 01, its t and its distance. | feet inside, before P_0 and beyond P_1; property against exact rationals | Released |
 | REQ-G2D-092 | WHEN a line has zero length, THE `closest_point` function SHALL return P_0 and \|Q − P_0\|. | test 17 | Released |
-| REQ-G2D-093 | WHEN Q ≠ C and the direction of Q − C lies in the arc's sweep, decided by exact signs (Peter, 2026-10-02), THE `closest_point` function SHALL return C + r·(Q − C)/\|Q − C\| and \|\|Q − C\| − r\|. | test 17 | Released |
-| REQ-G2D-094 | WHEN the direction of Q − C lies outside the sweep, THE `closest_point` function SHALL return the nearer end point, P_0 when the squared distances are equal (ours). | test 17 | Released |
+| REQ-G2D-093 | WHEN Q ≠ C and the direction of Q − C lies in the arc's sweep, decided by exact signs (Peter, 2026-10-02), THE `closest_point` function SHALL return C + r·(Q − C)/\|Q − C\| and \|\|Q − C\| − r\|. | test 17; the exact sweep edge; property against sampled arc points | Released |
+| REQ-G2D-094 | WHEN the direction of Q − C lies outside the sweep, THE `closest_point` function SHALL return the nearer end point, P_0 when the squared distances are equal (ours). | test 17; property against sampled arc points | Released |
 | REQ-G2D-096 | WHEN Q = C, THE `closest_point` function SHALL return P_0 and r without dividing by \|Q − C\|. | test 17 | Released |
-| REQ-G2D-097 | WHEN `circle_through(P_1, P_2, P_3)` finds a circle, THE function SHALL return the centre of research 01 with D the value `predicates.c`'s orient2d returns, whose sign is exact. | test 9 | Released |
+| REQ-G2D-097 | WHEN `circle_through(P_1, P_2, P_3)` finds a circle, THE function SHALL return the centre of research 01 with D the value `predicates.c`'s orient2d returns, whose sign is exact. | test 9; property against exact rationals | Released |
 | REQ-G2D-098 | IF orient2d(P_1, P_2, P_3) is 0, THEN THE `circle_through` function SHALL return no circle. | test 9 | Released |
 | REQ-G2D-099 | IF \|orient2d(P_1, P_3, P_2)\| / \|P_3 − P_1\| ≤ eps_len, THEN THE `circle_through` function SHALL return no circle, decided before any division by D. | test 9 | Released |
-| REQ-G2D-100 | IF P_1 = P_3, THEN THE `circle_through` function SHALL return no circle without dividing by \|P_3 − P_1\|. | new test | Released |
+| REQ-G2D-100 | IF P_1 = P_3, THEN THE `circle_through` function SHALL return no circle without dividing by \|P_3 − P_1\|. | P_1 = P_3 gives `None`; review: the kernel divides only when D ≠ 0 | Released |
 | REQ-G2D-101 | THE `circle_through` function SHALL apply no radius or chord limit of its own. | test 9 | Released |
 | REQ-G2D-213 | THE `bounding_box` function SHALL give a line the box of its end points. | new test | Released |
 | REQ-G2D-214 | THE `bounding_box` function SHALL give an arc the box of its end points and of the points at the angles 0, π/2, π and 3π/2 about C that lie in its sweep, decided by exact signs, all four for a full circle; where the octants of the end points contradict the sweep within the tolerance of REQ-G2D-043, the sweep governs (ours). | test 18 | Released |
@@ -231,7 +231,7 @@ The budget is foundation's (REQ-FND-009). Slice 1 spends none of it: `flatten` t
 | Zero-width spike | vertex dropped | `CLEANUP_SPIKE` (info), one per spike |
 | `cleanup` keeps fewer than 3 vertices | those indices; the area test reports the loop | none (ours) |
 | Collinear points, P_2 within eps_len of P_1P_3, or P_1 = P_3, in `circle_through` | `None` | none |
-| A NaN or infinite point given to an exact predicate | programming error | `ValueError` (ours) |
+| A NaN or infinite point given to an exact predicate, `circle_through` or `closest_point` | programming error | `ValueError` (ours) |
 | t not positive and finite, or so small that the step count exceeds an int; `signed_area` given more than one loop | programming error | `ValueError` (ours) |
 
 ## Algorithms and design inputs

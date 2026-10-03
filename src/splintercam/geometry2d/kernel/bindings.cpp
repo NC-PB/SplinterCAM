@@ -98,6 +98,20 @@ void bind_exact(nb::module_& m) {
         },
         nb::arg("q_y"), nb::arg("centre"), nb::arg("p0"), nb::arg("out"),
         "Write the exact sign of (q_y - c_y)^2 - |p0 - c|^2 per row (REQ-G2D-023).");
+    m.def(
+        "circles_through",
+        [](const PointRows& p1, const PointRows& p2, const PointRows& p3, double length_eps_mm,
+           const PointsOut& centres, const DoubleOut& radii, const Int8Out& found) {
+            check_rows(p1.shape(0), {p2.shape(0), p3.shape(0), centres.shape(0), radii.shape(0),
+                                     found.shape(0)});
+            circles_through({points(p1), points(p2), points(p3)}, length_eps_mm,
+                            {.centres = {centres.data(), centres.size()},
+                             .radii = {radii.data(), radii.size()},
+                             .found = view(found)});
+        },
+        nb::arg("p1"), nb::arg("p2"), nb::arg("p3"), nb::arg("length_eps_mm"), nb::arg("centres"),
+        nb::arg("radii"), nb::arg("found"),
+        "Write per row the circle through p1, p2, p3, or found = 0 (REQ-G2D-097 to 101).");
 }
 
 } // namespace
