@@ -1,12 +1,50 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Direction tests (research 01, Tolerances); the exact predicates follow in plan 0003, step 5."""
+"""Exact predicates and direction tests (research 01, Vectors and exact signs, and Tolerances)."""
 
 import math
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from splintercam import _kernels
 from splintercam.foundation import Context
+
+
+def _rows(*arrays: ArrayLike) -> list[NDArray[np.float64]]:
+    """C-contiguous float64 copies of (n, 2) point arrays with one n (REQ-G2D-201)."""
+    copies = [np.array(a, dtype=np.float64, order="C", copy=True) for a in arrays]
+    shape = copies[0].shape
+    if len(shape) != 2 or shape[1] != 2 or any(c.shape != shape for c in copies):
+        raise ValueError(
+            f"points must be (n, 2) arrays of one shape, got {[c.shape for c in copies]}"
+        )
+    if not all(np.isfinite(c).all() for c in copies):
+        raise ValueError("points must be finite: a NaN would read as sign 0")
+    return copies
+
+
+def orient2d(a: ArrayLike, b: ArrayLike, c: ArrayLike) -> NDArray[np.int8]:
+    """Per row the exact sign of orient2d(a, b, c): +1 when c lies left of the directed line
+    a → b, -1 right, 0 collinear (Shewchuk's predicates.c, SRC-032). No tolerance, no Context.
+
+    Implements: REQ-G2D-007 to 010, REQ-G2D-021, REQ-G2D-024.
+    """
+    pa, pb, pc = _rows(a, b, c)
+    out = np.empty(pa.shape[0], dtype=np.int8)
+    _kernels.geometry2d.orient2d_signs(pa, pb, pc, out)
+    return out
+
+
+def incircle(a: ArrayLike, b: ArrayLike, c: ArrayLike, d: ArrayLike) -> NDArray[np.int8]:
+    """Per row the exact sign of incircle(a, b, c, d): +1 when d lies inside the circle through
+    a, b, c given counter-clockwise, -1 outside, 0 cocircular; the opposite for clockwise.
+
+    Implements: REQ-G2D-011, REQ-G2D-021, REQ-G2D-024.
+    """
+    pa, pb, pc, pd = _rows(a, b, c, d)
+    out = np.empty(pa.shape[0], dtype=np.int8)
+    _kernels.geometry2d.incircle_signs(pa, pb, pc, pd, out)
+    return out
 
 
 def are_parallel(a: ArrayLike, b: ArrayLike, ctx: Context) -> NDArray[np.bool_]:

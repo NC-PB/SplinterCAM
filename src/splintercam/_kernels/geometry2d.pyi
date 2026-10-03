@@ -6,6 +6,18 @@ import numpy
 from numpy.typing import NDArray
 
 
+def two_sums(a: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu', writable=False)], b: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu', writable=False)], x: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu')], y: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu')]) -> None:
+    """Write x + y = a + b exactly (REQ-G2D-016)."""
+
+def two_products(a: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu', writable=False)], b: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu', writable=False)], x: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu')], y: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu')]) -> None:
+    """Write x + y = a * b exactly (REQ-G2D-016)."""
+
+def orient2d_signs(a: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], b: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], c: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], out: Annotated[NDArray[numpy.int8], dict(shape=(None,), order='C', device='cpu')]) -> None:
+    """Write the exact sign of orient2d per row (REQ-G2D-007)."""
+
+def incircle_signs(a: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], b: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], c: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], d: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], out: Annotated[NDArray[numpy.int8], dict(shape=(None,), order='C', device='cpu')]) -> None:
+    """Write the exact sign of incircle per row (REQ-G2D-011)."""
+
 def check_arcs(rows: Annotated[NDArray[numpy.float64], dict(shape=(None, 7), order='C', device='cpu', writable=False)], length_eps_mm: float, out: Annotated[NDArray[numpy.int8], dict(shape=(None,), order='C', device='cpu')]) -> None:
     """
     Write per curve row 0 (consistent), 1 (P1 off the circle) or 2 (sweep does not fit).

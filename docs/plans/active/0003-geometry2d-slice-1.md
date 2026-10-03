@@ -23,7 +23,8 @@
 - [x] 2. **Grid unit, lines and arcs.** First commit: `grid_unit_mm` on `ToleranceSet` (REQ-FND-001). Then the `geometry2d` package with `Line`, `Arc`, `make_line`, `make_arc` and `are_parallel`, its first kernel (`arcs.cpp`: the radial and angle checks; `angle.cpp`: the arctangent from basic operations), the module `AGENTS.md` and glossary terms. REQ-G2D-003, 018 (the arctangent), 025, 027, 035, 037 to 043, 045, 047 to 049. Size: about 250 + 350.
 - [x] 3. **Curve rows and bulges.** `CurveRows`, `curve_rows`, `arc_from_bulge`, `bulges_from_arc`. REQ-G2D-044, 050 to 053, 188 to 197, 201, 203. Size: about 180 + 300.
 - [x] 4. **Flattening and bounding boxes.** `flatten` (`flatten.cpp`), `bounding_box`, the step limit π/2 as a declared parameter in foundation's defaults file (a foundation SPEC change), the shared exact test of which axis directions lie in a sweep. REQ-G2D-102 to 113, 126, 213, 214, 230; the tests of REQ-G2D-231 and 232 start here and grow with each step. Size: about 220 + 300.
-- [ ] 5. **Exact predicates** (needs `predicates.c` in `kernel/vendor/`). The C build of the vendored file through our own wrapper, strict float flags, `exactinit` at load; `orient2d`, `incircle`, `in_arc_circle`, the (q_y − c_y)² comparison, `two_sum`, `two_product`; the build guard. REQ-G2D-005 to 011, 013 to 018, 021 to 024. Size: about 300 + 350.
+- [x] 5. **Exact predicates** (`predicates.c` vendored by Peter, pull request 15). The C build of the vendored file through our own wrapper, strict float flags, `exactinit` at load; `orient2d`, `incircle`, `two_sum`, `two_product`; the build guard. REQ-G2D-005 to 011, 013 to 018, 021, 024. Size: about 300 + 350.
+- [ ] 5b. **Arc predicates.** `in_arc_circle` and the (q_y − c_y)² comparison by expansion arithmetic, from the branch `step-5b-draft` (reviewed with step 5). REQ-G2D-022, 023. Size: about 110 + 120.
 - [ ] 6. **Distances and circles.** `closest_point`, `circle_through`. REQ-G2D-091 to 101. Size: about 150 + 250.
 - [ ] 7. **Area and orientation.** `signed_area` (`area.cpp`), with the exact sum. REQ-G2D-001, 002, 128 to 133. Size: about 180 + 250.
 - [ ] 8. **Point in region.** `point_in_region`, `point_in_region_exact` (`region.cpp`). REQ-G2D-134 to 150. Size: about 350 + 350.
@@ -37,12 +38,24 @@ Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
 - 2026-10-02: decisions and counts that need an angle (the arc angle check, the flattening count) use our own arctangent from IEEE basic operations in the kernel, so they are the same on every platform, as D-055 tier 1 and REQ-G2D-232's equal counts need (spec review of step 1). Sign decisions use exact predicates or exact comparisons of doubles (Peter's answer 5). Constructions use the platform's libm in C++, never NumPy's float64 ufuncs, which may pick SIMD code by CPU (tier 2).
 - 2026-10-02: a bulge whose sagitta is at most eps_len gives a line (ours): such an arc lies within eps_len of its chord, and its far centre would fail the radial check by rounding alone.
 - 2026-10-02: requirements moved between steps, slice 1 unchanged: REQ-G2D-044 to step 3 (no arc is built from end points before the bulge conversion), 201 and 203 to step 3 (the first arrays from callers reach the kernel through `curve_rows`; step 2's kernel only sees arrays its own module builds), 230 to step 4 (its parameter, the step limit, serves flattening). The test audit of step 2 asked for this to be recorded.
+- 2026-10-03: the sanitizer build turns ASan off for `kernel/shewchuk.c` alone (pending Peter's approval): `predicates.c`'s expansion sums read one element past an input array (`enow = e[++eindex]`) and use it only while `eindex < elen`; ASan reported it as a stack-buffer-overflow in `orient2dadapt` on CI. The vendored file stays unchanged; UBSan stays on.
+- 2026-10-03: step 5 split in two, 5 and 5b: with the review fixes it came to about 440 added lines of non-test code, over the limit of 400 per pull request (docs/dev/12, section 3); the arc predicates go next, from `main` after this step's merge.
+- 2026-10-03: the predicates' input range is a precondition, not a check: SRC-032 guarantees exact signs only for nonzero inputs with exponents in [−142, 201] (p. 308), and the first property run found 5e-324 (a nudged 0) giving the wrong sign, in Shewchuk's orient2d as in ours. Real coordinates in mm never come near 1.8e-43; the property generators stay inside the range with `assume`, so their oracle comparison stays strict. Refusing or flushing such values would need a decision (Peter).
 - 2026-10-02: the largest flattening step π/2 is an entry of foundation's `tolerance_defaults.toml` (REQ-G2D-230), so geometry2d reads no file of its own (docs/dev/03, rule 5).
 
 ## Progress log
 
 <!-- Newest first. What was done, what tools/check reported, what is next. At most about 30 lines per session;
      numbers go into tables. Above 300 lines, older entries move to an archive file next to the plan. -->
+
+### 2026-10-03, session 1, step 5
+
+- Peter vendored `predicates.c` (pull request 15, ADR 0009 accepted, NOTICE entry); SHA-256 f8662c3f…92029, in the REUSE sidecar `kernel/vendor/predicates.c.license`. Its header confirms the public-domain dedication and `exactinit()`; the quirks are `<sys/time.h>` and `random()` (test-data generators only) and old-style definitions; there is no x87 control-word code.
+- Done: CMake builds C for the wrapper `kernel/shewchuk.c` (C99 with extensions, warnings off for that file only, `-ffp-contract=off -fno-fast-math` or `/fp:precise`, hidden symbols; on MSVC an empty `<sys/time.h>` from `cmake/msvc-shim/` and `random` as `rand`); `kernel/exact.cpp`: `two_sum`, `two_product`, orient2d and incircle through `predicates.c`; `exactinit()` when the module loads. Python: `orient2d`, `incircle`. Tests first: note test 1's 65 536-point grid, as the first call in a fresh interpreter too; notes tests 2 and 4; the build guard on all 10^6 pairs against an independent NumPy reference, uniform and spread; properties against exact rationals on nearly collinear and nearly cocircular input.
+- Reviews: simplifier (cuts taken: the Python wrappers of `two_sum` and `two_product`, helpers with one caller, comments); test-auditor (fixed: the build guard exact on every pair, incircle drawn near its circle; the input-range `assume` judged a domain restriction, not a weakening, for Peter to confirm); spec-reviewer (no blocker, the expansion arithmetic checked; fixed: a NaN or infinite point read as sign 0, now `ValueError`; the 64-bit-only build and the C flags' coverage stated). The arc predicates, reviewed here too, moved to step 5b.
+- CI on pull request 16: the sanitizer found `predicates.c`'s one-past-end read (ASan off for that code, pending Peter's approval); Windows needed the vendored C code in a C-only library target of its own, because the Visual Studio generators do not apply per-language options and include directories in a mixed C and C++ target.
+- `tools/check`: PASS (11 of 14 steps). Property tests pass with 10 000 cases each.
+- Next step: 6.
 
 ### 2026-10-02, repository health check (Peter's request)
 
@@ -100,4 +113,3 @@ Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
 
 ## Blockers
 
-- Step 5: `predicates.c` is not in the repository, and this environment cannot download it.

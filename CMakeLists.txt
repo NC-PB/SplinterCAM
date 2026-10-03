@@ -3,7 +3,8 @@
 # (ADR 0004; docs/dev/02 and 04). scikit-build-core runs it from pyproject.toml.
 
 cmake_minimum_required(VERSION 3.28...4.1)
-project(splintercam_kernels LANGUAGES CXX)
+# C only for Shewchuk's predicates.c, vendored unchanged (ADR 0009).
+project(splintercam_kernels LANGUAGES C CXX)
 
 # C++20 features plus std::expected, which MSVC, GCC and Clang provide only in C++23 mode
 # (docs/dev/04; decision of 2026-09-24/26 in plan 0001).
@@ -76,8 +77,10 @@ endif()
 # Each folder's bindings.cpp goes into the extension; all other kernel files go into a library that
 # has neither nanobind nor Python on its include path, so only bindings.cpp can include nanobind
 # (docs/dev/03, rule 3).
-file(GLOB_RECURSE SPLINTERCAM_KERNEL_SOURCES CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/splintercam/*.cpp")
-list(FILTER SPLINTERCAM_KERNEL_SOURCES INCLUDE REGEX "/kernel/[^/]+\\.cpp$")
+file(GLOB_RECURSE SPLINTERCAM_KERNEL_SOURCES CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/splintercam/*.cpp"
+     "${PROJECT_SOURCE_DIR}/src/splintercam/*.c")
+# Vendored code in kernel/vendor/ is not listed: a wrapper in kernel/ includes it (ADR 0009).
+list(FILTER SPLINTERCAM_KERNEL_SOURCES INCLUDE REGEX "/kernel/[^/]+\\.c(pp)?$")
 set(SPLINTERCAM_BINDING_SOURCES ${SPLINTERCAM_KERNEL_SOURCES})
 list(FILTER SPLINTERCAM_BINDING_SOURCES INCLUDE REGEX "/bindings\\.cpp$")
 list(FILTER SPLINTERCAM_KERNEL_SOURCES EXCLUDE REGEX "/bindings\\.cpp$")
@@ -107,12 +110,43 @@ nanobind_add_module(_kernels NOMINSIZE
                     "${PROJECT_BINARY_DIR}/generated/kernels_bindings.cpp" ${SPLINTERCAM_BINDING_SOURCES})
 target_compile_options(_kernels PRIVATE ${SPLINTERCAM_CXX_OPTIONS})
 
+# The C sources are wrappers of vendored files (ADR 0009), in a C-only library of their own: the
+# Visual Studio generators do not apply $<COMPILE_LANGUAGE> options per language in a target that
+# mixes C and C++, so one shared target gave predicates.c our C++ warnings as errors.
+set(SPLINTERCAM_KERNEL_C_SOURCES ${SPLINTERCAM_KERNEL_SOURCES})
+list(FILTER SPLINTERCAM_KERNEL_C_SOURCES INCLUDE REGEX "\\.c$")
+list(FILTER SPLINTERCAM_KERNEL_SOURCES EXCLUDE REGEX "\\.c$")
+
 if(SPLINTERCAM_KERNEL_SOURCES)
   add_library(splintercam_kernel_code STATIC ${SPLINTERCAM_KERNEL_SOURCES})
   set_target_properties(splintercam_kernel_code PROPERTIES POSITION_INDEPENDENT_CODE ON)
   target_compile_options(splintercam_kernel_code PRIVATE ${SPLINTERCAM_CXX_OPTIONS})
   target_link_libraries(splintercam_kernel_code PRIVATE Clipper2)
   target_link_libraries(_kernels PRIVATE splintercam_kernel_code)
+endif()
+
+if(SPLINTERCAM_KERNEL_C_SOURCES)
+  # C99, warnings off for this third-party code only, the strict float flags of D-097, hidden
+  # symbols; an empty <sys/time.h> for MSVC from cmake/msvc-shim/ (only predicates.c includes it).
+  # 64-bit targets only (x86-64 SSE2, ARM64), so no x87 extended precision (REQ-G2D-015).
+  add_library(splintercam_vendored_c STATIC ${SPLINTERCAM_KERNEL_C_SOURCES})
+  set_target_properties(splintercam_vendored_c PROPERTIES POSITION_INDEPENDENT_CODE ON
+                        C_STANDARD 99 C_EXTENSIONS ON C_VISIBILITY_PRESET hidden)
+  if(MSVC)
+    target_compile_options(splintercam_vendored_c PRIVATE /w /fp:precise)
+    target_include_directories(splintercam_vendored_c PRIVATE ${PROJECT_SOURCE_DIR}/cmake/msvc-shim)
+  else()
+    target_compile_options(splintercam_vendored_c PRIVATE -w -ffp-contract=off -fno-fast-math)
+  endif()
+  # ASan off for the vendored C code only (pending Peter's approval, plan 0003, step 5): its
+  # expansion sums read one element past the end of an input array (predicates.c, enow =
+  # e[++eindex] in fast_expansion_sum_zeroelim and its kin) and use that value only while
+  # eindex < elen, so results are unaffected, but ASan reports a stack-buffer-overflow in
+  # orient2dadapt. The file stays unchanged (ADR 0009); UBSan stays on for it.
+  if(SPLINTERCAM_SANITIZE)
+    target_compile_options(splintercam_vendored_c PRIVATE -fno-sanitize=address)
+  endif()
+  target_link_libraries(splintercam_kernel_code PRIVATE splintercam_vendored_c)
 endif()
 
 install(TARGETS _kernels LIBRARY DESTINATION splintercam COMPONENT splintercam)

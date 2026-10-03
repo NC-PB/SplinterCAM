@@ -15,6 +15,7 @@ Layer 1. Implements docs/research/01 (slice 1; the rest is under "Later parts" i
 
 ## Local rules
 
+- `kernel/vendor/predicates.c` is third-party and stays unchanged (ADR 0009): build quirks go into `kernel/shewchuk.c` and `CMakeLists.txt`.
 - Only this module's Python code calls `splintercam._kernels.geometry2d`. Kernel outputs are arrays the Python side allocates and passes in.
 - Loops cross module boundaries as curve rows; single curves as `Line` and `Arc`.
 - Transcendental functions for constructions run in C++ with the platform's libm, never in NumPy, whose float64 ufuncs may pick SIMD code by CPU (D-055, tier 2).

@@ -68,6 +68,7 @@ def cleanup(points, ctx) -> Result[NDArray[np.int64]]: ...                    # 
 - `make_arc` applies its rules in this order (ours, the draft's proposal): non-finite values, sweep range, r ≤ eps_len, nearly closed, radial check, angle check. 2π is the double nearest 2π (ours).
 - `closest_point`'s parameter is t ∈ [0, 1] on a line and the angle from P_0 in the sense of φ on an arc (ours). `circle_through`'s radius is |P_1 − C| (ours).
 - `cleanup` takes a closed polyline (n, 2) and returns the indices of the vertices it keeps, in order, so callers carry source IDs along (ours).
+- The exact predicates are exact for coordinates that are 0 or have a magnitude in [2^−142, 2^201], about 1.8e-43 to 3e60 mm: SRC-032 (p. 308) proves this range for orient2d and incircle, and our expansions of the arc predicates stay inside it (ours). A precondition, not checked; outside it products underflow or overflow. A NaN or infinite coordinate is a programming error, `ValueError` (ours), since it would read as sign 0.
 - Internal entries for tests, not in `__all__`: `two_sum`, `two_product` (exact.cpp) and `point_in_region_exact`, the exact layer alone.
 
 ## Requirements
@@ -86,7 +87,7 @@ def cleanup(points, ctx) -> Result[NDArray[np.int64]]: ...                    # 
 | REQ-G2D-010 | WHEN the arguments are shifted cyclically, THE `orient2d` predicate SHALL return the same sign. | property: note test 3 | Released |
 | REQ-G2D-011 | THE `incircle` predicate SHALL return the exact sign of the incircle determinant: +1 when d lies inside the circle through a, b, c given CCW, −1 outside, 0 cocircular, the opposite for CW. | note test 4 | Released |
 | REQ-G2D-013 | THE geometry2d kernel SHALL call the initialisation routine of `predicates.c` once when the kernel module loads. | note test 1 as the first call in a fresh interpreter; review | Released |
-| REQ-G2D-014 | THE build SHALL compile `predicates.c` and the geometry2d kernel without floating-point contraction, fast-math or reassociation: `-ffp-contract=off` and `-fno-fast-math` on GCC and Clang, `/fp:precise` on MSVC from Visual Studio 2022 (17.0), which no longer contracts under it (D-097). | note test 7 in every build; review of `CMakeLists.txt` | Released |
+| REQ-G2D-014 | THE build SHALL compile `predicates.c` and the geometry2d kernel without floating-point contraction, fast-math or reassociation: `-ffp-contract=off` and `-fno-fast-math` on GCC and Clang, `/fp:precise` on MSVC from Visual Studio 2022 (17.0), which no longer contracts under it (D-097). | note test 7 in every build (the C++ arithmetic); note test 1's grid, which reaches stages B to D of `predicates.c` (the C flags); review of `CMakeLists.txt` | Released |
 | REQ-G2D-015 | THE geometry2d kernel SHALL do its exact arithmetic in IEEE 754 binary64, round to nearest even, without extended-precision intermediates. | note test 7 | Released |
 | REQ-G2D-016 | THE kernel's `two_sum` and `two_product` SHALL return a pair (x, y) with x + y equal to a + b, or a·b, exactly. | property: note test 7 | Released |
 | REQ-G2D-017 | THE continuous integration SHALL run the build guard (note test 7) in every configuration that builds the kernel. | review of `check.yml` and `sanitize.yml` | Released |
@@ -96,7 +97,7 @@ def cleanup(points, ctx) -> Result[NDArray[np.int64]]: ...                    # 
 | REQ-G2D-020 | WHEN `cleanup` takes sign decisions, THE function SHALL first merge vertices within eps_len and then apply the exact predicates to the merged vertices (D-097). | test 12 | Released |
 | REQ-G2D-021 | THE exact predicates SHALL take no tolerance and compare only with zero. | note test 1 (offsets of 2^−53); test 2 | Released |
 | REQ-G2D-022 | THE `in_arc_circle(q, c, p0)` predicate SHALL return the exact sign of \|p0 − c\|² − \|q − c\|²: +1 inside the circle, 0 on it, −1 outside (Peter, 2026-10-02). | test 2, exact rationals as oracle | Released |
-| REQ-G2D-023 | THE geometry2d kernel SHALL decide the sign of (q_y − c_y)² − \|p0 − c\|² exactly, so point in region compares q_y with c_y ± r without computing it. | test 6; property against exact rationals | Released |
+| REQ-G2D-023 | THE geometry2d kernel SHALL decide the sign of (q_y − c_y)² − \|p0 − c\|² exactly, so point in region compares q_y with c_y ± r without computing it (kernel `vertical_extent_signs`, used by `point_in_region`). | test 6; property against exact rationals | Released |
 | REQ-G2D-024 | THE predicates SHALL take arrays of points and return one sign per row, with no Python loop per point. | review; a batch gives the signs of single rows | Released |
 
 Release 1 kernels are single-threaded (Peter, 2026-10-02). Decisions and counts that need an angle (the arc angle check, the flattening count, the sweep of an arc) use our own arctangent, built from IEEE 754 basic operations in the kernel (`angle.cpp`), so they are the same on every platform (D-055, tier 1; ours). Constructed points (flattened vertices, centres) use the platform's libm and may differ in the last bit across platforms (tier 3).
@@ -230,6 +231,7 @@ The budget is foundation's (REQ-FND-009). Slice 1 spends none of it: `flatten` t
 | Zero-width spike | vertex dropped | `CLEANUP_SPIKE` (info), one per spike |
 | `cleanup` keeps fewer than 3 vertices | those indices; the area test reports the loop | none (ours) |
 | Collinear points, P_2 within eps_len of P_1P_3, or P_1 = P_3, in `circle_through` | `None` | none |
+| A NaN or infinite point given to an exact predicate | programming error | `ValueError` (ours) |
 | t not positive and finite, or so small that the step count exceeds an int; `signed_area` given more than one loop | programming error | `ValueError` (ours) |
 
 ## Algorithms and design inputs
@@ -275,6 +277,7 @@ No requirements; each line names the work and where its drafted requirements and
 ## Change log
 
 - 2026-10-02: drafted from research 01 (plan 0001, step 4), with review fixes.
+- 2026-10-03: plan 0003, step 5: the predicates' input range stated as a precondition (SRC-032, p. 308).
 - 2026-10-02: cut to slice 1 on Peter's answers (plan 0003, step 1): in_arc_circle +1 inside, arc rows give `ARC_INCONSISTENT`, predicates without a `Context`, D-055 tiers 2 and 3 (REQ-G2D-231, 232), single-threaded kernels; the draft's proposals taken for the other slice 1 questions and marked "(ours)"; everything else moved to Later parts. Merged into a neighbour: 095 into 094, 107 and 108 into 106, 111 into 110, 136 to 138 into 135, 140 to 142 into 139, 144 into 143, 195 into 194, 202 into 201, 208 into 207, 210 into 209. Stated in the Public interface instead: 225 to 227. Not needed: 228 (`flatten` expects validated curves). Slice 2: 229.
 
 [r01]: ../../../docs/research/01-foundations.md

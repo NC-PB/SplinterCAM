@@ -3,8 +3,10 @@
 // arrays the Python side allocates and passes in, so no kernel code owns Python memory.
 #include "angle.hpp"
 #include "arcs.hpp"
+#include "exact.hpp"
 #include "flatten.hpp"
 
+#include <initializer_list>
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <span>
@@ -18,6 +20,7 @@ using Rows = nb::ndarray<const double, nb::shape<-1, row_width>, nb::c_contig, n
 using Values = nb::ndarray<const double, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
 using DoubleOut = nb::ndarray<double, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
 using PointsOut = nb::ndarray<double, nb::shape<-1, 2>, nb::c_contig, nb::device::cpu>;
+using PointRows = nb::ndarray<const double, nb::shape<-1, 2>, nb::c_contig, nb::device::cpu>;
 using Int8Out = nb::ndarray<std::int8_t, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
 
 std::span<const double> view(const Rows& rows) {
@@ -28,9 +31,61 @@ std::span<std::int8_t> view(const Int8Out& out) {
     return {out.data(), out.size()};
 }
 
+void check_rows(std::size_t rows, std::initializer_list<std::size_t> others) {
+    for (const std::size_t other : others) {
+        if (other != rows) {
+            throw nb::value_error("every array needs the same number of rows");
+        }
+    }
+}
+
+Points points(const PointRows& rows) {
+    return {rows.data(), rows.size()};
+}
+
+void bind_exact(nb::module_& m) {
+    m.def(
+        "two_sums",
+        [](const Values& a, const Values& b, const DoubleOut& x, const DoubleOut& y) {
+            check_rows(a.shape(0), {b.shape(0), x.shape(0), y.shape(0)});
+            two_sums({.a = {a.data(), a.size()}, .b = {b.data(), b.size()}},
+                     {.x = {x.data(), x.size()}, .y = {y.data(), y.size()}});
+        },
+        nb::arg("a"), nb::arg("b"), nb::arg("x"), nb::arg("y"),
+        "Write x + y = a + b exactly (REQ-G2D-016).");
+    m.def(
+        "two_products",
+        [](const Values& a, const Values& b, const DoubleOut& x, const DoubleOut& y) {
+            check_rows(a.shape(0), {b.shape(0), x.shape(0), y.shape(0)});
+            two_products({.a = {a.data(), a.size()}, .b = {b.data(), b.size()}},
+                         {.x = {x.data(), x.size()}, .y = {y.data(), y.size()}});
+        },
+        nb::arg("a"), nb::arg("b"), nb::arg("x"), nb::arg("y"),
+        "Write x + y = a * b exactly (REQ-G2D-016).");
+    m.def(
+        "orient2d_signs",
+        [](const PointRows& a, const PointRows& b, const PointRows& c, const Int8Out& out) {
+            check_rows(a.shape(0), {b.shape(0), c.shape(0), out.shape(0)});
+            orient2d_signs({points(a), points(b), points(c)}, view(out));
+        },
+        nb::arg("a"), nb::arg("b"), nb::arg("c"), nb::arg("out"),
+        "Write the exact sign of orient2d per row (REQ-G2D-007).");
+    m.def(
+        "incircle_signs",
+        [](const PointRows& a, const PointRows& b, const PointRows& c, const PointRows& d,
+           const Int8Out& out) {
+            check_rows(a.shape(0), {b.shape(0), c.shape(0), d.shape(0), out.shape(0)});
+            incircle_signs({points(a), points(b), points(c), points(d)}, view(out));
+        },
+        nb::arg("a"), nb::arg("b"), nb::arg("c"), nb::arg("d"), nb::arg("out"),
+        "Write the exact sign of incircle per row (REQ-G2D-011).");
+}
+
 } // namespace
 
 void bind(nb::module_& m) {
+    init_exact_arithmetic(); // once, when the module loads (REQ-G2D-013)
+    bind_exact(m);
     m.def(
         "check_arcs",
         [](const Rows& rows, double length_eps_mm, const Int8Out& out) {
