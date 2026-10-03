@@ -266,9 +266,7 @@ void point_locations(std::span<const double> points, const RegionQuery& query,
                      std::span<std::int8_t> out) {
     std::size_t row = 0;
     for (std::int8_t& location : out) {
-        Point2 q{};
-        std::ranges::copy(points.subspan(2 * row, 2), q.begin());
-        location = static_cast<std::int8_t>(locate(q, query));
+        location = static_cast<std::int8_t>(locate(point(points, row), query));
         ++row;
     }
 }

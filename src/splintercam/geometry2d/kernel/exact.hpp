@@ -16,6 +16,9 @@ using Scalars = std::span<const double>;
 using Signs = std::span<std::int8_t>;
 using Point2 = std::array<double, 2>;
 
+// The point of row `row` of `points`.
+[[nodiscard]] Point2 point(Points points, std::size_t row);
+
 struct ValuePairs { // a and b, one value per row
     Scalars a;
     Scalars b;
