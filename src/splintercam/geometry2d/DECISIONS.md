@@ -139,3 +139,12 @@
 - Why: Hypothesis draws floats far below 2^-142 often, which is input outside the contract.
 - Rejected: loosening the oracle comparison.
 - Where: `tests/` of geometry2d, `tests/support/geometry2d_oracles.py`.
+
+## DEC-G2D-017: the module budget is 1700 NLOC
+
+- Date: 2026-10-03; decided by: Peter (answer 6 of 2026-10-03)
+- Status: Active
+- Decision: `architecture/modules.yaml` gives geometry2d a budget of 1700 NLOC, the SPEC's estimate for slice 1. `tools/size-check` reports the module above it and fails it above 2040.
+- Why: slice 1 measured 1561 NLOC on 2026-10-03; a budget makes growth visible. The slice 2 plan raises it, and must give a reason.
+- Rejected: no budget until slice 2 (growth would go unnoticed); a budget that already counts slice 2 (it would not be based on anything measured).
+- Where: `architecture/modules.yaml`; SPEC, Size estimate.
