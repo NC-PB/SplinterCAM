@@ -40,8 +40,7 @@ struct HeightQueries { // per row a query height and the circle about centre thr
 void two_sums(const ValuePairs& in, const ErrorFreePairs& out);
 void two_products(const ValuePairs& in, const ErrorFreePairs& out);
 
-// Single points: the exact signs of orient2d, of the arc predicate and of the (q_y − c_y)²
-// comparison below, for kernels that loop over points themselves.
+// Single points, for kernels that loop themselves: the signs of the batches below.
 struct CircleAt { // the circle about centre through p0
     Point2 centre;
     Point2 p0;
@@ -49,9 +48,8 @@ struct CircleAt { // the circle about centre through p0
 [[nodiscard]] int orient_sign(Point2 a, Point2 b, Point2 c);
 [[nodiscard]] int arc_circle_sign(Point2 q, const CircleAt& circle);
 [[nodiscard]] int vertical_extent_sign(double q_y, const CircleAt& circle);
-// The sign of q_y − Q_y, where Q is the point of the circle on the ray from its centre through
-// `toward` (Q is no double): the radial connector of an arc whose P1 lies off its circle
-// (Peter, 2026-10-03), compared by (q_y − c_y)²·|toward − c|² against r²·(toward_y − c_y)².
+// The sign of q_y − Q_y, Q where the ray from the centre through `toward` meets the circle (no
+// double): the end of an arc's radial connector (Peter, 2026-10-03).
 [[nodiscard]] int ray_height_sign(double q_y, const CircleAt& circle, Point2 toward);
 
 // Per row, the exact sign of orient2d(a, b, c): +1 when c lies left of a → b (REQ-G2D-007).
