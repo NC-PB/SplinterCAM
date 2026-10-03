@@ -9,4 +9,8 @@ namespace splintercam::geometry2d {
 // The angle of (x, y) in (−π, π], within a few rounding units of the true value; atan2(0, 0) = 0.
 [[nodiscard]] double basic_atan2(double y, double x);
 
+// φ − sin φ for |φ| <= 2π, the circular segment term of the signed area (research 01, Area and
+// orientation), within a few rounding units, from basic operations only like basic_atan2.
+[[nodiscard]] double phi_minus_sin(double phi);
+
 } // namespace splintercam::geometry2d

@@ -38,8 +38,3 @@ tol_min_step_mm = { default = 1e-7, unit = "mm", range = [1e-7, 1e-7], source = 
 # Declared here for geometry2d (REQ-G2D-230): the largest step of a flattened arc, π/2, at least
 # four steps per full circle (research 01, Flattening and Parameters).
 flatten_step_max_rad = { default = 1.5707963267948966, unit = "rad", range = [1.5707963267948966, 1.5707963267948966], source = "research 01, Parameters (ours)" }
-# Declared here for geometry2d (REQ-G2D-230): up to these limits the signed area's floating-point
-# sums keep their rounding error below eps_len·L; beyond either, the polygon part is summed
-# exactly (research 01, Area and orientation; 3355 mm is half the 2^26 range, ours).
-area_float_max_vertices = { default = 1000000, unit = "vertices", range = [1000000, 1000000], source = "research 01, Area and orientation (ours)" }
-area_float_max_half_extent_mm = { default = 3355, unit = "mm", range = [3355, 3355], source = "research 01, Area and orientation (ours)" }

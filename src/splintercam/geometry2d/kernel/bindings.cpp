@@ -7,10 +7,13 @@
 #include "exact.hpp"
 #include "flatten.hpp"
 
+#include <algorithm>
 #include <initializer_list>
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
+#include <nanobind/stl/pair.h>
 #include <span>
+#include <utility>
 
 namespace nb = nanobind;
 
@@ -118,17 +121,21 @@ void bind_exact(nb::module_& m) {
 void bind_area(nb::module_& m) {
     m.def(
         "loop_area",
-        [](const Rows& rows, double centre_x, double centre_y, bool exact, const DoubleOut& out) {
-            if (out.shape(0) != 2) {
-                throw nb::value_error("out needs two elements: area and length");
-            }
+        [](const Rows& rows, double centre_x, double centre_y, bool exact) {
             const LoopSums sums =
                 loop_area(view(rows), {.centre_x = centre_x, .centre_y = centre_y, .exact = exact});
-            std::span<double>(out.data(), 2).front() = sums.area;
-            std::span<double>(out.data(), 2).back() = sums.length;
+            return std::pair{sums.area, sums.length};
         },
-        nb::arg("rows"), nb::arg("centre_x"), nb::arg("centre_y"), nb::arg("exact"), nb::arg("out"),
-        "Write the signed area and the length of one loop of curve rows (REQ-G2D-128 to 132).");
+        nb::arg("rows"), nb::arg("centre_x"), nb::arg("centre_y"), nb::arg("exact"),
+        "Return the signed area and the length of one loop of curve rows (REQ-G2D-128 to 132).");
+    m.def(
+        "phi_minus_sin",
+        [](const Values& phi, const DoubleOut& out) {
+            check_rows(phi.shape(0), {out.shape(0)});
+            std::ranges::transform(std::span(phi.data(), phi.size()), out.data(), phi_minus_sin);
+        },
+        nb::arg("phi"), nb::arg("out"),
+        "Write phi - sin(phi) per value, from basic operations only (REQ-G2D-018).");
 }
 
 } // namespace

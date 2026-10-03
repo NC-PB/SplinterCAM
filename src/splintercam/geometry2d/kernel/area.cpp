@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
-// The signed area of a loop by Green's theorem (research 01, Area and orientation, ours): the
-// polygon sum over the end points of all rows plus each arc's circular segment ½ r² (φ − sin φ).
-// The polygon part is taken about the centre of the loop's bounding box, which keeps its rounding
-// error below eps_len·L for n ≤ 10^6 vertices and a half-extent up to 3355 mm; beyond, it is summed
-// exactly with SRC-032's expansion arithmetic. Lengths are sqrt of a sum of squares.
+// The signed area of a loop by Green's theorem (research 01, Area and orientation, ours), the
+// polygon part taken about the centre of the end points' bounding box. On the exact path the
+// polygon terms and the rounded segment terms are summed exactly (SRC-032's expansion arithmetic).
+// The segment term and the lengths use basic operations only, so |A| <= eps_len·L decides the same
+// on every platform (REQ-G2D-018).
 #include "area.hpp"
 
+#include "angle.hpp"
 #include "arcs.hpp"
 #include "exact.hpp"
 
@@ -14,8 +15,8 @@
 namespace splintercam::geometry2d {
 
 LoopSums loop_area(std::span<const double> rows, const LoopFrame& frame) {
-    double polygon = 0.0; // twice the polygon part, when summed in floating point
-    ExactSum exact_polygon;
+    double polygon = 0.0;   // twice the polygon part, when summed in floating point
+    ExactSum exact_polygon; // the polygon and segment terms, doubled, on the exact path
     double segments = 0.0;
     double length = 0.0;
     for (std::size_t start = 0; start < rows.size(); start += row_width) {
@@ -37,7 +38,12 @@ LoopSums loop_area(std::span<const double> rows, const LoopFrame& frame) {
             const double ax = row.x0 - row.cx;
             const double ay = row.y0 - row.cy;
             const double r2 = ax * ax + ay * ay;
-            segments += r2 * (row.sweep - std::sin(row.sweep)) / 2;
+            const double segment = r2 * phi_minus_sin(row.sweep) / 2;
+            if (frame.exact) { // twice the segment, like the polygon terms
+                exact_polygon.add({.a = segment + segment, .b = 1.0, .c = 0.0, .d = 0.0});
+            } else {
+                segments += segment;
+            }
             length += std::sqrt(r2) * std::abs(row.sweep);
         }
     }

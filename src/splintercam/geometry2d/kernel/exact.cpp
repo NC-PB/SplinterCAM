@@ -209,10 +209,11 @@ void circles_through(const std::array<Points, 3>& p123, double length_eps_mm,
 
 void ExactSum::add(const CrossTerm& term) {
     // Above this many components the expansion is compressed (predicates.c's compress, SRC-032),
-    // which keeps it short in practice, so each add stays cheap (ours).
+    // which keeps it short in practice, so each add stays cheap (ours): a speed setting, no
+    // tolerance, so not a declared parameter (REQ-G2D-230).
     constexpr int compress_above = 64;
     Expansion part = sum(of(two_product(term.a, term.b)), of(two_product(-term.c, term.d)));
-    const std::size_t needed = static_cast<std::size_t>(size_ + part.size) + 1;
+    const std::size_t needed = static_cast<std::size_t>(size_ + part.size) + 2;
     if (next_.size() < needed) {
         next_.resize(2 * needed, 0.0);
     }

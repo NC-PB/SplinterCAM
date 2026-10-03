@@ -11,7 +11,7 @@ import pytest
 import geometry2d_oracles as oracle
 from geometry2d_checks import codes, loop, polygon, reversed_loop
 from splintercam import _kernels
-from splintercam.foundation import TOLERANCE_DEFAULTS, Context
+from splintercam.foundation import Context
 from splintercam.geometry2d import CurveRows, signed_area
 
 NAN = math.nan
@@ -92,20 +92,14 @@ def _exact_flag(ctx: Context, loop_rows: CurveRows, monkeypatch: pytest.MonkeyPa
     seen: list[bool] = []
     kernel = _kernels.geometry2d.loop_area
 
-    def spy(*args: Any) -> None:
-        seen.append(bool(args[3]))  # loop_area(rows, centre_x, centre_y, exact, out)
-        kernel(*args)
+    def spy(*args: Any) -> tuple[float, float]:
+        seen.append(bool(args[3]))  # loop_area(rows, centre_x, centre_y, exact)
+        return kernel(*args)
 
     monkeypatch.setattr(_kernels.geometry2d, "loop_area", spy)
     signed_area(loop_rows, ctx)
     (flag,) = seen
     return flag
-
-
-@pytest.mark.req("REQ-G2D-131", "REQ-G2D-132", "REQ-G2D-230")
-def test_the_float_limits_are_declared_parameters() -> None:
-    assert TOLERANCE_DEFAULTS["area_float_max_vertices"].default == 10**6
-    assert TOLERANCE_DEFAULTS["area_float_max_half_extent_mm"].default == 3355
 
 
 @pytest.mark.req("REQ-G2D-131", "REQ-G2D-132")
@@ -147,6 +141,17 @@ def test_the_exact_sum_is_the_area_of_the_translated_loop(
     exact = oracle.polygon_area(translated)
     area = _area(polygon(points, ctx), ctx)
     assert abs(Fraction(area) - exact) <= Fraction(math.ulp(float(exact)))
+
+
+@pytest.mark.req("REQ-G2D-128", "REQ-G2D-132")
+def test_the_exact_path_sums_arcs_too(ctx: Context) -> None:
+    # Half-extent 4000 mm, beyond the limit: a full circle and the bulged square scaled up.
+    circle = loop([[4000.0, 0.0, 4000.0, 0.0, 0.0, 0.0, math.tau]], ctx)
+    assert _area(circle, ctx) == pytest.approx(math.pi * 4000.0**2, rel=1e-12)
+    scaled = [[v * 400 if i < 6 else v for i, v in enumerate(row)] for row in BULGED_SQUARE]
+    assert _area(loop(scaled, ctx), ctx) == pytest.approx(
+        400**2 * (100 + 12.5 * math.pi), rel=1e-12
+    )
 
 
 @pytest.mark.req("REQ-G2D-231")

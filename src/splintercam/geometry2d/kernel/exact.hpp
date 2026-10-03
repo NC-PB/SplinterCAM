@@ -73,9 +73,10 @@ public:
     [[nodiscard]] double value() const;
 
 private:
-    // Two buffers used in turn, each longer than its expansion: predicates.c reads one past it.
-    std::vector<double> parts_ = {0.0};
-    std::vector<double> next_ = {0.0};
+    // Two buffers used in turn, each two longer than its expansion: predicates.c reads past an
+    // input's end, e[0] and e[1] when it is empty.
+    std::vector<double> parts_ = {0.0, 0.0};
+    std::vector<double> next_ = {0.0, 0.0};
     int size_ = 0;
 };
 
