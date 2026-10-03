@@ -144,5 +144,6 @@ def test_the_step_count_fits_an_int_within_the_preconditions(ctx: Context, inscr
     eps, r = ctx.tolerances.length_eps_mm, 1e9
     row = np.array([[r, 0.0, r, 0.0, 0.0, 0.0, math.tau]])
     max_step = TOLERANCE_DEFAULTS["flatten_step_max_rad"].default
+    # The count alone: flatten itself would allocate about 7e7 vertices here.
     steps = _kernels.geometry2d.arc_steps(row, eps, inscribed, max_step)
     assert 0 < steps < 2**31

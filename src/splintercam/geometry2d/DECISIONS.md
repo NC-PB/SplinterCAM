@@ -146,7 +146,8 @@
 - Status: Active
 - Decision: when r ≤ eps_len, `make_arc` first checks ||P1 − C| − r| ≤ eps_len (REQ-G2D-042) and returns `ARC_INCONSISTENT` if it fails. Only then does it return the line P0P1, or nothing when P0 = P1. For r > eps_len the order is unchanged: nearly closed, radial check, angle check.
 - Why: before this change, an arc with r ≈ 0 and P1 100 mm away became a 100 mm line. Research 01's "within 2r of the segment" assumes P1 on the circle; with the check, the line it returns is at most 3·eps_len long.
-- Rejected: moving the radial check before the nearly closed rule for every radius (no gain: a nearly closed arc passes it anyway, and it would change the order of a rule that works); a check that P1 lies within 2·eps_len of C (another number for the same thing).
+- The angle check (REQ-G2D-043) stays skipped for r ≤ eps_len: with any sweep such an arc stays within 2r of P0, so its chord is a faithful replacement.
+- Rejected: moving the radial check before the nearly closed rule for every radius (no gain: a nearly closed arc passes it anyway, up to rounding, and it would change the order of a rule that works); a check that P1 lies within 2·eps_len of C (another number for the same thing).
 - Where: REQ-G2D-047; SPEC, Public interface (rule order); `_curves.py` (`_tiny_arc`); `tests/geometry2d/unit/test_curves.py`.
 
 ## DEC-G2D-019: arcs are valid input up to a radius of 10^9 mm
@@ -154,9 +155,9 @@
 - Date: 2026-10-03; decided by: ours, on Peter's answer 5 of 2026-10-03 (spec gap of plan 0003, step 3)
 - Status: Active
 - Decision: arcs, from `make_arc`, `arc_from_bulge` or `curve_rows`, are valid input up to r = 10^9 mm, as a documented precondition with no run-time check. Beyond it a valid arc may come back `ARC_INCONSISTENT`.
-- Why: the radial check compares |P1 − C| with r, and both carry rounding of about u·r. That is 1.1e-7 mm at 10^9 mm and 1.1e-6 mm, above eps_len, at 10^10 mm. Measured with random minor arcs from bulges (chords 0.1 to 2000 mm, coordinates within ±3000 mm): none rejected at 10^8, 10^9 or 3·10^9 mm, 180 of 549 at 10^10 mm. Peter named 10^10 mm; the measurement refutes it, so we state 10^9 mm, with a factor of three to spare.
-- Rejected: 10^10 mm (a third of valid bulges fail there); a run-time check or a bulge limit (Peter: documented preconditions only); a radial check scaled by r (it would loosen the eps_len contract of REQ-G2D-042). The tighter limit of `signed_area`, r·min(1, φ²) ≤ 10^7 mm, is DEC-G2D-016.
-- Where: SPEC, Public interface; `tests/geometry2d/property/test_bulge_arcs.py` (radii up to 10^9 mm never inconsistent).
+- Why: two checks carry rounding that grows with r. The radial check compares |P1 − C| with r, both rounded by about u·r: 1.1e-7 mm at 10^9 mm, 1.1e-6 mm (above eps_len) at 10^10 mm. The angle check binds first for large sweeps: its limit is eps_len/r, 1e-15 rad at 10^9 mm, while one rounding step of a sweep above 4 rad is 2^−50 = 8.9e-16 rad, so a sweep and the kernel's angle one step apart fail beyond 1.13·10^9 mm (spec review; a valid arc from the bulge 4000001090 on a 2 mm chord, r = 2·10^9 mm, is rejected). Measured, coordinates within ±3000 mm: random minor arcs from bulges (chords 0.1 to 2000 mm) none rejected up to 3·10^9 mm, 180 of 549 at 10^10 mm; 4000 random major arcs none rejected at 10^9 mm. Peter named 10^10 mm; the measurement refutes it. We state 10^9 mm. The margin is thin for large sweeps: it holds while `basic_atan2` stays within about 2 rounding units, as measured; REQ-G2D-233's 4 units alone would prove only about 2.8·10^8 mm.
+- Rejected: 10^10 mm (a third of valid bulges fail there); 2.8·10^8 mm, the limit REQ-G2D-233 alone proves (Peter may choose it over the measured one); a run-time check or a bulge limit (Peter: documented preconditions only); a radial check scaled by r (it would loosen the eps_len contract of REQ-G2D-042). The tighter limit of `signed_area`, r·min(1, φ²) ≤ 10^7 mm, is DEC-G2D-016.
+- Where: SPEC, Public interface; `tests/geometry2d/property/test_bulge_arcs.py` (minor and major arcs up to 10^9 mm never inconsistent).
 
 ## DEC-G2D-020: `flatten` expects t ≥ eps_len
 
