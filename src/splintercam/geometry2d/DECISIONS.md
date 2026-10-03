@@ -149,6 +149,15 @@
 - Rejected: summing the segment terms in floating point on the float path (its error grows with the arc count, up to 10^6·u·Σ|S|, which large arcs push past eps_len·L); a hand-written compensated sum (`ExactSum` exists and is exact); a run-time check of the precondition or a new diagnostic (Peter: documented preconditions only); a bound without min(1, φ²) (it would refuse flat arcs of large radius that are harmless).
 - Where: REQ-G2D-131, 132; SPEC, Public interface; `kernel/area.cpp`; `tests/geometry2d/property/test_signed_area_property.py` (loops with arcs, full circles up to 10^7 mm), `tests/geometry2d/unit/test_signed_area.py`; research 01, Area and orientation (draft in the same pull request).
 
+## DEC-G2D-017: the module budget is 1700 NLOC
+
+- Date: 2026-10-03; decided by: Peter (answer 6 of 2026-10-03)
+- Status: Active
+- Decision: `architecture/modules.yaml` gives geometry2d a budget of 1700 NLOC, the SPEC's estimate for slice 1. `tools/size-check` reports the module above it and fails it above 2040.
+- Why: slice 1 measured 1561 NLOC on 2026-10-03; a budget makes growth visible. The slice 2 plan raises it, and must give a reason.
+- Rejected: no budget until slice 2 (growth would go unnoticed); a budget that already counts slice 2 (it would not be based on anything measured).
+- Where: `architecture/modules.yaml`; SPEC, Size estimate.
+
 ## DEC-G2D-018: a tiny circle gets its radial check before it becomes a line
 
 - Date: 2026-10-03; decided by: ours, on Peter's answer 5 of 2026-10-03 (spec gap of plan 0003, step 2)

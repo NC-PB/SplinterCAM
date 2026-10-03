@@ -257,7 +257,7 @@ The budget is foundation's (REQ-FND-009). Slice 1 spends none of it: `flatten` t
 
 ## Size estimate
 
-About 800 NLOC of Python and 900 of C++ (`predicates.c` not counted), and 2500 lines of tests, in eight steps of plan 0003. Proposed budget for `architecture/modules.yaml`: 1700 NLOC, set by Peter.
+About 800 NLOC of Python and 900 of C++ (`predicates.c` not counted), and 2500 lines of tests, in eight steps of plan 0003. Budget in `architecture/modules.yaml`: 1700 NLOC (Peter, 2026-10-03); the slice 2 plan raises it with a reason.
 
 ## Open questions
 
@@ -284,6 +284,7 @@ No requirements; each line names the work and where its drafted requirements and
 - 2026-10-03: Peter confirmed that `cleanup`'s collinear and spike passes stop at three vertices (answer 3; DEC-G2D-014).
 - 2026-10-03: plan 0003, step 5: the predicates' input range stated as a precondition (SRC-032, p. 308).
 - 2026-10-02: cut to slice 1 on Peter's answers (plan 0003, step 1): in_arc_circle +1 inside, arc rows give `ARC_INCONSISTENT`, predicates without a `Context`, D-055 tiers 2 and 3 (REQ-G2D-231, 232), single-threaded kernels; the draft's proposals taken for the other slice 1 questions and marked "(ours)"; everything else moved to Later parts. Merged into a neighbour: 095 into 094, 107 and 108 into 106, 111 into 110, 136 to 138 into 135, 140 to 142 into 139, 144 into 143, 195 into 194, 202 into 201, 208 into 207, 210 into 209. Stated in the Public interface instead: 225 to 227. Not needed: 228 (`flatten` expects validated curves). Slice 2: 229.
+- 2026-10-03: the module budget of 1700 NLOC set in `architecture/modules.yaml` (Peter's answer 6).
 - 2026-10-03: Peter's answers on point in region (plan 0003, step 8): REQ-G2D-143's ON on an arc by the sweep instead of the chord side; REQ-G2D-135's radial connector for P1 off the circle; REQ-G2D-148 measures to the nearer of the radii |P_0 − C| and |P_1 − C|. Research 01, Point in region, still states the earlier rule.
 - 2026-10-03: research 01, Point in region, updated to Peter's answers of step 8 (DEC-G2D-012: ON in the sweep, the radial connector, the nearer radius) on his answer 2 of 2026-10-03; the requirements are unchanged.
 - 2026-10-03: Peter's answer 1 of 2026-10-03: the arc term of the area's error bound derived (DEC-G2D-016); the segment terms are summed exactly on both paths (REQ-G2D-131, 132); the precondition r·min(1, φ²) ≤ 10^7 mm and E ≤ 10^9 mm stated in the Public interface. Research 01, Area and orientation, updated in the same pull request.

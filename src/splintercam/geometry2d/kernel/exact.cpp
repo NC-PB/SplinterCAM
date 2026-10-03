@@ -89,12 +89,6 @@ std::int8_t sign_of(const Expansion& e) {
     return sign_of(e.parts.at(static_cast<std::size_t>(std::max(e.size - 1, 0))));
 }
 
-std::array<double, 2> point(Points points, std::size_t row) {
-    std::array<double, 2> p{};
-    std::ranges::copy(points.subspan(2 * row, 2), p.begin());
-    return p;
-}
-
 double value(Scalars values, std::size_t row) {
     return values.subspan(row, 1).front();
 }
@@ -281,6 +275,12 @@ int ray_height_sign(double q_y, const CircleAt& circle, Point2 toward) {
     add_product(difference, squared_difference(ty, cy, false),
                 sum(squared_difference(px, cx, false), squared_difference(py, cy, false)), -1.0);
     return q_side * sign_of(difference.value());
+}
+
+Point2 point(Points points, std::size_t row) {
+    Point2 p{};
+    std::ranges::copy(points.subspan(2 * row, 2), p.begin());
+    return p;
 }
 
 } // namespace splintercam::geometry2d
