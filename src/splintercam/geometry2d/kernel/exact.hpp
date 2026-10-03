@@ -48,6 +48,15 @@ void in_arc_circle_signs(const ArcQueries& in, Signs out);
 // circle, 0 at them, +1 beyond (REQ-G2D-023).
 void vertical_extent_signs(const HeightQueries& in, Signs out);
 
+struct CircleOut { // per row the centre (x, y), the radius and 1 when a circle was found, else 0
+    std::span<double> centres;
+    std::span<double> radii;
+    Signs found;
+};
+// The circle through p1, p2, p3 (research 01, Circle through three points; SRC-032, p. 359): none
+// when orient2d is 0 or p2 lies within length_eps_mm of the line p1p3 (REQ-G2D-097 to 101).
+void circles_through(const std::array<Points, 3>& p123, double length_eps_mm, const CircleOut& out);
+
 // Starts predicates.c's error bounds; called once when the kernel module loads (REQ-G2D-013).
 void init_exact_arithmetic();
 

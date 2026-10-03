@@ -26,6 +26,11 @@ def vertical_extent_signs(q_y: Annotated[NDArray[numpy.float64], dict(shape=(Non
     Write the exact sign of (q_y - c_y)^2 - |p0 - c|^2 per row (REQ-G2D-023).
     """
 
+def circles_through(p1: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], p2: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], p3: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], length_eps_mm: float, centres: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu')], radii: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu')], found: Annotated[NDArray[numpy.int8], dict(shape=(None,), order='C', device='cpu')]) -> None:
+    """
+    Write per row the circle through p1, p2, p3, or found = 0 (REQ-G2D-097 to 101).
+    """
+
 def check_arcs(rows: Annotated[NDArray[numpy.float64], dict(shape=(None, 7), order='C', device='cpu', writable=False)], length_eps_mm: float, out: Annotated[NDArray[numpy.int8], dict(shape=(None,), order='C', device='cpu')]) -> None:
     """
     Write per curve row 0 (consistent), 1 (P1 off the circle) or 2 (sweep does not fit).
