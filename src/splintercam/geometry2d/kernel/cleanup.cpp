@@ -28,9 +28,7 @@ struct Polyline {
     double length_eps_mm;
 
     [[nodiscard]] Point2 at(std::size_t i) const {
-        Point2 p{};
-        std::ranges::copy(points.subspan(2 * i, 2), p.begin());
-        return p;
+        return point(points, i);
     }
     // Whether every vertex of `vertex` lies within eps_len of `first`; IEEE 754's correctly rounded
     // sqrt makes this the same everywhere (a tolerance test, not a sign decision).
