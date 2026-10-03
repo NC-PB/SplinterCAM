@@ -125,7 +125,7 @@
 ## DEC-G2D-014: cleanup order and its three-vertex stop
 
 - Date: 2026-10-03; decided by: ours; the three-vertex stop waits for Peter's confirmation (plan 0003, Handover, question 4)
-- Status: Active
+- Status: Active; the three-vertex stop confirmed by Peter on 2026-10-03 (answer 3)
 - Decision: `cleanup` runs merge, collinear, spike in that order (research 01, Helpers). A kept vertex carries the vertices merged into it, so a later round merges it only where all of them lie within eps_len. The collinear and spike passes stop at three vertices.
 - Why: merging a merged vertex again would let points drift by more than eps_len in total.
 - Rejected: merging against the kept vertex alone.
