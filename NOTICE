@@ -6,5 +6,10 @@ Licensed under the Apache License, Version 2.0 (see LICENSE).
 Third-party components and the attributions their licences require are listed below.
 Update this file whenever a dependency is added (docs/dev/09-dependencies-licensing-provenance.md).
 
-None bundled yet. Planned (ADR 0004): Open CASCADE Technology through OCP, Qt through PySide6,
+Robust geometric predicates (src/splintercam/geometry2d/kernel/vendor/predicates.c, ADR 0009)
+Jonathan Richard Shewchuk, "Routines for Arbitrary Precision Floating-point Arithmetic and
+Fast Robust Geometric Predicates", 1996, https://www.cs.cmu.edu/~quake/robust.html.
+Placed in the public domain by its author; vendored unchanged.
+
+Planned (ADR 0004): Open CASCADE Technology through OCP, Qt through PySide6,
 NumPy, Clipper2, Boost.Polygon, nanobind.

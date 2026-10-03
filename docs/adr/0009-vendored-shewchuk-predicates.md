@@ -1,6 +1,6 @@
 # ADR 0009: Vendor Shewchuk's predicates.c for the exact predicates
 
-- Status: Proposed
+- Status: Accepted (Peter, 2026-10-03)
 - Date: 2026-10-02
 - Deciders: Peter Burgener
 - Drafted by: Claude Code (plan 0003, step 1)
