@@ -3,6 +3,7 @@
 // arrays the Python side allocates and passes in, so no kernel code owns Python memory.
 #include "angle.hpp"
 #include "arcs.hpp"
+#include "area.hpp"
 #include "exact.hpp"
 #include "flatten.hpp"
 
@@ -114,11 +115,28 @@ void bind_exact(nb::module_& m) {
         "Write per row the circle through p1, p2, p3, or found = 0 (REQ-G2D-097 to 101).");
 }
 
+void bind_area(nb::module_& m) {
+    m.def(
+        "loop_area",
+        [](const Rows& rows, double centre_x, double centre_y, bool exact, const DoubleOut& out) {
+            if (out.shape(0) != 2) {
+                throw nb::value_error("out needs two elements: area and length");
+            }
+            const LoopSums sums =
+                loop_area(view(rows), {.centre_x = centre_x, .centre_y = centre_y, .exact = exact});
+            std::span<double>(out.data(), 2).front() = sums.area;
+            std::span<double>(out.data(), 2).back() = sums.length;
+        },
+        nb::arg("rows"), nb::arg("centre_x"), nb::arg("centre_y"), nb::arg("exact"), nb::arg("out"),
+        "Write the signed area and the length of one loop of curve rows (REQ-G2D-128 to 132).");
+}
+
 } // namespace
 
 void bind(nb::module_& m) {
     init_exact_arithmetic(); // once, when the module loads (REQ-G2D-013)
     bind_exact(m);
+    bind_area(m);
     m.def(
         "check_arcs",
         [](const Rows& rows, double length_eps_mm, const Int8Out& out) {

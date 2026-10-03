@@ -31,6 +31,11 @@ def circles_through(p1: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), 
     Write per row the circle through p1, p2, p3, or found = 0 (REQ-G2D-097 to 101).
     """
 
+def loop_area(rows: Annotated[NDArray[numpy.float64], dict(shape=(None, 7), order='C', device='cpu', writable=False)], centre_x: float, centre_y: float, exact: bool, out: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu')]) -> None:
+    """
+    Write the signed area and the length of one loop of curve rows (REQ-G2D-128 to 132).
+    """
+
 def check_arcs(rows: Annotated[NDArray[numpy.float64], dict(shape=(None, 7), order='C', device='cpu', writable=False)], length_eps_mm: float, out: Annotated[NDArray[numpy.int8], dict(shape=(None,), order='C', device='cpu')]) -> None:
     """
     Write per curve row 0 (consistent), 1 (P1 off the circle) or 2 (sweep does not fit).

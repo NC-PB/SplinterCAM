@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """geometry2d: planar curves, exact signs and the algorithms on them (see SPEC.md)."""
 
+from ._area import signed_area
 from ._box import Box, bounding_box
 from ._bulge import arc_from_bulge, bulges_from_arc
 from ._circle import Circle, circle_through
@@ -33,4 +34,5 @@ __all__ = [
     "make_arc",
     "make_line",
     "orient2d",
+    "signed_area",
 ]
