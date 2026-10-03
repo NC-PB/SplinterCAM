@@ -36,7 +36,7 @@ FINE = st.integers(-(2**24), 2**24).map(lambda k: k / 2**20)
 fine_point = st.tuples(FINE, FINE)
 
 
-@pytest.mark.req("REQ-G2D-135", "REQ-G2D-139", "REQ-G2D-143", "REQ-G2D-149", "REQ-G2D-150")
+@pytest.mark.req("REQ-G2D-135", "REQ-G2D-139", "REQ-G2D-143")
 @shared_ctx
 @given(
     points=st.lists(grid_point, min_size=3, max_size=12),
@@ -78,7 +78,7 @@ def _rows(curves: list[Curve], ctx: Context) -> CurveRows:
     return built.value
 
 
-@pytest.mark.req("REQ-G2D-135", "REQ-G2D-139", "REQ-G2D-149")
+@pytest.mark.req("REQ-G2D-135", "REQ-G2D-139")
 @shared_ctx
 @given(
     corners=st.lists(fine_point, min_size=2, max_size=6),
@@ -103,7 +103,7 @@ def test_arcs_match_a_fine_flattening_away_from_the_boundary(
     assert exact.tolist() == flattened.tolist()
 
 
-@pytest.mark.req("REQ-G2D-135", "REQ-G2D-139", "REQ-G2D-150")
+@pytest.mark.req("REQ-G2D-135", "REQ-G2D-139")
 @shared_ctx
 @given(
     start=st.floats(-math.pi, math.pi),

@@ -91,3 +91,17 @@ def winding(q: P, points: list[P]) -> int | None:
         elif b[1] <= q[1] < a[1] and side < 0:
             total -= 1
     return total
+
+
+def ray_height_sign(q_y: float, centre: P, p0: P, toward: P) -> int:
+    """The sign of q_y minus the height where the ray from `centre` through `toward` meets the
+    circle about `centre` through `p0`, exactly: by sides of c_y, then by squares."""
+    qy, cx, cy, px, py, tx, ty = (Fraction(v) for v in (q_y, *centre, *p0, *toward))
+    q_side, ray_side = sign(qy - cy), sign(ty - cy)
+    if q_side != ray_side:
+        return 1 if q_side > ray_side else -1
+    if q_side == 0:
+        return 0
+    left = (qy - cy) ** 2 * ((tx - cx) ** 2 + (ty - cy) ** 2)
+    right = ((px - cx) ** 2 + (py - cy) ** 2) * (ty - cy) ** 2
+    return q_side * sign(left - right)

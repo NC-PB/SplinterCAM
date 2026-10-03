@@ -41,20 +41,20 @@ def _exact(q: list[tuple[float, float]], loops: CurveRows) -> list[PointLocation
     return [PointLocation(v) for v in point_in_region_exact(np.array(q), loops)]
 
 
-@pytest.mark.req("REQ-G2D-135", "REQ-G2D-139", "REQ-G2D-143", "REQ-G2D-145", "REQ-G2D-150")
+@pytest.mark.req("REQ-G2D-135", "REQ-G2D-139", "REQ-G2D-143", "REQ-G2D-145")
 def test_research_test_5_exact_layer(ctx: Context) -> None:
     q = [(15.0, 5.0), (15.0 - TINY, 5.0), (15.0 + TINY, 5.0), (10.0, 5.0), (5.0, 5.0)]
     for loops in _both_orientations(BULGED, ctx):
         assert _exact(q, loops) == [ON, IN, OUT, IN, IN]
 
 
-@pytest.mark.req("REQ-G2D-135", "REQ-G2D-149", "REQ-G2D-150")
+@pytest.mark.req("REQ-G2D-135")
 def test_research_test_5_inward_semicircle(ctx: Context) -> None:
     for loops in _both_orientations(BITTEN, ctx):
         assert _exact([(10.0, 5.0), (4.0, 5.0), (6.0, 5.0)], loops) == [OUT, IN, OUT]
 
 
-@pytest.mark.req("REQ-G2D-135", "REQ-G2D-143", "REQ-G2D-150")
+@pytest.mark.req("REQ-G2D-135", "REQ-G2D-143")
 def test_research_test_6_full_circle(ctx: Context) -> None:
     q = [(0.0, 0.0), (5.0, 0.0), (10.0, 0.0), (0.0, 5.0), (0.0, -3.0), (0.0, -5.0), (-5.0, 0.0)]
     for loops in _both_orientations(CIRCLE, ctx):
@@ -62,7 +62,7 @@ def test_research_test_6_full_circle(ctx: Context) -> None:
         assert _exact(q, loops) == expected
 
 
-@pytest.mark.req("REQ-G2D-135", "REQ-G2D-139", "REQ-G2D-143", "REQ-G2D-150")
+@pytest.mark.req("REQ-G2D-135", "REQ-G2D-139", "REQ-G2D-143")
 def test_shewchuk_note_test_6_square(ctx: Context) -> None:
     q = [(10.0, 5.0), (10.0, 10.0), (10.0 - TINY, 5.0), (10.0 + TINY, 5.0)]
     for loops in [polygon(SQUARE, ctx), polygon(SQUARE[::-1], ctx)]:
@@ -113,7 +113,7 @@ def test_arcs_split_at_their_top_and_bottom(ctx: Context, start: float) -> None:
         assert _exact(q, loops) == [IN, IN, OUT, OUT, IN]
 
 
-@pytest.mark.req("REQ-G2D-135", "REQ-G2D-149")
+@pytest.mark.req("REQ-G2D-135")
 def test_winding_sums_over_all_loops(ctx: Context) -> None:
     # A square with a square hole of the opposite orientation: inside the hole the winding is 0.
     outer = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]
@@ -150,7 +150,7 @@ def test_results_are_bit_identical_when_repeated(ctx: Context) -> None:
     assert point_in_region_exact(q, loops).tobytes() == first.tobytes()
 
 
-@pytest.mark.req("REQ-G2D-135", "REQ-G2D-150")
+@pytest.mark.req("REQ-G2D-135")
 def test_an_arc_whose_p1_lies_past_the_top_leaves_no_gap(ctx: Context) -> None:
     # Found by the flattening property: a half disc whose arc ends 2^-126 mm above the top of its
     # circle (P1 may lie off the circle, REQ-G2D-042). The ray at the height of the top must meet
@@ -174,7 +174,7 @@ def _loop_or_reversed_answers(
     return [_exact(q, loops) for loops in _both_orientations(rows, ctx)]
 
 
-@pytest.mark.req("REQ-G2D-143", "REQ-G2D-145", "REQ-G2D-150")
+@pytest.mark.req("REQ-G2D-143", "REQ-G2D-145")
 def test_a_tiny_arc_is_not_on_its_whole_circle(ctx: Context) -> None:
     # Spec review of step 8: P1 lies just clockwise of P0 (the angle check works modulo 2π), so
     # the chord line meets the circle all around; ON needs q in the sweep (Peter, 2026-10-03).
@@ -188,7 +188,7 @@ def test_a_tiny_arc_is_not_on_its_whole_circle(ctx: Context) -> None:
         assert answer == [OUT, OUT, OUT]
 
 
-@pytest.mark.req("REQ-G2D-143", "REQ-G2D-145", "REQ-G2D-150")
+@pytest.mark.req("REQ-G2D-143", "REQ-G2D-145")
 def test_the_chord_line_meeting_the_circle_again_is_not_on(ctx: Context) -> None:
     rows = [
         [5.0, 0.0, 5.0 + 7e-7, 7e-7, 0.0, 0.0, 1.4e-7],
@@ -199,7 +199,7 @@ def test_the_chord_line_meeting_the_circle_again_is_not_on(ctx: Context) -> None
         assert answer == [OUT]
 
 
-@pytest.mark.req("REQ-G2D-135", "REQ-G2D-150")
+@pytest.mark.req("REQ-G2D-135")
 @pytest.mark.parametrize(
     ("rows", "q"),
     [
@@ -239,5 +239,45 @@ def test_the_radial_connector_to_p1_is_part_of_the_boundary(ctx: Context) -> Non
         [0.0, 0.0, 5.0, 0.0, NAN, NAN, 0.0],
     ]
     loops = loop(rows, ctx)
-    q = [(0.0, 5.0), (0.0, 5.0 + 2.0**-41), (2.0**-60, 5.0 + 2.0**-41), (1.0, 4.0)]
-    assert _exact(q, loops) == [ON, ON, OUT, IN]  # the third lies above the circle's top
+    q = [
+        (0.0, 5.0),
+        (0.0, 5.0 + 2.0**-41),  # on the connector
+        (2.0**-60, 5.0 + 2.0**-41),  # beside it, above the circle's top
+        (1.0, 4.0),
+        (0.0, 5.0 + 2.0**-39),  # on the ray beyond P1: a helper zero (REQ-G2D-145)
+        (0.0, -5.0 - 2.0**-41),  # on the opposite ray, between the radii
+    ]
+    assert _exact(q, loops) == [ON, ON, OUT, IN, OUT, OUT]
+
+
+@pytest.mark.req("REQ-G2D-135", "REQ-G2D-143", "REQ-G2D-145")
+def test_inward_and_slanted_connectors(ctx: Context) -> None:
+    # P1 inside the circle on the y axis, and P1 outside it on the ray through (3, 4).
+    inward = [
+        [5.0, 0.0, 0.0, 5.0 - 2.0**-40, 0.0, 0.0, math.pi / 2],
+        [0.0, 5.0 - 2.0**-40, 0.0, 0.0, NAN, NAN, 0.0],
+        [0.0, 0.0, 5.0, 0.0, NAN, NAN, 0.0],
+    ]
+    q = [(0.0, 5.0 - 2.0**-41), (0.0, 5.0), (0.0, 5.0 + 2.0**-41), (-3.0, -4.0)]
+    assert _exact(q, loop(inward, ctx)) == [ON, ON, OUT, OUT]
+    k, m = 1.0 + 2.0**-30, 1.0 + 2.0**-31  # the ray through (3, 4): 3k, 4k and 3m, 4m are doubles
+    slanted = [
+        [5.0, 0.0, 3.0 * k, 4.0 * k, 0.0, 0.0, math.atan2(4.0, 3.0)],
+        [3.0 * k, 4.0 * k, 0.0, 0.0, NAN, NAN, 0.0],
+        [0.0, 0.0, 5.0, 0.0, NAN, NAN, 0.0],
+    ]
+    q = [(3.0, 4.0), (3.0 * m, 4.0 * m), (3.0 * (2 * k - 1), 4.0 * (2 * k - 1)), (2.0, 1.0)]
+    assert _exact(q, loop(slanted, ctx)) == [ON, ON, OUT, IN]
+
+
+@pytest.mark.req("REQ-G2D-143", "REQ-G2D-145")
+def test_the_missing_part_of_a_nearly_full_arc_is_not_on(ctx: Context) -> None:
+    # A 7/4 turn of radius 5 closed by its chord: points of the circle in the missing quarter
+    # are not on the arc.
+    sweep = 1.75 * math.pi
+    p1 = (5 * math.cos(sweep), 5 * math.sin(sweep))
+    rows = [[5.0, 0.0, *p1, 0.0, 0.0, sweep], [*p1, 5.0, 0.0, NAN, NAN, 0.0]]
+    q = [(5 * math.cos(-0.4), 5 * math.sin(-0.4)), (0.0, -5.0), (-5.0, 0.0)]
+    assert _exact(q, loop(rows, ctx)) == [OUT, ON, ON]
+    # Reversed, the radius is |P1 - C|, 5 only up to rounding: the missing part stays off the arc.
+    assert _exact(q[:1], loop(reversed_loop(rows), ctx)) == [OUT]
