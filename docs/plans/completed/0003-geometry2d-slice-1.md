@@ -8,13 +8,13 @@
 - Research: `docs/research/01-foundations.md`
 - Branch: one branch and one pull request per step, based on `main` after the previous step's merge. Stacked pull requests (based on the previous step's branch) were tried in steps 2 and 3: merging with "delete branch" closed the next one (pull request 9) or merged it into a branch instead of `main` (12, then repeated as 10). Do not stack
 - Owner: Peter Burgener; agents: Claude Code cloud sessions
-- Status (2026-10-03): all steps done and merged (pull requests 11 to 22); `tools/check` passes on `main`. Waiting for Peter's review of slice 1. See Handover.
+- Status (2026-10-03): complete. All steps merged (pull requests 11 to 22), Peter's review answered and merged (25 to 31); slice 2 is plan 0004.
 
 ## Handover
 
 For the next agent. Slice 1 is complete on `main`; nothing is in flight, no branch or pull request is open.
 
-**Do not start new geometry2d work** until Peter has reviewed slice 1 and answered the questions below. Slice 2 (loop tree, `build_region`, PolyTree, topic 02 offsets) needs its own plan; the SPEC lists it under Later parts.
+Slice 1 is reviewed. Slice 2 is proposed as `docs/plans/active/0004-geometry2d-slice-2.md`; **do not start it** until Peter approves it and answers its questions.
 
 What exists (public API in `src/splintercam/geometry2d/__init__.py`; contract in its `SPEC.md`):
 
@@ -28,19 +28,20 @@ What exists (public API in `src/splintercam/geometry2d/__init__.py`; contract in
 | Point in region | `point_in_region`, `PointLocation`; internal `point_in_region_exact` | `region.cpp` |
 | Cleanup | `cleanup` | `cleanup.cpp` |
 
-Open questions for Peter (each also under Backlog with its details):
+Peter's review questions, all answered on 2026-10-03 and merged (pull requests 25 to 31):
 
-1. Research 01, Area and orientation: its bound n·u·(√2·E·L + 3E²) has no term for arc segments, so the sign invariant of `signed_area` is proven for polygons only (step 7).
-2. Research 01, Point in region, still states the chord-side ON rule and has no radial connector; the SPEC carries Peter's answers of 2026-10-03 (step 8). Agents may not edit `docs/research/`; Peter updates it or registers the decision in Project Spike.
-3. Done 2026-10-03: the module decisions are in `src/splintercam/geometry2d/DECISIONS.md`; Peter's answers of 2026-10-02 and 2026-10-03 are registered as D-161 in Project Spike.
-4. `cleanup` stops its collinear and spike passes at three vertices (ours, step 9); confirm.
-5. Plan 0002, step 2: whether the label `large-change` exists and whether `change-size` is a required check.
-6. Spec gaps found by reviews, listed under Backlog (steps 2, 3, 4, 6, 7): rule order in `make_arc` for r ≤ eps_len, huge-radius bulges, a lower bound on t in `flatten`, the arctangent without a requirement of its own, limits not in the SPEC (segment rounding for r ≳ 1e10 mm, translation for E ≳ 1e9 mm).
-7. The geometry2d module budget: the SPEC proposes 1700 NLOC; `tools/size-check` reports 1561 on 2026-10-03; `architecture/modules.yaml` has none yet.
+1. The area bound had no arc term: derived (DEC-G2D-016), with a property test; the segment terms are summed exactly; research 01, Area and orientation, updated (#28).
+2. Research 01, Point in region, updated to DEC-G2D-012 (#25). Agents may edit `docs/research/` through a pull request Peter reviews.
+3. Module decisions are in `src/splintercam/geometry2d/DECISIONS.md` (D-161).
+4. `cleanup`'s three-vertex stop confirmed (#26, DEC-G2D-014).
+5. Plan 0002, step 2: the label `large-change` exists; Peter makes `change-size` a required check (plan 0002 records the result).
+6. The spec gaps of the reviews closed (#31, DEC-G2D-018 to 021): a tiny circle's radial check, arcs up to r = 10^9 mm (Peter named 10^10 mm; measurement refuted it), t ≥ eps_len for `flatten`, REQ-G2D-233 for the arctangent; E ≤ 10^9 mm and r·min(1, φ²) ≤ 10^7 mm for `signed_area` (DEC-G2D-016).
+7. Module budget 1700 NLOC in `architecture/modules.yaml` (#27, DEC-G2D-017).
+8. The point accessor cleanup of the backlog (#29). Slice 2 is proposed as plan 0004 (#30), waiting for Peter's approval.
 
 How the work ran (keep doing it this way):
 
-- One branch and one pull request per step, from `main` after the previous merge; never stack. At most 400 added lines of non-test code per pull request (`tools/size-check --change origin/main` counts raw added lines, comments included); a step that grows past it is split (5/5b, 8/8b), not labelled.
+- One branch and one pull request per step, from `main` after the previous merge; never stack. Since 2026-10-03 the rule is one pull request per session (docs/dev/07, Branches, commits and pull requests): six parallel pull requests that all appended to the SPEC change log and `DECISIONS.md` conflicted after every merge. At most 400 added lines of non-test code per pull request (`tools/size-check --change origin/main` counts raw added lines, comments included); a step that grows past it is split (5/5b, 8/8b), not labelled.
 - Tests first, tagged with requirement IDs; then `tools/check`; then the simplifier (over about 100 lines), the spec-reviewer and the test-auditor, one round each (D-159). Must-fix findings are fixed or, where they come from the SPEC or research, put to Peter before coding on (step 8). Reproduce every reviewer counterexample before acting on it: one in step 8b did not hold for valid input.
 - Property tests run with `HYPOTHESIS_PROFILE=thorough` (10 000 cases) before each pull request; they found real bugs in steps 7, 8 and 9.
 - Read `tools/check`'s result before committing or pushing.
@@ -180,6 +181,8 @@ Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
 - For Peter: vendor `predicates.c` (from <https://www.cs.cmu.edu/~quake/robust.html>) into `src/splintercam/geometry2d/kernel/vendor/` on the step 5 branch, or allow `www.cs.cmu.edu` in the environment's network settings; accept or change ADR 0009 and apply `0003-notice.patch`.
 
 ## Backlog
+
+Done after slice 1 (pull requests 25 to 31): the point accessor (step 9), research 01's Point in region (step 8), the area's arc term (step 7), the spec gaps of steps 2 (1, 3), 3 (1) and 4. Open items that slice 2 needs are copied into plan 0004's backlog.
 
 - Step 9 simplifier: the point accessor exists three times in the kernel (`exact.cpp`'s `point`, `region.cpp`, `cleanup.cpp`); one declaration in `exact.hpp` would serve all.
 

@@ -70,7 +70,10 @@ A person must approve: reviewed specs, accepted ADRs, `modules.yaml`, new depend
 
 ## Branches, commits and pull requests
 
-- One branch per task: `feat/geometry2d-offset-arcs`, `fix/post-arc-rounding`.
+- One branch and one pull request per working session, not per task or plan step (Peter, 2026-10-03). Inside it, one commit per item, each with its record (tests, SPEC, `DECISIONS.md`), so the maintainer can review commit by commit. Branch names name the session's main work: `feat/geometry2d-offset-arcs`, `fix/post-arc-rounding`.
+- Small code changes go into the session's pull request: up to about 100 lines of non-test code with no new or changed algorithm. A change gets a pull request of its own when it is a new or changed algorithm (it needs the spec-reviewer round), when it is over about 100 lines of non-test code, or when the session's pull request would pass the 400-line limit of [12](12-lean-code.md), section 3.
+- At most two pull requests open at a time. A new branch starts from `main` after the previous merge; never stack pull requests (merging with "delete branch" closes or retargets the next one).
+- Why: on 2026-10-03 six pull requests opened in parallel all appended to the SPEC change log and `DECISIONS.md`, so each merge left the others in conflict or out of date with `main`.
 - Commit messages follow Conventional Commits and name the requirement: `feat(geometry2d): true-arc offsets (REQ-OFF-006)`.
 - AI-assisted commits carry the agent's attribution trailer (for example `Co-Authored-By:`), and the human who submits the work signs off (Developer Certificate of Origin, `Signed-off-by:`), taking responsibility for it.
 - The pull request uses [.github/PULL_REQUEST_TEMPLATE.md](../../.github/PULL_REQUEST_TEMPLATE.md): requirements covered, commands run with results, renders, tests added or changed (and why), golden changes, dependencies, sources used. The maintainer reviews with [docs/templates/REVIEW-CHECKLIST.md](../templates/REVIEW-CHECKLIST.md).
@@ -79,7 +82,7 @@ A person must approve: reviewed specs, accepted ADRs, `modules.yaml`, new depend
 
 - Give each agent its own working copy (a git worktree) and its own branch.
 - Assign different modules or different strategies; the architecture keeps strategies independent for exactly this reason.
-- Shared files (`modules.yaml`, the glossary, schemas) are changed in separate small pull requests, merged first.
+- Shared files (`modules.yaml`, the glossary, schemas) are changed in a small pull request merged before the work that needs them.
 
 ## Starting the project
 

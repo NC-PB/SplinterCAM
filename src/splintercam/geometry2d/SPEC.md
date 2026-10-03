@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| Status | Slice 1 released by [plan 0003](../../../docs/plans/active/0003-geometry2d-slice-1.md) on Peter's answers of 2026-10-02; Peter reviews this text in the pull request of plan 0003, step 1. Choices marked "(ours)" answer open questions of the draft without asking again (D-159) |
+| Status | Slice 1 released by [plan 0003](../../../docs/plans/completed/0003-geometry2d-slice-1.md) on Peter's answers of 2026-10-02; Peter reviews this text in the pull request of plan 0003, step 1. Choices marked "(ours)" answer open questions of the draft without asking again (D-159) |
 | Layer | 1 (see architecture/modules.yaml) |
 | Depends on | foundation |
 | Research | [01][r01]: the main text is normative, the literature notes are evidence. This SPEC links to it instead of restating it |
