@@ -10,9 +10,8 @@ from fractions import Fraction
 import numpy as np
 import pytest
 
-import geometry2d_oracles as oracle
 from splintercam import _kernels
-from splintercam.geometry2d import in_arc_circle, incircle, orient2d
+from splintercam.geometry2d import incircle, orient2d
 
 ULP_AT_HALF = 2.0**-53  # one rounding unit at 0.5 (note test 1)
 
@@ -81,45 +80,6 @@ def test_note_test_4_incircle() -> None:
     assert cw.tolist() == [0, -1, 1]
 
 
-@pytest.mark.req("REQ-G2D-022", "REQ-G2D-021")
-def test_research_test_2_arc_predicate() -> None:
-    # C = (0, 0), P0 = (5, 0): (3, 4) on the circle, 2^-50 below inside (+1), above outside (-1).
-    q = np.array([[3.0, 4.0], [3.0, 4.0 - 2.0**-50], [3.0, 4.0 + 2.0**-50]])
-    centre, p0 = np.zeros((3, 2)), np.tile([5.0, 0.0], (3, 1))
-    assert in_arc_circle(q, centre, p0).tolist() == [0, 1, -1]
-    assert [oracle.in_arc_circle(tuple(row), (0.0, 0.0), (5.0, 0.0)) for row in q] == [0, 1, -1]
-
-
-def _vertical_extent_sign(
-    q_y: list[float], centre: list[list[float]], p0: list[list[float]]
-) -> list[int]:
-    out = np.empty(len(q_y), dtype=np.int8)
-    _kernels.geometry2d.vertical_extent_signs(np.array(q_y), np.array(centre), np.array(p0), out)
-    return out.tolist()
-
-
-@pytest.mark.req("REQ-G2D-023")
-def test_q_y_against_the_highest_and_lowest_point_of_a_circle() -> None:
-    # Research 01, test 6's circle: C = (0, 0), r = 5. The sign of (q_y - c_y)^2 - r^2: 0 at the
-    # top (q_y = 5), -1 inside the band (q_y = -3), +1 beyond it.
-    signs = _vertical_extent_sign(
-        [5.0, -3.0, 5.0 + 2.0**-50, -5.0], [[0.0, 0.0]] * 4, [[5.0, 0.0]] * 4
-    )
-    assert signs == [0, -1, 1, 0]
-
-
-@pytest.mark.req("REQ-G2D-023")
-def test_q_y_against_a_top_that_is_not_a_double() -> None:
-    # r = |(1, 1) - (0, 0)| = sqrt(2): c_y + r is no double; the doubles just below and above it
-    # lie inside and outside the band.
-    top = math.sqrt(2.0)
-    below, above = (
-        (top, math.nextafter(top, math.inf)) if top * top < 2 else (math.nextafter(top, 0.0), top)
-    )
-    assert Fraction(below) ** 2 < 2 < Fraction(above) ** 2
-    assert _vertical_extent_sign([below, above], [[0.0, 0.0]] * 2, [[1.0, 1.0]] * 2) == [-1, 1]
-
-
 def _kernel_pairs(name: str, a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     x, y = np.empty_like(a), np.empty_like(a)
     function = _kernels.geometry2d.two_sums if name == "sum" else _kernels.geometry2d.two_products
@@ -176,7 +136,7 @@ def test_build_guard_error_free_transformations(spread: bool) -> None:
             assert Fraction(float(x[k])) + Fraction(float(y[k])) == exact
 
 
-@pytest.mark.req("REQ-G2D-007", "REQ-G2D-011", "REQ-G2D-022")
+@pytest.mark.req("REQ-G2D-007", "REQ-G2D-011")
 @pytest.mark.parametrize("bad", [math.nan, math.inf])
 def test_a_non_finite_point_is_a_programming_error(bad: float) -> None:
     good = np.zeros((1, 2))
@@ -184,20 +144,17 @@ def test_a_non_finite_point_is_a_programming_error(bad: float) -> None:
         orient2d(np.array([[bad, 0.0]]), good, good)
     with pytest.raises(ValueError, match="finite"):
         incircle(good, good, good, np.array([[0.0, bad]]))
-    with pytest.raises(ValueError, match="finite"):
-        in_arc_circle(good, np.array([[bad, bad]]), good)
 
 
 @pytest.mark.req("REQ-G2D-024")
 def test_a_batch_gives_the_signs_of_single_rows() -> None:
     rng = np.random.default_rng(3)
     a, b, c, d = rng.uniform(-1.0, 1.0, (4, 50, 2))
-    batch = orient2d(a, b, c), incircle(a, b, c, d), in_arc_circle(a, b, c)
+    batch = orient2d(a, b, c), incircle(a, b, c, d)
     for k in range(50):
         one = slice(k, k + 1)
         single = orient2d(a[one], b[one], c[one]), incircle(a[one], b[one], c[one], d[one])
         assert [int(s[0]) for s in single] == [int(batch[0][k]), int(batch[1][k])]
-        assert int(in_arc_circle(a[one], b[one], c[one])[0]) == int(batch[2][k])
 
 
 @pytest.mark.req("REQ-G2D-024")

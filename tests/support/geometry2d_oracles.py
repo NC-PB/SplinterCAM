@@ -33,13 +33,3 @@ def incircle(a: P, b: P, c: P, d: P) -> int:
     (a0, a1, a2), (b0, b1, b2), (c0, c1, c2) = rows
     det = a0 * (b1 * c2 - b2 * c1) - a1 * (b0 * c2 - b2 * c0) + a2 * (b0 * c1 - b1 * c0)
     return sign(det)
-
-
-def squared_distance(p: P, q: P) -> Fraction:
-    dx, dy = Fraction(p[0]) - Fraction(q[0]), Fraction(p[1]) - Fraction(q[1])
-    return dx * dx + dy * dy
-
-
-def in_arc_circle(q: P, centre: P, p0: P) -> int:
-    """+1 inside the circle about `centre` through `p0`, 0 on it, -1 outside (REQ-G2D-022)."""
-    return sign(squared_distance(p0, centre) - squared_distance(q, centre))

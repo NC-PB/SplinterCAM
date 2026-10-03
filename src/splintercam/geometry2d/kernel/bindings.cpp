@@ -79,25 +79,6 @@ void bind_exact(nb::module_& m) {
         },
         nb::arg("a"), nb::arg("b"), nb::arg("c"), nb::arg("d"), nb::arg("out"),
         "Write the exact sign of incircle per row (REQ-G2D-011).");
-    m.def(
-        "in_arc_circle_signs",
-        [](const PointRows& q, const PointRows& centre, const PointRows& p0, const Int8Out& out) {
-            check_rows(q.shape(0), {centre.shape(0), p0.shape(0), out.shape(0)});
-            in_arc_circle_signs({.q = points(q), .centre = points(centre), .p0 = points(p0)},
-                                view(out));
-        },
-        nb::arg("q"), nb::arg("centre"), nb::arg("p0"), nb::arg("out"),
-        "Write the exact sign of |p0 - c|^2 - |q - c|^2 per row (REQ-G2D-022).");
-    m.def(
-        "vertical_extent_signs",
-        [](const Values& q_y, const PointRows& centre, const PointRows& p0, const Int8Out& out) {
-            check_rows(q_y.shape(0), {centre.shape(0), p0.shape(0), out.shape(0)});
-            vertical_extent_signs(
-                {.q_y = {q_y.data(), q_y.size()}, .centre = points(centre), .p0 = points(p0)},
-                view(out));
-        },
-        nb::arg("q_y"), nb::arg("centre"), nb::arg("p0"), nb::arg("out"),
-        "Write the exact sign of (q_y - c_y)^2 - |p0 - c|^2 per row (REQ-G2D-023).");
 }
 
 } // namespace
