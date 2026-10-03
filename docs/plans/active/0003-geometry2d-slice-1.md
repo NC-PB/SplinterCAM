@@ -25,7 +25,7 @@
 - [x] 4. **Flattening and bounding boxes.** `flatten` (`flatten.cpp`), `bounding_box`, the step limit π/2 as a declared parameter in foundation's defaults file (a foundation SPEC change), the shared exact test of which axis directions lie in a sweep. REQ-G2D-102 to 113, 126, 213, 214, 230; the tests of REQ-G2D-231 and 232 start here and grow with each step. Size: about 220 + 300.
 - [x] 5. **Exact predicates** (`predicates.c` vendored by Peter, pull request 15). The C build of the vendored file through our own wrapper, strict float flags, `exactinit` at load; `orient2d`, `incircle`, `two_sum`, `two_product`; the build guard. REQ-G2D-005 to 011, 013 to 018, 021, 024. Size: about 300 + 350.
 - [x] 5b. **Arc predicates.** `in_arc_circle` and the (q_y − c_y)² comparison by expansion arithmetic, from the branch `step-5b-draft` (reviewed with step 5). REQ-G2D-022, 023. Size: about 110 + 120.
-- [ ] 6. **Distances and circles.** `closest_point`, `circle_through`. REQ-G2D-091 to 101. Size: about 150 + 250.
+- [x] 6. **Distances and circles.** `closest_point`, `circle_through`. REQ-G2D-091 to 101. Size: about 150 + 250.
 - [ ] 7. **Area and orientation.** `signed_area` (`area.cpp`), with the exact sum. REQ-G2D-001, 002, 128 to 133. Size: about 180 + 250.
 - [ ] 8. **Point in region.** `point_in_region`, `point_in_region_exact` (`region.cpp`). REQ-G2D-134 to 150. Size: about 350 + 350.
 - [ ] 9. **Cleanup.** `cleanup` (`cleanup.cpp`). REQ-G2D-020, 204 to 212. Size: about 180 + 250.
@@ -56,6 +56,13 @@ Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
 - CI on pull request 16: the sanitizer found `predicates.c`'s one-past-end read (ASan off for that code, approved by Peter); Windows needed the vendored C code in a C-only library target of its own, because the Visual Studio generators do not apply per-language options and include directories in a mixed C and C++ target.
 - `tools/check`: PASS (11 of 14 steps). Property tests pass with 10 000 cases each.
 - Next step: 5b.
+
+### 2026-10-03, session 1, step 6
+
+- Done: `closest_point` (`_distances.py`): the clamped foot on a line; on an arc the sweep decided by exact orient2d signs (two halves from the start direction, a clockwise arc as the counter-clockwise arc from P1 to P0, the sweep governing near 0 and near a full turn as in `bounding_box`), the nearer end by `in_arc_circle`. `circle_through` (`_circle.py`, kernel `circles_through` in `exact.cpp`): D from `predicates.c`'s orient2d, the eps_len test as |D| > eps_len·|P3 − P1| with no division, lengths as sqrt of a sum of squares. A NaN or infinite query is a `ValueError`. Tests first, they failed on the missing names: research tests 9 and 17, note test 5, the exact sweep edge 2^-60 off the ray, the exact nearer end, the eps_len boundary, run twice byte for byte (REQ-G2D-231); properties against exact rationals and sampled arc points.
+- Reviews: simplifier (taken: `_sign`, the full-circle branch, private docstrings, `d != 0` in the kernel; the shared sweep test with `_box.py` in the backlog); spec-reviewer (fixed: the circle decision through libm `hypot`, now sqrt of a sum of squares as in `arcs.cpp`; the nearer end from rounded distances, now exact, its failing input a test; a −0.0 parameter; the eps_len boundary tested; a nearly full arc that `make_arc` really builds; NaN queries; the module's `distance`); test-auditor (fixed: two untagged tests, the sweep-edge test too coarse at 2^-40, REQ-G2D-231 run-twice tests for tests 9 and 17; the existence check before the conditioning filter; arc tolerances scaled like the others). The 10 000-case run found coordinates near 1e-195, below the predicates' input range, where the squared chord underflows: the circle and arc properties keep to the range with `assume`, as the predicate properties do.
+- `tools/check`: PASS (11 of 14 steps). Property tests pass with 10 000 cases each.
+- Next step: 7.
 
 ### 2026-10-03, session 1, step 5b
 
@@ -102,6 +109,13 @@ Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
 - For Peter: vendor `predicates.c` (from <https://www.cs.cmu.edu/~quake/robust.html>) into `src/splintercam/geometry2d/kernel/vendor/` on the step 5 branch, or allow `www.cs.cmu.edu` in the environment's network settings; accept or change ADR 0009 and apply `0003-notice.patch`.
 
 ## Backlog
+
+- Step 6 simplifier: `bounding_box` could use `_distances._in_sweep` on its four axis points and drop `_octant` and `_axes_in_sweep` (about 25 lines), once REQ-G2D-214's tests confirm the same answers; its own step, since it changes `_box.py`.
+
+- Step 6 spec review, for steps 7 and 8: the ON rule of REQ-G2D-148 needs point-to-edge distances for every point and edge; calling `closest_point` in a Python loop would break the split rule, so plan a batched kernel there. `_in_sweep` assumes r > eps_len, which `make_arc` ensures but `curve_rows` does not (`check_arcs` accepts any sweep when r ≤ eps_len/π).
+
+- Step 6 test audit, optional: a line whose squared length underflows (|P1 − P0| below about 1.5e-154, outside the predicates' input range) counts as zero length; `_arc_parameter` uses Python's `math.atan2` (libm, only for the returned parameter, no decision on a sign); `test_bounding_box` has no REQ-G2D-231 run-twice test (from step 4); non-finite tests cover NaN in one position only; the clamp branch of `_arc_parameter` has no targeted test.
+
 
 - Step 4 spec review, spec gap for Peter: no lower bound on t and no declared maximum step count; today only a count beyond an int is refused (`ValueError`). Operation tolerances give at most about 55 000 steps per circle (t_flat >= 1.1e-5 mm, r < 6711 mm).
 

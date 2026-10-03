@@ -82,6 +82,18 @@ def test_radius_is_the_distance_to_p1(ctx: Context) -> None:
     assert circle.radius_mm == math.sqrt(dx * dx + dy * dy)
 
 
+@pytest.mark.req("REQ-G2D-097")
 def test_a_non_finite_point_is_a_programming_error(ctx: Context) -> None:
     with pytest.raises(ValueError, match="finite"):
         circle_through((0.0, 0.0), (math.nan, 1.0), (2.0, 0.0), ctx)
+
+
+@pytest.mark.req("REQ-G2D-231")
+def test_circles_are_bit_identical_when_repeated(ctx: Context) -> None:
+    triples = [
+        ((0.0, 0.0), (4.0, 0.0), (0.0, 2.0)),
+        ((10.0, 0.0), (-10.0, 0.0), (10 * math.cos(-1e-4), 10 * math.sin(-1e-4))),
+        ((0.3, 0.1), (4.7, 0.2), (0.4, 2.9)),
+    ]
+    first = [circle_through(*p, ctx) for p in triples]
+    assert [circle_through(*p, ctx) for p in triples] == first

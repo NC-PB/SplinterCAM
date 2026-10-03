@@ -155,7 +155,7 @@ Release 1 kernels are single-threaded (Peter, 2026-10-02). Decisions and counts 
 | REQ-G2D-097 | WHEN `circle_through(P_1, P_2, P_3)` finds a circle, THE function SHALL return the centre of research 01 with D the value `predicates.c`'s orient2d returns, whose sign is exact. | test 9; property against exact rationals | Released |
 | REQ-G2D-098 | IF orient2d(P_1, P_2, P_3) is 0, THEN THE `circle_through` function SHALL return no circle. | test 9 | Released |
 | REQ-G2D-099 | IF \|orient2d(P_1, P_3, P_2)\| / \|P_3 − P_1\| ≤ eps_len, THEN THE `circle_through` function SHALL return no circle, decided before any division by D. | test 9 | Released |
-| REQ-G2D-100 | IF P_1 = P_3, THEN THE `circle_through` function SHALL return no circle without dividing by \|P_3 − P_1\|. | P_1 = P_3 gives `None` without a warning | Released |
+| REQ-G2D-100 | IF P_1 = P_3, THEN THE `circle_through` function SHALL return no circle without dividing by \|P_3 − P_1\|. | P_1 = P_3 gives `None`; review: the kernel divides only when D ≠ 0 | Released |
 | REQ-G2D-101 | THE `circle_through` function SHALL apply no radius or chord limit of its own. | test 9 | Released |
 | REQ-G2D-213 | THE `bounding_box` function SHALL give a line the box of its end points. | new test | Released |
 | REQ-G2D-214 | THE `bounding_box` function SHALL give an arc the box of its end points and of the points at the angles 0, π/2, π and 3π/2 about C that lie in its sweep, decided by exact signs, all four for a full circle; where the octants of the end points contradict the sweep within the tolerance of REQ-G2D-043, the sweep governs (ours). | test 18 | Released |

@@ -70,13 +70,25 @@ def test_arc_inside_the_sweep_gives_the_radial_point(  # noqa: PLR0913 (parametr
 
 
 @pytest.mark.req("REQ-G2D-093")
-@pytest.mark.parametrize("arc", [QUARTER, QUARTER_CW])
-def test_the_sweep_is_decided_by_exact_signs(ctx: Context, arc: Arc) -> None:
-    # 2^-40 mm off the ray through (0, 5): inside the sweep the point moves off the y axis,
-    # outside it is P1 or P0 of the CW arc, (0, 5), exactly.
-    inside = closest_point(arc, (2.0**-40, 7.0), ctx).point
-    assert inside[0] > 0.0
-    assert closest_point(arc, (-(2.0**-40), 7.0), ctx).point == (0.0, 5.0)
+@pytest.mark.parametrize(
+    ("arc", "inside", "outside", "end"),
+    [
+        (QUARTER, (2.0**-60, 7.0), (-(2.0**-60), 7.0), (0.0, 5.0)),
+        (QUARTER_CW, (7.0, 2.0**-60), (7.0, -(2.0**-60)), (5.0, 0.0)),
+    ],
+)
+def test_the_sweep_is_decided_by_exact_signs(
+    ctx: Context,
+    arc: Arc,
+    inside: tuple[float, float],
+    outside: tuple[float, float],
+    end: tuple[float, float],
+) -> None:
+    # 2^-60 mm off the ray through P1, below the resolution of an angle near π/2 or 0: a sweep
+    # decided on a rounded angle would take both as inside. Inside, the point leaves the ray;
+    # outside, it is P1, exactly.
+    assert closest_point(arc, inside, ctx).point != end
+    assert closest_point(arc, outside, ctx).point == end
 
 
 @pytest.mark.req("REQ-G2D-093")
@@ -139,6 +151,7 @@ def test_a_query_on_the_start_ray_has_parameter_plus_zero(ctx: Context) -> None:
     assert math.copysign(1.0, found.parameter) == 1.0
 
 
+@pytest.mark.req("REQ-G2D-091", "REQ-G2D-093")
 @pytest.mark.parametrize("curve", [QUARTER, Line((0.0, 0.0), (1.0, 0.0))])
 def test_a_non_finite_query_is_a_programming_error(ctx: Context, curve: Line | Arc) -> None:
     with pytest.raises(ValueError, match="finite"):
@@ -149,3 +162,11 @@ def test_a_non_finite_query_is_a_programming_error(ctx: Context, curve: Line | A
 @pytest.mark.parametrize("arc", [QUARTER, QUARTER_CW])
 def test_centre_gives_p0_at_the_radius(ctx: Context, arc: Arc) -> None:
     assert closest_point(arc, (0.0, 0.0), ctx) == ClosestPoint(arc.p0, 0.0, 5.0)
+
+
+@pytest.mark.req("REQ-G2D-231")
+@pytest.mark.parametrize("curve", [QUARTER, QUARTER_CW, Line((0.1, 0.7), (3.3, -2.9))])
+def test_closest_points_are_bit_identical_when_repeated(ctx: Context, curve: Line | Arc) -> None:
+    queries = [(6.0, 8.0), (1.0, 1.0), (3.0, -4.0), (-1.0, -1.0), (0.0, 0.0), (0.3, 7.1)]
+    first = [closest_point(curve, q, ctx) for q in queries]
+    assert [closest_point(curve, q, ctx) for q in queries] == first

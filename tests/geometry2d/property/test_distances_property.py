@@ -45,21 +45,24 @@ def test_line_foot_matches_the_exact_foot(
 def test_arc_closest_point_is_no_farther_than_any_arc_point(
     ctx: Context, r: float, start: float, sweep: float, q: tuple[float, float]
 ) -> None:
+    assume(oracle.in_safe_range(*q))  # the predicates' input range, a precondition
     centre = (1.0, -2.0)
     p0 = (centre[0] + r * math.cos(start), centre[1] + r * math.sin(start))
     p1 = (centre[0] + r * math.cos(start + sweep), centre[1] + r * math.sin(start + sweep))
     found = closest_point(Arc(p0, p1, centre, sweep), q, ctx)
-    assert found.distance_mm == pytest.approx(math.dist(q, found.point), abs=1e-9)
+    # A few thousand rounding units of the largest coordinate, as in the other properties.
+    tol = 1e-12 * max(1.0, abs(q[0]), abs(q[1]), r)
+    assert found.distance_mm == pytest.approx(math.dist(q, found.point), abs=tol)
     assert 0.0 <= found.parameter <= abs(sweep)
     angles = start + np.linspace(0.0, sweep, 2001)
     samples = np.column_stack((centre[0] + r * np.cos(angles), centre[1] + r * np.sin(angles)))
     nearest = float(np.min(np.hypot(samples[:, 0] - q[0], samples[:, 1] - q[1])))
-    assert found.distance_mm <= nearest + 1e-9 * max(1.0, nearest)
+    assert found.distance_mm <= nearest + tol
     # The point found lies on the arc: on its circle, at its parameter from P0.
-    assert math.dist(found.point, centre) == pytest.approx(r, abs=1e-9)
+    assert math.dist(found.point, centre) == pytest.approx(r, abs=tol)
     direction = start + math.copysign(found.parameter, sweep)
     expected = (centre[0] + r * math.cos(direction), centre[1] + r * math.sin(direction))
-    assert found.point == pytest.approx(expected, abs=1e-9)
+    assert found.point == pytest.approx(expected, abs=tol)
 
 
 @pytest.mark.req("REQ-G2D-097", "REQ-G2D-099")
@@ -68,17 +71,20 @@ def test_arc_closest_point_is_no_farther_than_any_arc_point(
 def test_circle_matches_the_exact_circumcentre(
     ctx: Context, p1: tuple[float, float], p2: tuple[float, float], p3: tuple[float, float]
 ) -> None:
+    # The predicates' input range, a precondition (geometry2d SPEC; Peter, 2026-10-03): below
+    # it the squared chord underflows.
+    assume(oracle.in_safe_range(*p1, *p2, *p3))
     chord = math.dist(p1, p3)
     assume(chord > 0.0)
     height = abs(oracle.twice_area(p1, p2, p3)) / chord  # P2's distance from the line P1P3
     circle = circle_through(p1, p2, p3, ctx)
-    if height <= 0.5 * ctx.tolerances.length_eps_mm:
+    eps = ctx.tolerances.length_eps_mm
+    if height <= 0.5 * eps:
         assert circle is None
         return
-    # Clear of the eps_len boundary, and well conditioned: P2 not much closer to the line than a
-    # tenth of the chord.
-    assume(height >= max(2 * ctx.tolerances.length_eps_mm, 0.1 * chord))
+    assume(height >= 2 * eps)  # clear of the eps_len boundary, which a unit test covers exactly
     assert circle is not None
+    assume(height >= 0.1 * chord)  # well conditioned: P2 not much closer to the line
     cx, cy = oracle.circumcentre(p1, p2, p3)
     scale = max(1.0, *map(abs, (*p1, *p2, *p3)), circle.radius_mm)
     assert circle.centre == pytest.approx((float(cx), float(cy)), abs=1e-12 * scale)
