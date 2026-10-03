@@ -5,7 +5,7 @@ from ._box import Box, bounding_box
 from ._bulge import arc_from_bulge, bulges_from_arc
 from ._curves import Arc, Curve, Line, Point, make_arc, make_line
 from ._flatten import AirSide, flatten
-from ._predicates import are_parallel
+from ._predicates import are_parallel, in_arc_circle, incircle, orient2d
 from ._rows import CurveRows, curve_rows
 
 __all__ = [
@@ -22,6 +22,9 @@ __all__ = [
     "bulges_from_arc",
     "curve_rows",
     "flatten",
+    "in_arc_circle",
+    "incircle",
     "make_arc",
     "make_line",
+    "orient2d",
 ]

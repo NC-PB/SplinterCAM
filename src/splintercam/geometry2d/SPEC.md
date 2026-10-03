@@ -68,6 +68,7 @@ def cleanup(points, ctx) -> Result[NDArray[np.int64]]: ...                    # 
 - `make_arc` applies its rules in this order (ours, the draft's proposal): non-finite values, sweep range, r ≤ eps_len, nearly closed, radial check, angle check. 2π is the double nearest 2π (ours).
 - `closest_point`'s parameter is t ∈ [0, 1] on a line and the angle from P_0 in the sense of φ on an arc (ours). `circle_through`'s radius is |P_1 − C| (ours).
 - `cleanup` takes a closed polyline (n, 2) and returns the indices of the vertices it keeps, in order, so callers carry source IDs along (ours).
+- The exact predicates are exact for coordinates that are 0 or have a magnitude in [2^−142, 2^201] (SRC-032, p. 308; ours: a precondition, not checked); below it their products underflow. In mm that is any coordinate from 1.8e-43 mm up.
 - Internal entries for tests, not in `__all__`: `two_sum`, `two_product` (exact.cpp) and `point_in_region_exact`, the exact layer alone.
 
 ## Requirements
@@ -275,6 +276,7 @@ No requirements; each line names the work and where its drafted requirements and
 ## Change log
 
 - 2026-10-02: drafted from research 01 (plan 0001, step 4), with review fixes.
+- 2026-10-03: plan 0003, step 5: the predicates' input range stated as a precondition (SRC-032, p. 308).
 - 2026-10-02: cut to slice 1 on Peter's answers (plan 0003, step 1): in_arc_circle +1 inside, arc rows give `ARC_INCONSISTENT`, predicates without a `Context`, D-055 tiers 2 and 3 (REQ-G2D-231, 232), single-threaded kernels; the draft's proposals taken for the other slice 1 questions and marked "(ours)"; everything else moved to Later parts. Merged into a neighbour: 095 into 094, 107 and 108 into 106, 111 into 110, 136 to 138 into 135, 140 to 142 into 139, 144 into 143, 195 into 194, 202 into 201, 208 into 207, 210 into 209. Stated in the Public interface instead: 225 to 227. Not needed: 228 (`flatten` expects validated curves). Slice 2: 229.
 
 [r01]: ../../../docs/research/01-foundations.md

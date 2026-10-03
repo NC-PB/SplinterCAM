@@ -3,7 +3,8 @@
 # (ADR 0004; docs/dev/02 and 04). scikit-build-core runs it from pyproject.toml.
 
 cmake_minimum_required(VERSION 3.28...4.1)
-project(splintercam_kernels LANGUAGES CXX)
+# C only for Shewchuk's predicates.c, vendored unchanged (ADR 0009).
+project(splintercam_kernels LANGUAGES C CXX)
 
 # C++20 features plus std::expected, which MSVC, GCC and Clang provide only in C++23 mode
 # (docs/dev/04; decision of 2026-09-24/26 in plan 0001).
@@ -76,8 +77,10 @@ endif()
 # Each folder's bindings.cpp goes into the extension; all other kernel files go into a library that
 # has neither nanobind nor Python on its include path, so only bindings.cpp can include nanobind
 # (docs/dev/03, rule 3).
-file(GLOB_RECURSE SPLINTERCAM_KERNEL_SOURCES CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/splintercam/*.cpp")
-list(FILTER SPLINTERCAM_KERNEL_SOURCES INCLUDE REGEX "/kernel/[^/]+\\.cpp$")
+file(GLOB_RECURSE SPLINTERCAM_KERNEL_SOURCES CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/splintercam/*.cpp"
+     "${PROJECT_SOURCE_DIR}/src/splintercam/*.c")
+# Vendored code in kernel/vendor/ is not listed: a wrapper in kernel/ includes it (ADR 0009).
+list(FILTER SPLINTERCAM_KERNEL_SOURCES INCLUDE REGEX "/kernel/[^/]+\\.c(pp)?$")
 set(SPLINTERCAM_BINDING_SOURCES ${SPLINTERCAM_KERNEL_SOURCES})
 list(FILTER SPLINTERCAM_BINDING_SOURCES INCLUDE REGEX "/bindings\\.cpp$")
 list(FILTER SPLINTERCAM_KERNEL_SOURCES EXCLUDE REGEX "/bindings\\.cpp$")
@@ -110,7 +113,23 @@ target_compile_options(_kernels PRIVATE ${SPLINTERCAM_CXX_OPTIONS})
 if(SPLINTERCAM_KERNEL_SOURCES)
   add_library(splintercam_kernel_code STATIC ${SPLINTERCAM_KERNEL_SOURCES})
   set_target_properties(splintercam_kernel_code PROPERTIES POSITION_INDEPENDENT_CODE ON)
-  target_compile_options(splintercam_kernel_code PRIVATE ${SPLINTERCAM_CXX_OPTIONS})
+  target_compile_options(splintercam_kernel_code PRIVATE
+                         $<$<COMPILE_LANGUAGE:CXX>:${SPLINTERCAM_CXX_OPTIONS}>)
+  # The C sources are wrappers of vendored files (ADR 0009, Peter): C99 for their old-style
+  # definitions, compiler warnings off for that third-party code only, the strict float flags of
+  # D-097 like every kernel source, and hidden symbols so their global names stay in the module.
+  # MSVC lacks <sys/time.h>, which predicates.c includes for its test-data generators: an empty
+  # stand-in comes from cmake/msvc-shim/.
+  set_target_properties(splintercam_kernel_code PROPERTIES C_STANDARD 99 C_EXTENSIONS ON
+                        C_VISIBILITY_PRESET hidden)
+  if(MSVC)
+    target_compile_options(splintercam_kernel_code PRIVATE $<$<COMPILE_LANGUAGE:C>:/w /fp:precise>)
+    target_include_directories(splintercam_kernel_code PRIVATE
+                               $<$<COMPILE_LANGUAGE:C>:${PROJECT_SOURCE_DIR}/cmake/msvc-shim>)
+  else()
+    target_compile_options(splintercam_kernel_code PRIVATE
+                           $<$<COMPILE_LANGUAGE:C>:-w -ffp-contract=off -fno-fast-math>)
+  endif()
   target_link_libraries(splintercam_kernel_code PRIVATE Clipper2)
   target_link_libraries(_kernels PRIVATE splintercam_kernel_code)
 endif()
