@@ -142,14 +142,15 @@ def test_p1_off_the_circle_matches_arc_and_connector_flattened(
     assert exact.tolist() == flattened.tolist()
 
 
-@pytest.mark.req("REQ-G2D-148")
+@pytest.mark.req("REQ-G2D-148", "REQ-G2D-149", "REQ-G2D-150")
 @shared_ctx
 @given(
     bulges=st.lists(st.floats(-2.0, 2.0), min_size=4, max_size=4),
     along=st.floats(0.0, 1.0),
     edge=st.integers(0, 3),
     offset=st.sampled_from([0.0, 2.0**-30, 0.5e-6, 0.99e-6, 1.01e-6, 2e-6, 1e-3]),
-    direction=st.floats(0.0, math.tau),
+    # On a grid of 2^20 directions: no tiny sines below the predicates' input range.
+    direction=st.integers(0, 2**20).map(lambda k: k * math.tau / 2**20),
 )
 def test_the_tolerance_layer_is_on_within_eps_len(  # noqa: PLR0913 (Hypothesis draws)
     ctx: Context,
@@ -170,8 +171,15 @@ def test_the_tolerance_layer_is_on_within_eps_len(  # noqa: PLR0913 (Hypothesis 
     )
     loops = _rows(curves, ctx)
     eps = ctx.tolerances.length_eps_mm
-    distance = min(closest_point(c, q, ctx).distance_mm for c in curves)
+    # REQ-G2D-148 as amended: an arc is measured to the nearer of its radii |P0 - C| and |P1 - C|,
+    # and the reversed arc has the second. The band absorbs a point equally near both ends.
+    reversed_curves = [
+        Arc(c.p1, c.p0, c.centre, -c.sweep_rad) if isinstance(c, Arc) else Line(c.p1, c.p0)
+        for c in curves[::-1]
+    ]
+    distance = min(closest_point(c, q, ctx).distance_mm for c in curves + reversed_curves)
     found = PointLocation(point_in_region(np.array([q]), loops, ctx)[0])
+    assert point_in_region(np.array([q]), _rows(reversed_curves, ctx), ctx)[0] == found
     exact = PointLocation(point_in_region_exact(np.array([q]), loops)[0])
     if distance <= eps * (1 - 1e-9):
         assert found is ON

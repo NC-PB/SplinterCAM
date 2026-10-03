@@ -42,9 +42,11 @@ def test_research_test_5_tolerance_layer(ctx: Context) -> None:
         (15.0 + TINY, 5.0),
         (15.0 - 2e-6, 5.0),
         (15.0 + 2e-6, 5.0),
+        (10.0, 5.0),  # on the chord line
+        (5.0, 5.0),  # on the arc's circle, outside its sweep
     ]
     for loops in _both(_square_with_semicircle(math.pi), ctx):
-        assert _located(q, loops, ctx) == [ON, ON, ON, IN, OUT]
+        assert _located(q, loops, ctx) == [ON, ON, ON, IN, OUT, IN, IN]
     for loops in _both(_square_with_semicircle(-math.pi), ctx):
         assert _located([(10.0, 5.0), (4.0, 5.0), (6.0, 5.0)], loops, ctx) == [OUT, IN, OUT]
 
@@ -68,7 +70,7 @@ def test_eps_len_itself_is_on(ctx: Context) -> None:
     assert _located(q, polygon(SQUARE, ctx), ctx) == [ON, OUT, ON, IN]
 
 
-@pytest.mark.req("REQ-G2D-149")
+@pytest.mark.req("REQ-G2D-148", "REQ-G2D-149")
 def test_winding_sums_over_all_loops(ctx: Context) -> None:
     one = polygon(SQUARE, ctx)
     two = polygon([(3.0, 3.0), (3.0, 7.0), (7.0, 7.0), (7.0, 3.0)], ctx)  # a clockwise hole
@@ -124,6 +126,8 @@ def test_both_orientations_agree(
 ) -> None:
     forward, backward = _both(rows, ctx)
     assert _located(q, forward, ctx) == _located(q, backward, ctx)
+    if len(rows) == 4:  # the tiny arc: its circle off the sweep is not ON
+        assert _located(q, forward, ctx) == [OUT, OUT, IN]
 
 
 @pytest.mark.req("REQ-G2D-134", "REQ-G2D-201")
