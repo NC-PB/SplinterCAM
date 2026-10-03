@@ -133,10 +133,8 @@ Splits arc_splits(int start, int end, double sweep) {
 // The radial connector from the circle to P1, outward when P1 lies outside the circle.
 int connector_winding(Point2 q, const Arc& arc) {
     const int p1_inside = arc_circle_sign(arc.p1, {arc.c, arc.p0});
-    const int rise =
-        p1_inside == 0
-            ? 0
-            : piece_winding(y(q), {End{EndKind::ray, 0.0}, End{EndKind::point, y(arc.p1)}}, arc);
+    const std::array<End, 2> ends = {End{EndKind::ray, 0.0}, End{EndKind::point, y(arc.p1)}};
+    const int rise = p1_inside == 0 ? 0 : piece_winding(y(q), ends, arc);
     const int side = -p1_inside * orient_sign(arc.c, arc.p1, q); // +1: q left of the connector
     return rise > 0 ? static_cast<int>(side > 0) : -static_cast<int>(rise < 0 && side < 0);
 }
@@ -146,7 +144,7 @@ int arc_winding(Point2 q, const Arc& arc) {
     int from_octant = octant(arc.p0, arc.c, mirrored);
     const int end_octant = octant(arc.p1, arc.c, mirrored);
     const Splits splits = arc_splits(from_octant, end_octant, std::abs(arc.sweep));
-    // Whether the circle crosses the ray right of q on its left and on its right half.
+    // Whether the circle crosses the ray right of q on each half.
     const int circle = arc_circle_sign(q, {arc.c, arc.p0});              // +1 inside
     const std::array<bool, 2> crosses = {x(q) < x(arc.c) && circle < 0,  // left half
                                          x(q) < x(arc.c) || circle > 0}; // right half

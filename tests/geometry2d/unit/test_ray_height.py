@@ -15,7 +15,7 @@ P = tuple[float, float]
 
 
 def _ray_end_height(centre: P, p0: P, toward: P) -> float:
-    # The height c_y + r·(t_y − c_y)/|t − c|, rounded once from 60 digits.
+    # The height c_y + r·(t_y - c_y)/|t - c|, rounded once from 60 digits.
     with localcontext() as ctx:
         ctx.prec = 60
         cx, cy, px, py, tx, ty = (Decimal(v) for v in (*centre, *p0, *toward))

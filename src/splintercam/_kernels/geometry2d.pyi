@@ -44,7 +44,7 @@ def phi_minus_sin(phi: Annotated[NDArray[numpy.float64], dict(shape=(None,), ord
 
 def ray_height_sign(arg0: float, arg1: Sequence[float], arg2: Sequence[float], arg3: Sequence[float], /) -> int:
     """
-    The exact sign of q_y minus the height where the ray from centre through toward meets the circle about centre through p0 (REQ-G2D-005, 135).
+    Sign of q_y minus where the ray centre -> toward meets the circle through p0 (exact).
     """
 
 def point_locations(q: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], rows: Annotated[NDArray[numpy.float64], dict(shape=(None, 7), order='C', device='cpu', writable=False)], out: Annotated[NDArray[numpy.int8], dict(shape=(None,), order='C', device='cpu')]) -> None:
