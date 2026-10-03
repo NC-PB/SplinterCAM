@@ -128,6 +128,15 @@ if(SPLINTERCAM_KERNEL_SOURCES)
     target_compile_options(splintercam_kernel_code PRIVATE
                            $<$<COMPILE_LANGUAGE:C>:-w -ffp-contract=off -fno-fast-math>)
   endif()
+  # ASan off for the vendored C code only (pending Peter's approval, plan 0003, step 5): its
+  # expansion sums read one element past the end of an input array (predicates.c, enow =
+  # e[++eindex] in fast_expansion_sum_zeroelim and its kin) and use that value only while
+  # eindex < elen, so results are unaffected, but ASan reports a stack-buffer-overflow in
+  # orient2dadapt. The file stays unchanged (ADR 0009); UBSan stays on for it.
+  if(SPLINTERCAM_SANITIZE)
+    target_compile_options(splintercam_kernel_code PRIVATE
+                           $<$<COMPILE_LANGUAGE:C>:-fno-sanitize=address>)
+  endif()
   target_link_libraries(splintercam_kernel_code PRIVATE Clipper2)
   target_link_libraries(_kernels PRIVATE splintercam_kernel_code)
 endif()
