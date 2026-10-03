@@ -5,12 +5,14 @@
 import math
 from fractions import Fraction
 
+import numpy as np
 import pytest
 from hypothesis import HealthCheck, assume, given, reject, settings
 from hypothesis import strategies as st
 
 import geometry2d_oracles as oracle
 from geometry2d_checks import loop, polygon
+from splintercam import _kernels
 from splintercam.foundation import Context
 from splintercam.geometry2d import Arc, arc_from_bulge, signed_area
 
@@ -113,7 +115,7 @@ def _check_area(ctx: Context, rows: list[list[float]]) -> None:
     largest = max(abs(v) for p in ends for v in p)
     translation = 2 * U * (e + U * largest) * chords
     polygon_sums = len(rows) * U * (math.sqrt(2) * e * chords + 3 * e * e) if e <= 3355.0 else 0.0
-    # The final halving rounds once more: u·|A| with a margin for the comparison itself.
+    # The final halving rounds once more: u·|A|, doubled for the rounding of `bound` itself.
     bound = polygon_sums + translation + _arc_bound(rows) + 2 * U * abs(float(exact))
     eps_l = ctx.tolerances.length_eps_mm * length
     result = signed_area(loop(rows, ctx), ctx)
@@ -128,7 +130,9 @@ def _check_area(ctx: Context, rows: list[list[float]]) -> None:
 BULGES = st.one_of(st.none(), st.floats(-8.0, 8.0), st.floats(-1e-3, 1e-3))
 
 
-@pytest.mark.req("REQ-G2D-001", "REQ-G2D-128", "REQ-G2D-130", "REQ-G2D-131", "REQ-G2D-132")
+@pytest.mark.req(
+    "REQ-G2D-001", "REQ-G2D-128", "REQ-G2D-130", "REQ-G2D-131", "REQ-G2D-132", "REQ-G2D-133"
+)
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=None)
 @given(
     offset=st.tuples(st.floats(-1e4, 1e4), st.floats(-1e4, 1e4)),
@@ -171,3 +175,14 @@ def test_full_circles_up_to_the_radius_limit(
     p0 = (centre[0] + radius * math.cos(angle), centre[1] + radius * math.sin(angle))
     assume(all(oracle.in_safe_range(*p) for p in (p0, centre)))
     _check_area(ctx, [[*p0, *p0, *centre, -math.tau if clockwise else math.tau]])
+
+
+@pytest.mark.req("REQ-G2D-128")
+@given(phi=st.floats(-math.tau, math.tau).filter(lambda v: v == 0.0 or abs(v) >= 1e-100))
+def test_phi_minus_sin_within_the_bounds_the_area_proof_uses(phi: float) -> None:
+    # DEC-G2D-016: 16u relative for |φ| <= 1, 64u absolute beyond (no underflow below 1e-100).
+    out = np.empty(1)
+    _kernels.geometry2d.phi_minus_sin(np.array([phi]), out)
+    exact = oracle.phi_minus_sin(phi)
+    allowed = 16 * U * abs(exact) if abs(phi) <= 1.0 else Fraction(64 * U)
+    assert abs(Fraction(float(out[0])) - exact) <= allowed

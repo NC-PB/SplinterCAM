@@ -69,7 +69,7 @@ def cleanup(points, ctx) -> Result[NDArray[np.int64]]: ...                    # 
 - `closest_point`'s parameter is t ∈ [0, 1] on a line and the angle from P_0 in the sense of φ on an arc (ours). `circle_through`'s radius is |P_1 − C| (ours).
 - `cleanup` takes a closed polyline (n, 2) and returns the indices of the vertices it keeps, in order, so callers carry source IDs along (ours). Its passes run in the order merge, collinear, spike (research 01, Helpers); a kept vertex carries the vertices merged into it, so no vertex moves twice; the collinear and spike passes stop at three vertices, a loop that would lose more encloses nothing and the area test reports it (ours).
 - The exact predicates are exact for coordinates that are 0 or have a magnitude in [2^−142, 2^201], about 1.8e-43 to 3e60 mm: SRC-032 (p. 308) proves this range for orient2d and incircle, and our expansions of the arc predicates stay inside it (ours). A precondition, not checked (Peter); outside it products underflow or overflow. A NaN or infinite coordinate is a programming error, `ValueError` (ours), since it would read as sign 0.
-- `signed_area` guarantees its sign for loops whose arcs all have r·min(1, φ²) ≤ 10^7 mm and whose end points have a half-extent E ≤ 10^9 mm (DEC-G2D-016, ours): beyond them the rounding of the segment terms or of the translation could reach eps_len·L. A precondition, not checked (Peter, 2026-10-03).
+- For eps_len ≥ 1e-6 mm (the default), `signed_area` guarantees its sign for loops whose arcs all have r·min(1, φ²) ≤ 10^7 mm and whose end points have a half-extent E ≤ 10^9 mm (DEC-G2D-016, ours); the float limits of REQ-G2D-131 assume the same eps_len: beyond them the rounding of the segment terms or of the translation could reach eps_len·L. A precondition, not checked (Peter, 2026-10-03).
 - Internal entries for tests, not in `__all__`: `two_sum`, `two_product` (exact.cpp) and `point_in_region_exact`, the exact layer alone.
 
 ## Requirements
@@ -80,7 +80,7 @@ def cleanup(points, ctx) -> Result[NDArray[np.int64]]: ...                    # 
 
 | ID | Requirement (EARS) | Verified by | Status |
 | --- | --- | --- | --- |
-| REQ-G2D-005 | THE geometry2d module SHALL take every decision on input geometry that depends on a sign (side, collinearity, inside or outside, the sweep an angle lies in) from exact predicates or exact comparisons of doubles, never from the sign of a rounded expression; loop orientation (REQ-G2D-131) is the one exception. | review; tests 5 and 12 | Released |
+| REQ-G2D-005 | THE geometry2d module SHALL take every decision on input geometry that depends on a sign (side, collinearity, inside or outside, the sweep an angle lies in) from exact predicates or exact comparisons of doubles, never from the sign of a rounded expression; loop orientation (REQ-G2D-131, 132), decided by a proven bound, is the one exception. | review; tests 5 and 12 | Released |
 | REQ-G2D-006 | THE geometry2d kernel SHALL compute orient2d and incircle with Shewchuk's `predicates.c`, vendored unchanged (D-097, ADR 0009). | review | Released |
 | REQ-G2D-007 | THE `orient2d` predicate SHALL return the exact sign of the orient2d determinant of research 01: +1 when c lies left of a → b, −1 right, 0 collinear. | property: note test 1, exact rationals as oracle | Released |
 | REQ-G2D-008 | WHEN three points share their x or their y coordinate, THE `orient2d` predicate SHALL return 0. | note test 2 | Released |
