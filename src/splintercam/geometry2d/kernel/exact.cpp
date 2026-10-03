@@ -81,16 +81,16 @@ Expansion squared_difference(double a, double b, bool negate) {
                of(two_product(sign * y, y)));
 }
 
-std::int8_t sign_of(double value) {
-    return static_cast<std::int8_t>((value > 0.0) - (value < 0.0));
+int sign_of(double value) {
+    return (value > 0.0) - (value < 0.0);
 }
 
-std::int8_t sign_of(const Expansion& e) {
+int sign_of(const Expansion& e) {
     return sign_of(e.parts.at(static_cast<std::size_t>(std::max(e.size - 1, 0))));
 }
 
-std::array<double, 2> point(Points points, std::size_t row) {
-    std::array<double, 2> p{};
+Point2 point(Points points, std::size_t row) {
+    Point2 p{};
     std::ranges::copy(points.subspan(2 * row, 2), p.begin());
     return p;
 }
@@ -121,13 +121,36 @@ void two_products(const ValuePairs& in, const ErrorFreePairs& out) {
     }
 }
 
+int orient_sign(Point2 a, Point2 b, Point2 c) {
+    return sign_of(orient2d(a.data(), b.data(), c.data()));
+}
+
+int arc_circle_sign(Point2 q, const CircleAt& circle) {
+    const auto [qx, qy] = q;
+    const auto [cx, cy] = circle.centre;
+    const auto [px, py] = circle.p0;
+    const Expansion radius =
+        sum(squared_difference(px, cx, false), squared_difference(py, cy, false));
+    const Expansion distance =
+        sum(squared_difference(qx, cx, true), squared_difference(qy, cy, true));
+    return sign_of(sum(radius, distance));
+}
+
+int vertical_extent_sign(double q_y, const CircleAt& circle) {
+    const auto [cx, cy] = circle.centre;
+    const auto [px, py] = circle.p0;
+    const Expansion height = squared_difference(q_y, cy, false);
+    const Expansion radius =
+        sum(squared_difference(px, cx, true), squared_difference(py, cy, true));
+    return sign_of(sum(height, radius));
+}
+
 void orient2d_signs(const std::array<Points, 3>& abc, Signs out) {
     std::size_t row = 0;
     for (std::int8_t& sign : out) {
-        auto pa = point(std::get<0>(abc), row);
-        auto pb = point(std::get<1>(abc), row);
-        auto pc = point(std::get<2>(abc), row);
-        sign = sign_of(orient2d(pa.data(), pb.data(), pc.data()));
+        sign = static_cast<std::int8_t>(orient_sign(point(std::get<0>(abc), row),
+                                                    point(std::get<1>(abc), row),
+                                                    point(std::get<2>(abc), row)));
         ++row;
     }
 }
@@ -139,7 +162,8 @@ void incircle_signs(const std::array<Points, 4>& abcd, Signs out) {
         auto pb = point(std::get<1>(abcd), row);
         auto pc = point(std::get<2>(abcd), row);
         auto pd = point(std::get<3>(abcd), row);
-        sign = sign_of(incircle(pa.data(), pb.data(), pc.data(), pd.data()));
+        sign =
+            static_cast<std::int8_t>(sign_of(incircle(pa.data(), pb.data(), pc.data(), pd.data())));
         ++row;
     }
 }
@@ -147,14 +171,8 @@ void incircle_signs(const std::array<Points, 4>& abcd, Signs out) {
 void in_arc_circle_signs(const ArcQueries& in, Signs out) {
     std::size_t row = 0;
     for (std::int8_t& sign : out) {
-        const auto [qx, qy] = point(in.q, row);
-        const auto [cx, cy] = point(in.centre, row);
-        const auto [px, py] = point(in.p0, row);
-        const Expansion radius =
-            sum(squared_difference(px, cx, false), squared_difference(py, cy, false));
-        const Expansion distance =
-            sum(squared_difference(qx, cx, true), squared_difference(qy, cy, true));
-        sign = sign_of(sum(radius, distance));
+        sign = static_cast<std::int8_t>(
+            arc_circle_sign(point(in.q, row), {point(in.centre, row), point(in.p0, row)}));
         ++row;
     }
 }
@@ -162,12 +180,8 @@ void in_arc_circle_signs(const ArcQueries& in, Signs out) {
 void vertical_extent_signs(const HeightQueries& in, Signs out) {
     std::size_t row = 0;
     for (std::int8_t& sign : out) {
-        const auto [cx, cy] = point(in.centre, row);
-        const auto [px, py] = point(in.p0, row);
-        const Expansion height = squared_difference(value(in.q_y, row), cy, false);
-        const Expansion radius =
-            sum(squared_difference(px, cx, true), squared_difference(py, cy, true));
-        sign = sign_of(sum(height, radius));
+        sign = static_cast<std::int8_t>(
+            vertical_extent_sign(value(in.q_y, row), {point(in.centre, row), point(in.p0, row)}));
         ++row;
     }
 }

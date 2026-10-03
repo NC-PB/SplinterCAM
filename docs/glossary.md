@@ -37,6 +37,7 @@
 | bulge | `bulge` | Bulge (Ausbauchung) | DXF polyline value of an arc: tan(φ/4), positive counter-clockwise, only at DXF import and export (D-057) | 01 |
 | closest point | `ClosestPoint` | nächster Punkt | The point of a curve nearest to a query point, with its parameter and distance (research 01, Distances) | 01 |
 | signed area | `signed_area` | vorzeichenbehaftete Fläche | Area of a loop, positive for a counter-clockwise loop (research 01, Area and orientation) | 01 |
+| point location | `PointLocation` (`IN`, `OUT`, `ON`) | Punktlage | Where a point lies against a region: ON within eps_len of the boundary, else IN where the winding number is not 0 (research 01, Point in region) | 01 |
 | curve rows | `CurveRows` | Kurvenzeilen | Lines and arcs of closed loops as arrays at the kernel boundary: [x0, y0, x1, y1, cx, cy, sweep] per row, IDs, loop starts | 01 |
 | scallop height | `scallop_height` | Kammhöhe | Height of the ridge left between passes | 09 |
 | toolpath | `Toolpath` | Werkzeugweg | Ordered passes and links of one operation | 10 |

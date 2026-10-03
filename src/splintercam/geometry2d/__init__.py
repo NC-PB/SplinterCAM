@@ -9,6 +9,7 @@ from ._curves import Arc, Curve, Line, Point, make_arc, make_line
 from ._distances import ClosestPoint, closest_point
 from ._flatten import AirSide, flatten
 from ._predicates import are_parallel, in_arc_circle, incircle, orient2d
+from ._region import PointLocation, point_in_region
 from ._rows import CurveRows, curve_rows
 
 __all__ = [
@@ -21,6 +22,7 @@ __all__ = [
     "CurveRows",
     "Line",
     "Point",
+    "PointLocation",
     "arc_from_bulge",
     "are_parallel",
     "bounding_box",
@@ -34,5 +36,6 @@ __all__ = [
     "make_arc",
     "make_line",
     "orient2d",
+    "point_in_region",
     "signed_area",
 ]

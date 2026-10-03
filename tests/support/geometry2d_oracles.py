@@ -73,3 +73,21 @@ def polygon_area(points: list[P]) -> Fraction:
     for (x0, y0), (x1, y1) in zip(points, points[1:] + points[:1], strict=True):
         total += Fraction(x0) * Fraction(y1) - Fraction(x1) * Fraction(y0)
     return total / 2
+
+
+def winding(q: P, points: list[P]) -> int | None:
+    """The winding number of the closed polygon through `points` about q by a ray to the right,
+    with half-open height ranges, exactly; None when q lies on an edge."""
+    total = 0
+    for a, b in zip(points, points[1:] + points[:1], strict=True):
+        side = orient2d(a, b, q)
+        within = min(a[0], b[0]) <= q[0] <= max(a[0], b[0]) and min(a[1], b[1]) <= q[1] <= max(
+            a[1], b[1]
+        )
+        if side == 0 and within:
+            return None
+        if a[1] <= q[1] < b[1] and side > 0:
+            total += 1
+        elif b[1] <= q[1] < a[1] and side < 0:
+            total -= 1
+    return total
