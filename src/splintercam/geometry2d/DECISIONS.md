@@ -139,3 +139,39 @@
 - Why: Hypothesis draws floats far below 2^-142 often, which is input outside the contract.
 - Rejected: loosening the oracle comparison.
 - Where: `tests/` of geometry2d, `tests/support/geometry2d_oracles.py`.
+
+## DEC-G2D-018: a tiny circle gets its radial check before it becomes a line
+
+- Date: 2026-10-03; decided by: ours, on Peter's answer 5 of 2026-10-03 (spec gap of plan 0003, step 2)
+- Status: Active
+- Decision: when r ≤ eps_len, `make_arc` first checks ||P1 − C| − r| ≤ eps_len (REQ-G2D-042) and returns `ARC_INCONSISTENT` if it fails. Only then does it return the line P0P1, or nothing when P0 = P1. For r > eps_len the order is unchanged: nearly closed, radial check, angle check.
+- Why: before this change, an arc with r ≈ 0 and P1 100 mm away became a 100 mm line. Research 01's "within 2r of the segment" assumes P1 on the circle; with the check, the line it returns is at most 3·eps_len long.
+- Rejected: moving the radial check before the nearly closed rule for every radius (no gain: a nearly closed arc passes it anyway, and it would change the order of a rule that works); a check that P1 lies within 2·eps_len of C (another number for the same thing).
+- Where: REQ-G2D-047; SPEC, Public interface (rule order); `_curves.py` (`_tiny_arc`); `tests/geometry2d/unit/test_curves.py`.
+
+## DEC-G2D-019: arcs are valid input up to a radius of 10^9 mm
+
+- Date: 2026-10-03; decided by: ours, on Peter's answer 5 of 2026-10-03 (spec gap of plan 0003, step 3)
+- Status: Active
+- Decision: arcs, from `make_arc`, `arc_from_bulge` or `curve_rows`, are valid input up to r = 10^9 mm, as a documented precondition with no run-time check. Beyond it a valid arc may come back `ARC_INCONSISTENT`.
+- Why: the radial check compares |P1 − C| with r, and both carry rounding of about u·r. That is 1.1e-7 mm at 10^9 mm and 1.1e-6 mm, above eps_len, at 10^10 mm. Measured with random minor arcs from bulges (chords 0.1 to 2000 mm, coordinates within ±3000 mm): none rejected at 10^8, 10^9 or 3·10^9 mm, 180 of 549 at 10^10 mm. Peter named 10^10 mm; the measurement refutes it, so we state 10^9 mm, with a factor of three to spare.
+- Rejected: 10^10 mm (a third of valid bulges fail there); a run-time check or a bulge limit (Peter: documented preconditions only); a radial check scaled by r (it would loosen the eps_len contract of REQ-G2D-042). The tighter limit of `signed_area`, r·min(1, φ²) ≤ 10^7 mm, is DEC-G2D-016.
+- Where: SPEC, Public interface; `tests/geometry2d/property/test_bulge_arcs.py` (radii up to 10^9 mm never inconsistent).
+
+## DEC-G2D-020: `flatten` expects t ≥ eps_len
+
+- Date: 2026-10-03; decided by: ours, on Peter's answer 5 of 2026-10-03 (spec gap of plan 0003, step 4)
+- Status: Active
+- Decision: t ≥ eps_len is a documented precondition of `flatten`, not checked. The existing `ValueError` for a step count beyond an int stays.
+- Why: below eps_len a flattening is finer than the module can tell apart, and only memory limits the step count. Callers pass t_flat ≥ 1.1e-5 mm or 0.001 mm (research 01, Flattening). At t = eps_len and r = 10^9 mm (DEC-G2D-019) a full circle needs fewer than 2^31 steps, so the int check fires only outside the preconditions.
+- Rejected: a `ValueError` for t < eps_len (it would make the int check unreachable and replace a working test's error for no caller's benefit); a declared largest step count (a new foundation parameter that no caller needs yet).
+- Where: SPEC, Public interface; `_flatten.py`; `tests/geometry2d/unit/test_flatten.py` (the count at the corner of the preconditions).
+
+## DEC-G2D-021: the arctangent has a requirement of its own
+
+- Date: 2026-10-03; decided by: ours, on Peter's answer 5 of 2026-10-03 (spec gap of plan 0003, step 2)
+- Status: Active
+- Decision: REQ-G2D-233 states what `basic_atan2` promises: within 4 rounding units of atan2, exact on the axes, the same bits everywhere. The existing tests carry its ID next to REQ-G2D-018 and 043.
+- Why: the angle check and the flattening count rest on it, but it was tested only under the requirements that use it, so a change to it had no contract to fail against.
+- Rejected: leaving it under REQ-G2D-018 and 043 (the gap); a correctly rounded arctangent (more code, and nothing needs it: the decisions only need the same bits everywhere and a known error).
+- Where: REQ-G2D-233; `kernel/angle.cpp`; `tests/geometry2d/unit/test_angle.py`. See DEC-G2D-003.

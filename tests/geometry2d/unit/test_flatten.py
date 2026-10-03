@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 from numpy.typing import NDArray
 
+from splintercam import _kernels
 from splintercam.foundation import TOLERANCE_DEFAULTS, Context
 from splintercam.geometry2d import AirSide, Arc, Line, flatten
 
@@ -133,3 +134,15 @@ def test_the_step_limit_reaches_the_kernel(ctx: Context, monkeypatch: pytest.Mon
 def test_a_step_count_beyond_the_int_range_is_refused(ctx: Context) -> None:
     with pytest.raises(ValueError, match="steps"):
         flatten(CIRCLE, 5e-324, None, ctx)
+
+
+@pytest.mark.req("REQ-G2D-106")
+@pytest.mark.parametrize("inscribed", [True, False])
+def test_the_step_count_fits_an_int_within_the_preconditions(ctx: Context, inscribed: bool) -> None:
+    # DEC-G2D-020: t >= eps_len and r <= 10^9 mm keep a full circle below 2^31 steps, so the
+    # ValueError for an int overflow fires only outside the preconditions.
+    eps, r = ctx.tolerances.length_eps_mm, 1e9
+    row = np.array([[r, 0.0, r, 0.0, 0.0, 0.0, math.tau]])
+    max_step = TOLERANCE_DEFAULTS["flatten_step_max_rad"].default
+    steps = _kernels.geometry2d.arc_steps(row, eps, inscribed, max_step)
+    assert 0 < steps < 2**31

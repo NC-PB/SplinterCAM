@@ -151,6 +151,20 @@ def test_arc_with_radius_within_eps_len_becomes_its_chord(ctx: Context) -> None:
     assert result.value == (Line((5e-7, 0.0), (-5e-7, 0.0)),)
 
 
+@pytest.mark.req("REQ-G2D-042", "REQ-G2D-047")
+def test_a_tiny_circle_with_p1_far_off_it_is_inconsistent(ctx: Context) -> None:
+    # DEC-G2D-018: the radial check comes before r <= eps_len, so this is no 100 mm line.
+    result = make_arc((5e-7, 0.0), (100.0, 0.0), (0.0, 0.0), math.pi, ctx)
+    assert result.value is None
+    assert codes(result) == ["ARC_INCONSISTENT"]
+
+
+@pytest.mark.req("REQ-G2D-042", "REQ-G2D-047")
+def test_a_tiny_circle_with_p1_within_eps_len_of_it_is_its_chord(ctx: Context) -> None:
+    result = make_arc((5e-7, 0.0), (-1.4e-6, 0.0), (0.0, 0.0), math.pi, ctx)  # 9e-7 off
+    assert result.value == (Line((5e-7, 0.0), (-1.4e-6, 0.0)),)
+
+
 @pytest.mark.req("REQ-G2D-048")
 def test_closed_arc_with_radius_within_eps_len_is_removed(ctx: Context) -> None:
     result = make_arc((5e-7, 0.0), (5e-7, 0.0), (0.0, 0.0), math.tau, ctx)

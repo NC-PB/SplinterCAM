@@ -16,7 +16,7 @@ def _basic_atan2(y: list[float], x: list[float]) -> list[float]:
 
 
 # The angle REQ-G2D-043 decides with: exact on the axes, accurate elsewhere.
-@pytest.mark.req("REQ-G2D-043")
+@pytest.mark.req("REQ-G2D-043", "REQ-G2D-233")
 def test_axis_directions_and_the_origin() -> None:
     angles = _basic_atan2([0.0, 1.0, 0.0, -1.0, 0.0], [1.0, 0.0, -1.0, 0.0, 0.0])
     assert angles == [0.0, math.pi / 2, math.pi, -math.pi / 2, 0.0]
@@ -42,14 +42,14 @@ PINNED = [
 ]
 
 
-@pytest.mark.req("REQ-G2D-018")
+@pytest.mark.req("REQ-G2D-018", "REQ-G2D-233")
 def test_the_same_bits_on_every_platform() -> None:
     y = [float.fromhex(row[0]) for row in PINNED]
     x = [float.fromhex(row[1]) for row in PINNED]
     assert [float.hex(angle) for angle in _basic_atan2(y, x)] == [row[2] for row in PINNED]
 
 
-@pytest.mark.req("REQ-G2D-043")
+@pytest.mark.req("REQ-G2D-043", "REQ-G2D-233")
 def test_within_four_rounding_units_of_libm_over_all_directions() -> None:
     # The reference is the platform's atan2, itself within a rounding unit or so of the truth.
     rng = np.random.default_rng(1)
