@@ -222,17 +222,20 @@ void circles_through(const std::array<Points, 3>& p123, double length_eps_mm,
 }
 
 void ExactSum::add(const CrossTerm& term) {
+    Expansion part = sum(of(two_product(term.a, term.b)), of(two_product(-term.c, term.d)));
+    add(part.parts.data(), part.size);
+}
+
+void ExactSum::add(double* parts, int count) {
     // Above this many components the expansion is compressed (predicates.c's compress, SRC-032),
     // which keeps it short in practice, so each add stays cheap (ours): a speed setting, no
     // tolerance, so not a declared parameter (REQ-G2D-230).
     constexpr int compress_above = 64;
-    Expansion part = sum(of(two_product(term.a, term.b)), of(two_product(-term.c, term.d)));
-    const std::size_t needed = static_cast<std::size_t>(size_ + part.size) + 2;
+    const std::size_t needed = static_cast<std::size_t>(size_ + count) + 2;
     if (next_.size() < needed) {
         next_.resize(2 * needed, 0.0);
     }
-    size_ = fast_expansion_sum_zeroelim(size_, parts_.data(), part.size, part.parts.data(),
-                                        next_.data());
+    size_ = fast_expansion_sum_zeroelim(size_, parts_.data(), count, parts, next_.data());
     std::swap(parts_, next_);
     if (size_ > compress_above) {
         size_ = compress(size_, parts_.data(), parts_.data());
@@ -242,6 +245,49 @@ void ExactSum::add(const CrossTerm& term) {
 double ExactSum::value() const {
     const auto parts = std::span(parts_).first(static_cast<std::size_t>(size_));
     return std::accumulate(parts.begin(), parts.end(), 0.0);
+}
+
+namespace {
+
+// Adds e·f to the sum, exactly: e scaled by each component of f (predicates.c's
+// scale_expansion_zeroelim, SRC-032 Theorem 19).
+void add_product(ExactSum& total, Expansion e, const Expansion& f) {
+    for (const double component : std::span(f.parts).first(static_cast<std::size_t>(f.size))) {
+        std::array<double, 2 * expansion_capacity + 1> scaled{};
+        const int count =
+            scale_expansion_zeroelim(e.size, e.parts.data(), component, scaled.data());
+        total.add(scaled.data(), count);
+    }
+}
+
+Expansion negated(Expansion e) {
+    for (double& part : e.parts) {
+        part = -part;
+    }
+    return e;
+}
+
+} // namespace
+
+int ray_height_sign(double q_y, const CircleAt& circle, Point2 toward) {
+    const auto [cx, cy] = circle.centre;
+    const auto [tx, ty] = toward;
+    const auto [px, py] = circle.p0;
+    const int q_side = (q_y > cy) - (q_y < cy);
+    const int ray_side = (ty > cy) - (ty < cy);
+    if (q_side != ray_side) { // on opposite sides of c_y, or one of them on it
+        return q_side > ray_side ? 1 : -1;
+    }
+    if (q_side == 0) {
+        return 0;
+    }
+    // |q_y − c_y| against |Q_y − c_y| = r·|t_y − c_y| / |t − c|, squared and multiplied out.
+    ExactSum difference;
+    add_product(difference, squared_difference(q_y, cy, false),
+                sum(squared_difference(tx, cx, false), squared_difference(ty, cy, false)));
+    add_product(difference, negated(squared_difference(ty, cy, false)),
+                sum(squared_difference(px, cx, false), squared_difference(py, cy, false)));
+    return q_side * sign_of(difference.value());
 }
 
 } // namespace splintercam::geometry2d

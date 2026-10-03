@@ -11,8 +11,7 @@ enum class Location : std::int8_t { out = 0, in = 1, on = 2 };
 
 struct RegionQuery {
     std::span<const double> rows; // the curve rows of all loops, row_width doubles each
-    double length_eps_mm;         // the tolerance layer's eps_len
-    bool tolerance_layer;         // false: the exact layer alone (point_in_region_exact)
+    double length_eps_mm;         // eps_len; 0 for the exact layer alone (point_in_region_exact)
 };
 
 // Per query point (x, y pairs) its location against all loops: ON on an edge, else IN where the

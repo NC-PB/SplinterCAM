@@ -184,3 +184,97 @@ def test_an_arc_whose_p1_lies_past_the_top_leaves_no_gap(ctx: Context) -> None:
             IN,
             OUT,
         ]
+
+
+def _loop_or_reversed_answers(
+    rows: list[list[float]], q: list[tuple[float, float]], ctx: Context
+) -> list[list[PointLocation]]:
+    return [_exact(q, loops) for loops in _both_orientations(rows, ctx)] + [
+        _located(q, loops, ctx) for loops in _both_orientations(rows, ctx)
+    ]
+
+
+@pytest.mark.req("REQ-G2D-143", "REQ-G2D-145", "REQ-G2D-150")
+def test_a_tiny_arc_is_not_on_its_whole_circle(ctx: Context) -> None:
+    # Spec review of step 8: P1 lies just clockwise of P0 (the angle check works modulo 2π), so
+    # the chord line meets the circle all around; ON needs q in the sweep (Peter, 2026-10-03).
+    rows = [
+        [5.0, 0.0, 5.0, -1e-8, 0.0, 0.0, 1e-9],
+        [5.0, -1e-8, 20.0, 0.0, NAN, NAN, 0.0],
+        [20.0, 0.0, 5.0, 10.0, NAN, NAN, 0.0],
+        [5.0, 10.0, 5.0, 0.0, NAN, NAN, 0.0],
+    ]
+    for answer in _loop_or_reversed_answers(rows, [(3.0, 4.0), (-5.0, 0.0), (0.0, 5.0)], ctx):
+        assert answer == [OUT, OUT, OUT]
+
+
+@pytest.mark.req("REQ-G2D-143", "REQ-G2D-145", "REQ-G2D-150")
+def test_the_chord_line_meeting_the_circle_again_is_not_on(ctx: Context) -> None:
+    rows = [
+        [5.0, 0.0, 5.0 + 7e-7, 7e-7, 0.0, 0.0, 1.4e-7],
+        [5.0 + 7e-7, 7e-7, 5.0, -3.0, NAN, NAN, 0.0],
+        [5.0, -3.0, 5.0, 0.0, NAN, NAN, 0.0],
+    ]
+    for answer in _loop_or_reversed_answers(rows, [(4.0, -3.0)], ctx):
+        assert answer == [OUT]
+
+
+@pytest.mark.req("REQ-G2D-135", "REQ-G2D-150")
+@pytest.mark.parametrize(
+    ("rows", "q"),
+    [
+        (  # P1 outward near the top of a circle of radius 1000 mm
+            [
+                [1000.0, 0.0, 0.02, 1000.0000005, 0.0, 0.0, math.atan2(1000.0000005, 0.02)],
+                [0.02, 1000.0000005, 0.0, 0.0, NAN, NAN, 0.0],
+                [0.0, 0.0, 1000.0, 0.0, NAN, NAN, 0.0],
+            ],
+            (0.01, 1000.0000002),
+        ),
+        (  # P1 inward exactly at the bottom
+            [
+                [-1000.0, 0.0, 0.0, -999.9999995, 0.0, 0.0, math.pi / 2],
+                [0.0, -999.9999995, 0.0, 0.0, NAN, NAN, 0.0],
+                [0.0, 0.0, -1000.0, 0.0, NAN, NAN, 0.0],
+            ],
+            (0.02, -999.9999997),
+        ),
+    ],
+)
+def test_p1_off_the_circle_near_an_extreme_leaves_no_gap(
+    ctx: Context, rows: list[list[float]], q: tuple[float, float]
+) -> None:
+    # Spec review of step 8: the arc is closed to P1 along the ray C → P1 (Peter, 2026-10-03);
+    # q lies 0.01 to 0.02 mm outside the loop.
+    for answer in _loop_or_reversed_answers(rows, [q], ctx):
+        assert answer == [OUT]
+
+
+@pytest.mark.req("REQ-G2D-135", "REQ-G2D-143")
+def test_the_radial_connector_to_p1_is_part_of_the_boundary(ctx: Context) -> None:
+    # A quarter circle of radius 5 whose P1 lies 2^-40 mm outside it, on the y axis.
+    rows = [
+        [5.0, 0.0, 0.0, 5.0 + 2.0**-40, 0.0, 0.0, math.pi / 2],
+        [0.0, 5.0 + 2.0**-40, 0.0, 0.0, NAN, NAN, 0.0],
+        [0.0, 0.0, 5.0, 0.0, NAN, NAN, 0.0],
+    ]
+    loops = loop(rows, ctx)
+    q = [(0.0, 5.0), (0.0, 5.0 + 2.0**-41), (2.0**-60, 5.0 + 2.0**-41), (1.0, 4.0)]
+    assert _exact(q, loops) == [ON, ON, OUT, IN]  # the third lies above the circle's top
+
+
+@pytest.mark.req("REQ-G2D-148", "REQ-G2D-150")
+def test_the_tolerance_layer_measures_to_the_nearer_radius(ctx: Context) -> None:
+    # P1 lies 7e-7 inside the circle of radius |P0 - C| = 5: q at radius 5 + 0.5e-6 is within
+    # eps_len of that circle and 1.2e-6 from |P1 - C|; both orientations say ON (Peter,
+    # 2026-10-03).
+    p1 = (0.0, 5.0 - 7e-7)
+    rows = [
+        [5.0, 0.0, *p1, 0.0, 0.0, math.pi / 2],
+        [*p1, 0.0, 0.0, NAN, NAN, 0.0],
+        [0.0, 0.0, 5.0, 0.0, NAN, NAN, 0.0],
+    ]
+    r = 5.0 + 0.5e-6
+    q = [(r * math.cos(0.7), r * math.sin(0.7))]
+    for loops in _both_orientations(rows, ctx):
+        assert _located(q, loops, ctx) == [ON]

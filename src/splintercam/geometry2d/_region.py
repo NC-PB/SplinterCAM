@@ -24,8 +24,7 @@ class PointLocation(IntEnum):
 def _locations(q: ArrayLike, loops: CurveRows, length_eps_mm: float) -> NDArray[np.int8]:
     (points,) = point_rows(q)
     out = np.empty(points.shape[0], dtype=np.int8)
-    tolerance_layer = length_eps_mm > 0.0
-    _kernels.geometry2d.point_locations(points, loops.rows, length_eps_mm, tolerance_layer, out)
+    _kernels.geometry2d.point_locations(points, loops.rows, length_eps_mm, out)  # 0: exact only
     out.flags.writeable = False
     return out
 

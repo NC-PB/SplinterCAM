@@ -49,6 +49,10 @@ struct CircleAt { // the circle about centre through p0
 [[nodiscard]] int orient_sign(Point2 a, Point2 b, Point2 c);
 [[nodiscard]] int arc_circle_sign(Point2 q, const CircleAt& circle);
 [[nodiscard]] int vertical_extent_sign(double q_y, const CircleAt& circle);
+// The sign of q_y − Q_y, where Q is the point of the circle on the ray from its centre through
+// `toward` (Q is no double): the radial connector of an arc whose P1 lies off its circle
+// (Peter, 2026-10-03), compared by (q_y − c_y)²·|toward − c|² against r²·(toward_y − c_y)².
+[[nodiscard]] int ray_height_sign(double q_y, const CircleAt& circle, Point2 toward);
 
 // Per row, the exact sign of orient2d(a, b, c): +1 when c lies left of a → b (REQ-G2D-007).
 void orient2d_signs(const std::array<Points, 3>& abc, Signs out);
@@ -80,6 +84,8 @@ struct CrossTerm { // a·b − c·d
 class ExactSum {
 public:
     void add(const CrossTerm& term);
+    // Adds an expansion of `count` components, smallest first, with one readable element past it.
+    void add(double* parts, int count);
     // The components summed smallest first: the exact sum within a rounding unit, its sign exact.
     [[nodiscard]] double value() const;
 

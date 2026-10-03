@@ -139,17 +139,12 @@ void bind_area(nb::module_& m) {
         "Write phi - sin(phi) per value, from basic operations only (REQ-G2D-018).");
     m.def(
         "point_locations",
-        [](const PointRows& q, const Rows& rows, double length_eps_mm, bool tolerance_layer,
-           const Int8Out& out) {
+        [](const PointRows& q, const Rows& rows, double length_eps_mm, const Int8Out& out) {
             check_rows(q.shape(0), {out.shape(0)});
             point_locations({q.data(), q.size()},
-                            {.rows = view(rows),
-                             .length_eps_mm = length_eps_mm,
-                             .tolerance_layer = tolerance_layer},
-                            view(out));
+                            {.rows = view(rows), .length_eps_mm = length_eps_mm}, view(out));
         },
-        nb::arg("q"), nb::arg("rows"), nb::arg("length_eps_mm"), nb::arg("tolerance_layer"),
-        nb::arg("out"),
+        nb::arg("q"), nb::arg("rows"), nb::arg("length_eps_mm"), nb::arg("out"),
         "Write per point 0 (OUT), 1 (IN) or 2 (ON) against the loops' rows (REQ-G2D-134 to 150).");
 }
 
