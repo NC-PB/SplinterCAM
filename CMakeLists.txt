@@ -138,7 +138,7 @@ if(SPLINTERCAM_KERNEL_C_SOURCES)
   else()
     target_compile_options(splintercam_vendored_c PRIVATE -w -ffp-contract=off -fno-fast-math)
   endif()
-  # ASan off for the vendored C code only (pending Peter's approval, plan 0003, step 5): its
+  # ASan off for the vendored C code only (approved by Peter, plan 0003, step 5): its
   # expansion sums read one element past the end of an input array (predicates.c, enow =
   # e[++eindex] in fast_expansion_sum_zeroelim and its kin) and use that value only while
   # eindex < elen, so results are unaffected, but ASan reports a stack-buffer-overflow in
