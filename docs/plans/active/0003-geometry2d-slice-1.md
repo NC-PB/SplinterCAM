@@ -68,7 +68,7 @@ Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
 - Peter's answers (2026-10-03): 1. ON in the sweep; 2. the radial connector; 3. the nearer of both radii. Done: ON on an arc is an end point, a point of the circle in the sweep (`in_sweep`, as `closest_point`) or a point of the connector; the last piece of an arc ends where the ray through P1 meets the circle, compared with q_y by a new exact `ray_height_sign` ((q_y − c_y)²·|P1 − C|² against r²·(P1_y − c_y)², products of expansions by `predicates.c`'s `scale_expansion_zeroelim`), and the connector counts like a straight edge. The four failing inputs of the review are tests; a property compares arcs with P1 off the circle against their flattened arc and connector.
 - Simplifier, taken: `RowResult` folded into `locate`, no separate flag for the exact layer, a shorter `line_winding`, no full-circle branch in `in_sweep`. The 10 000-case runs also found coordinates far below the predicates' input range; the properties now draw from a 2^-20 mm grid.
 - Split: with the answers the step came to 472 lines of non-test code; the tolerance layer (distances, `point_in_region`) moves to step 8b, saved on the branch's history (commit of the full version).
-- Reviews: simplifier and spec-reviewer as above, one round each (D-159); the test-auditor on this step's diff.
+- Reviews: simplifier and spec-reviewer as above, one round each (D-159); test-auditor (fixed: `ray_height_sign` had no test next to the ray's end, so a rounded comparison would have passed; it now has a scalar binding, unit tests at the double nearest the end and one unit either side, straight above and below C, both sides of c_y, and a property against exact rationals; the connector's ON rule tested both ways, beyond P1, on the opposite ray, inward and slanted; REQ-149 and 150 tags removed from exact-layer tests, they come with step 8b; optional, taken: a nearly full arc's missing part).
 - `tools/check`: PASS (11 of 14 steps). Property tests pass with 10 000 cases each.
 - Next step: 8b.
 
@@ -133,6 +133,9 @@ Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
 - For Peter: vendor `predicates.c` (from <https://www.cs.cmu.edu/~quake/robust.html>) into `src/splintercam/geometry2d/kernel/vendor/` on the step 5 branch, or allow `www.cs.cmu.edu` in the environment's network settings; accept or change ADR 0009 and apply `0003-notice.patch`.
 
 ## Backlog
+
+- Step 8: research 01's Point in region section still states the chord-side ON rule and has no radial connector; the SPEC carries Peter's answers of 2026-10-03 (REQ-G2D-135, 143). Exact ON on a circle depends on the orientation when P1 lies off it (the radius is |P0 - C|); the tolerance layer of step 8b covers it with the nearer radius. The kernel's sweep logic exists twice besides `_box.py` and `_distances.py` (octants and halves); a shared kernel for `bounding_box` and `closest_point` would stop them drifting apart. The region kernel holds the interpreter lock for n points × m rows (SPEC, Later parts).
+
 
 - Step 7 test audit, optional: the eps_len·L boundary is tested 1 % on either side, not at equality; the `ValueError` for more than one loop carries the tag REQ-G2D-128, though the rule is in the Public interface; the 10^6-row exact path holds the interpreter lock without a cancellation check (SPEC, Later parts).
 
