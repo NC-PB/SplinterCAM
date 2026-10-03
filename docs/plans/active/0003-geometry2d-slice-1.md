@@ -24,7 +24,7 @@
 - [x] 3. **Curve rows and bulges.** `CurveRows`, `curve_rows`, `arc_from_bulge`, `bulges_from_arc`. REQ-G2D-044, 050 to 053, 188 to 197, 201, 203. Size: about 180 + 300.
 - [x] 4. **Flattening and bounding boxes.** `flatten` (`flatten.cpp`), `bounding_box`, the step limit π/2 as a declared parameter in foundation's defaults file (a foundation SPEC change), the shared exact test of which axis directions lie in a sweep. REQ-G2D-102 to 113, 126, 213, 214, 230; the tests of REQ-G2D-231 and 232 start here and grow with each step. Size: about 220 + 300.
 - [x] 5. **Exact predicates** (`predicates.c` vendored by Peter, pull request 15). The C build of the vendored file through our own wrapper, strict float flags, `exactinit` at load; `orient2d`, `incircle`, `two_sum`, `two_product`; the build guard. REQ-G2D-005 to 011, 013 to 018, 021, 024. Size: about 300 + 350.
-- [ ] 5b. **Arc predicates.** `in_arc_circle` and the (q_y − c_y)² comparison by expansion arithmetic, from the branch `step-5b-draft` (reviewed with step 5). REQ-G2D-022, 023. Size: about 110 + 120.
+- [x] 5b. **Arc predicates.** `in_arc_circle` and the (q_y − c_y)² comparison by expansion arithmetic, from the branch `step-5b-draft` (reviewed with step 5). REQ-G2D-022, 023. Size: about 110 + 120.
 - [ ] 6. **Distances and circles.** `closest_point`, `circle_through`. REQ-G2D-091 to 101. Size: about 150 + 250.
 - [ ] 7. **Area and orientation.** `signed_area` (`area.cpp`), with the exact sum. REQ-G2D-001, 002, 128 to 133. Size: about 180 + 250.
 - [ ] 8. **Point in region.** `point_in_region`, `point_in_region_exact` (`region.cpp`). REQ-G2D-134 to 150. Size: about 350 + 350.
@@ -55,6 +55,14 @@ Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
 - Reviews: simplifier (cuts taken: the Python wrappers of `two_sum` and `two_product`, helpers with one caller, comments); test-auditor (fixed: the build guard exact on every pair, incircle drawn near its circle; the input-range `assume` judged a domain restriction, not a weakening; Peter confirmed); spec-reviewer (no blocker, the expansion arithmetic checked; fixed: a NaN or infinite point read as sign 0, now `ValueError`; the 64-bit-only build and the C flags' coverage stated). The arc predicates, reviewed here too, moved to step 5b.
 - CI on pull request 16: the sanitizer found `predicates.c`'s one-past-end read (ASan off for that code, approved by Peter); Windows needed the vendored C code in a C-only library target of its own, because the Visual Studio generators do not apply per-language options and include directories in a mixed C and C++ target.
 - `tools/check`: PASS (11 of 14 steps). Property tests pass with 10 000 cases each.
+- Next step: 5b.
+
+### 2026-10-03, session 1, step 5b
+
+- Peter merged pull request 16 and decided: ASan stays off for the vendored C code only; the predicates' input range stays an unchecked precondition. Those records (commit cf24ec2) missed the merge and come with this step.
+- Done: from `step-5b-draft` (reviewed with step 5): `kernel/exact.cpp` expands each squared difference exactly and sums by `predicates.c`'s `fast_expansion_sum_zeroelim`; `in_arc_circle_signs`, `vertical_extent_signs`; Python `in_arc_circle`. Tests first, they failed on the missing names: research test 2; q_y against the top and bottom of a circle, also a top that is not a double; the batch against single rows; properties against exact rationals for both arc predicates.
+- Reviews: those of step 5 cover this code unchanged; no new round (D-159).
+- `tools/check`: PASS (11 of 14 steps); `tools/test --all` with the sanitizer: PASS.
 - Next step: 6.
 
 ### 2026-10-02, repository health check (Peter's request)

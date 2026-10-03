@@ -47,6 +47,18 @@ def incircle(a: ArrayLike, b: ArrayLike, c: ArrayLike, d: ArrayLike) -> NDArray[
     return out
 
 
+def in_arc_circle(q: ArrayLike, centre: ArrayLike, p0: ArrayLike) -> NDArray[np.int8]:
+    """Per row the exact sign of |p0 - c|² - |q - c|²: +1 when q lies inside the circle of an arc
+    with centre c and start point p0, 0 on it, -1 outside (Peter, 2026-10-02).
+
+    Implements: REQ-G2D-022, REQ-G2D-024.
+    """
+    pq, pc, p0_rows = _rows(q, centre, p0)
+    out = np.empty(pq.shape[0], dtype=np.int8)
+    _kernels.geometry2d.in_arc_circle_signs(pq, pc, p0_rows, out)
+    return out
+
+
 def are_parallel(a: ArrayLike, b: ArrayLike, ctx: Context) -> NDArray[np.bool_]:
     """For rows of directions a and b ((n, 2) each), whether they are parallel: the square of their
     cross product is at most sin²(eps_ang)·|a|²·|b|² (research 01, Tolerances).
