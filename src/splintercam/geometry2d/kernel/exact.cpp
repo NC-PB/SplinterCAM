@@ -81,16 +81,16 @@ Expansion squared_difference(double a, double b, bool negate) {
                of(two_product(sign * y, y)));
 }
 
-int sign_of(double value) {
-    return (value > 0.0) - (value < 0.0);
+std::int8_t sign_of(double value) {
+    return static_cast<std::int8_t>((value > 0.0) - (value < 0.0));
 }
 
-int sign_of(const Expansion& e) {
+std::int8_t sign_of(const Expansion& e) {
     return sign_of(e.parts.at(static_cast<std::size_t>(std::max(e.size - 1, 0))));
 }
 
-Point2 point(Points points, std::size_t row) {
-    Point2 p{};
+std::array<double, 2> point(Points points, std::size_t row) {
+    std::array<double, 2> p{};
     std::ranges::copy(points.subspan(2 * row, 2), p.begin());
     return p;
 }
@@ -148,9 +148,10 @@ int vertical_extent_sign(double q_y, const CircleAt& circle) {
 void orient2d_signs(const std::array<Points, 3>& abc, Signs out) {
     std::size_t row = 0;
     for (std::int8_t& sign : out) {
-        sign = static_cast<std::int8_t>(orient_sign(point(std::get<0>(abc), row),
-                                                    point(std::get<1>(abc), row),
-                                                    point(std::get<2>(abc), row)));
+        auto pa = point(std::get<0>(abc), row);
+        auto pb = point(std::get<1>(abc), row);
+        auto pc = point(std::get<2>(abc), row);
+        sign = sign_of(orient2d(pa.data(), pb.data(), pc.data()));
         ++row;
     }
 }
@@ -162,8 +163,7 @@ void incircle_signs(const std::array<Points, 4>& abcd, Signs out) {
         auto pb = point(std::get<1>(abcd), row);
         auto pc = point(std::get<2>(abcd), row);
         auto pd = point(std::get<3>(abcd), row);
-        sign =
-            static_cast<std::int8_t>(sign_of(incircle(pa.data(), pb.data(), pc.data(), pd.data())));
+        sign = sign_of(incircle(pa.data(), pb.data(), pc.data(), pd.data()));
         ++row;
     }
 }
@@ -249,22 +249,15 @@ double ExactSum::value() const {
 
 namespace {
 
-// Adds e·f to the sum, exactly: e scaled by each component of f (predicates.c's
+// Adds ±e·f to the sum, exactly: e scaled by each component of f (predicates.c's
 // scale_expansion_zeroelim, SRC-032 Theorem 19).
-void add_product(ExactSum& total, Expansion e, const Expansion& f) {
+void add_product(ExactSum& total, Expansion e, const Expansion& f, double sign) {
     for (const double component : std::span(f.parts).first(static_cast<std::size_t>(f.size))) {
         std::array<double, 2 * expansion_capacity + 1> scaled{};
         const int count =
-            scale_expansion_zeroelim(e.size, e.parts.data(), component, scaled.data());
+            scale_expansion_zeroelim(e.size, e.parts.data(), sign * component, scaled.data());
         total.add(scaled.data(), count);
     }
-}
-
-Expansion negated(Expansion e) {
-    for (double& part : e.parts) {
-        part = -part;
-    }
-    return e;
 }
 
 } // namespace
@@ -284,9 +277,9 @@ int ray_height_sign(double q_y, const CircleAt& circle, Point2 toward) {
     // |q_y − c_y| against |Q_y − c_y| = r·|t_y − c_y| / |t − c|, squared and multiplied out.
     ExactSum difference;
     add_product(difference, squared_difference(q_y, cy, false),
-                sum(squared_difference(tx, cx, false), squared_difference(ty, cy, false)));
-    add_product(difference, negated(squared_difference(ty, cy, false)),
-                sum(squared_difference(px, cx, false), squared_difference(py, cy, false)));
+                sum(squared_difference(tx, cx, false), squared_difference(ty, cy, false)), 1.0);
+    add_product(difference, squared_difference(ty, cy, false),
+                sum(squared_difference(px, cx, false), squared_difference(py, cy, false)), -1.0);
     return q_side * sign_of(difference.value());
 }
 

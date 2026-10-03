@@ -58,8 +58,7 @@ struct Arc {
     double sweep;
 };
 
-// A piece end: P0 (a double y), the circle's top or bottom (c_y ± r) or where the ray through P1
-// meets the circle; the last two are no doubles.
+// A piece end: P0, the circle's top or bottom, or where the ray through P1 meets the circle.
 enum class EndKind : std::int8_t { point, top, bottom, ray };
 struct End {
     EndKind kind;
@@ -71,7 +70,7 @@ int compare(double height, const End& end, const Arc& arc) {
     switch (end.kind) {
     case EndKind::point:
         return sign(height, end.y);
-    case EndKind::top: // below c_y it is above, else the comparison of squares
+    case EndKind::top:
         return height < y(arc.c) ? -1 : vertical_extent_sign(height, {arc.c, arc.p0});
     case EndKind::bottom:
         return height > y(arc.c) ? 1 : -vertical_extent_sign(height, {arc.c, arc.p0});
@@ -81,8 +80,8 @@ int compare(double height, const End& end, const Arc& arc) {
     return 0;
 }
 
-// The order of the ends that are no doubles: the top above the ray's end above the bottom, the
-// ray's end at the top or bottom only when P1 lies straight above or below C.
+// Top above the ray's end above bottom; the ray's end is the top or bottom only straight above or
+// below C.
 int rank(const End& end, const Arc& arc) {
     if (end.kind == EndKind::ray) {
         return x(arc.p1) == x(arc.c) ? sign(y(arc.p1), y(arc.c)) : 0;
@@ -101,8 +100,7 @@ int compare(const End& a, const End& b, const Arc& arc) {
     return sign(rank(a, arc), rank(b, arc));
 }
 
-// +1 or −1 when q_y lies in the half-open height range of a monotone piece, by its ends' heights;
-// else 0.
+// ±1 when q_y lies in the half-open height range of a monotone piece, by its ends' heights.
 int piece_winding(double q_y, const std::array<End, 2>& ends, const Arc& arc) {
     const auto& [from, to] = ends;
     const int rise = compare(to, from, arc);
@@ -111,9 +109,8 @@ int piece_winding(double q_y, const std::array<End, 2>& ends, const Arc& arc) {
     return rise != 0 && compare(q_y, low, arc) >= 0 && compare(q_y, high, arc) < 0 ? rise : 0;
 }
 
-// The points where the arc is split, in the order it passes them: the octants 2 and 6 (its top
-// and bottom in the mirrored frame) that the sweep passes, by the rules of _box.py, where the
-// sweep governs near 0 and near a full turn (REQ-G2D-043).
+// Where the arc is split, in travel order: the octants 2 and 6 the sweep passes, by the rules of
+// _box.py (the sweep governs near 0 and near a full turn, REQ-G2D-043).
 struct Splits {
     std::array<int, 2> octant{};
     std::size_t count = 0;
@@ -201,7 +198,6 @@ bool in_sweep(Point2 q, const Arc& arc) {
     return q_half != end_half ? q_half < end_half : orient_sign(arc.c, q, e) >= 0;
 }
 
-// ON: an end point, on the circle in the sweep, or on the radial connector (Peter, 2026-10-03).
 bool on_arc(Point2 q, const Arc& arc) {
     if (q == arc.p0 || q == arc.p1) {
         return true;
