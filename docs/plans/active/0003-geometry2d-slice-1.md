@@ -28,7 +28,7 @@
 - [x] 6. **Distances and circles.** `closest_point`, `circle_through`. REQ-G2D-091 to 101. Size: about 150 + 250.
 - [x] 7. **Area and orientation.** `signed_area` (`area.cpp`), with the exact sum. REQ-G2D-001, 002, 128 to 133. Size: about 180 + 250.
 - [x] 8. **Point in region, exact layer.** `PointLocation`, `point_in_region_exact` (`region.cpp`), the radial connector and its exact height comparison. REQ-G2D-135, 139, 143, 145. Size: about 380 + 400.
-- [ ] 8b. **Point in region, tolerance layer.** `point_in_region`: ON within eps_len by the distances of REQ-G2D-091 to 096, measured to the nearer of the two radii (Peter, 2026-10-03), from the branch's saved full version. REQ-G2D-134, 148 to 150. Size: about 60 + 120.
+- [x] 8b. **Point in region, tolerance layer.** `point_in_region`: ON within eps_len by the distances of REQ-G2D-091 to 096, measured to the nearer of the two radii (Peter, 2026-10-03), from the branch's saved full version. REQ-G2D-134, 148 to 150. Size: about 60 + 120.
 - [ ] 9. **Cleanup.** `cleanup` (`cleanup.cpp`). REQ-G2D-020, 204 to 212. Size: about 180 + 250.
 
 Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
@@ -57,6 +57,13 @@ Stop after step 9 for Peter's review of slice 1, or earlier at a blocker.
 - CI on pull request 16: the sanitizer found `predicates.c`'s one-past-end read (ASan off for that code, approved by Peter); Windows needed the vendored C code in a C-only library target of its own, because the Visual Studio generators do not apply per-language options and include directories in a mixed C and C++ target.
 - `tools/check`: PASS (11 of 14 steps). Property tests pass with 10 000 cases each.
 - Next step: 5b.
+
+### 2026-10-03, session 1, step 8b
+
+- Done: `point_in_region` with the tolerance layer, from the saved full version of step 8: ON within eps_len by the distances of `closest_point` (the clamped foot, ends exactly; in the sweep by exact signs), on an arc to the nearer of the circles of radius |P0 − C| and |P1 − C| (Peter, 2026-10-03), so both orientations agree. Tests first, they failed on the missing name: research tests 5 and 6 and note test 6 with the tolerance layer, eps_len itself ON and the next double not, the winding over two loops, the nearer radius, both orientations of the review's off-circle cases; the property against `closest_point`'s distances.
+- Reviews (69 lines, so no simplifier): test-auditor (fixed: the property's oracle measured arcs to |P0 − C| only, now to the nearer radius, and checks both orientations; `direction` on a grid inside the predicates' input range; research test 5's (10, 5) and (5, 5) under the tolerance layer, the only test of arcs measured with the sweep; pinned results for the tiny arc; tags and the SPEC change log). Spec-reviewer: line distances differed by a rounding unit between the orientations of a slanted edge, ON in one only (found by replaying the formula, now a unit test; the kernel takes the nearer of both directions). Its main finding, a short arc whose P1 lies both off the circle and just behind P0, does not reproduce where both orientations are valid input: the angle check (REQ-G2D-043) measures with |P0 − C|, so the reversed counterexample is rejected; a property searches that case over both-valid inputs and passes 10 000 cases.
+- `tools/check`: PASS (11 of 14 steps). Property tests pass with 10 000 cases each.
+- Next step: 9.
 
 ### 2026-10-03, session 1, step 8
 

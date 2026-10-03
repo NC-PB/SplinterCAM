@@ -1,12 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Property tests: the exact layer of point in region against an exact winding oracle and against
-a fine flattening (research 01, Point in region)."""
+"""Property tests: point in region against an exact winding oracle, against a fine flattening and
+against the distances of closest_point (research 01, Point in region)."""
 
+import itertools
 import math
 
 import numpy as np
 import pytest
-from hypothesis import HealthCheck, assume, given, settings
+from hypothesis import HealthCheck, assume, given, reject, settings
 from hypothesis import strategies as st
 
 import geometry2d_oracles as oracle
@@ -22,6 +23,7 @@ from splintercam.geometry2d import (
     closest_point,
     curve_rows,
     flatten,
+    point_in_region,
 )
 from splintercam.geometry2d._region import point_in_region_exact
 
@@ -139,3 +141,127 @@ def test_p1_off_the_circle_matches_arc_and_connector_flattened(
     exact = point_in_region_exact(np.array(far), built.value)
     flattened = point_in_region_exact(np.array(far), polygon(flat, ctx))
     assert exact.tolist() == flattened.tolist()
+
+
+@pytest.mark.req("REQ-G2D-148", "REQ-G2D-149", "REQ-G2D-150")
+@shared_ctx
+@given(
+    bulges=st.lists(st.floats(-2.0, 2.0), min_size=4, max_size=4),
+    along=st.floats(0.0, 1.0),
+    edge=st.integers(0, 3),
+    offset=st.sampled_from([0.0, 2.0**-30, 0.5e-6, 0.99e-6, 1.01e-6, 2e-6, 1e-3]),
+    # On a grid of 2^20 directions: no tiny sines below the predicates' input range.
+    direction=st.integers(0, 2**20).map(lambda k: k * math.tau / 2**20),
+)
+def test_the_tolerance_layer_is_on_within_eps_len(  # noqa: PLR0913 (Hypothesis draws)
+    ctx: Context,
+    bulges: list[float],
+    along: float,
+    edge: int,
+    offset: float,
+    direction: float,
+) -> None:
+    corners = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]
+    curves = _bulged_loop(corners, bulges, ctx)
+    # A point near the chosen edge: a flattened point moved by `offset` in some direction.
+    flat = flatten(curves[edge], 1e-9, None, ctx)
+    base = flat[min(int(along * (len(flat) - 1)), len(flat) - 1)]
+    q = (
+        float(base[0]) + offset * math.cos(direction),
+        float(base[1]) + offset * math.sin(direction),
+    )
+    loops = _rows(curves, ctx)
+    eps = ctx.tolerances.length_eps_mm
+    # REQ-G2D-148 as amended: an arc is measured to the nearer of its radii |P0 - C| and |P1 - C|,
+    # and the reversed arc has the second. The band absorbs a point equally near both ends.
+    reversed_curves = [
+        Arc(c.p1, c.p0, c.centre, -c.sweep_rad) if isinstance(c, Arc) else Line(c.p1, c.p0)
+        for c in curves[::-1]
+    ]
+    distance = min(closest_point(c, q, ctx).distance_mm for c in curves + reversed_curves)
+    found = PointLocation(point_in_region(np.array([q]), loops, ctx)[0])
+    assert point_in_region(np.array([q]), _rows(reversed_curves, ctx), ctx)[0] == found
+    exact = PointLocation(point_in_region_exact(np.array([q]), loops)[0])
+    if distance <= eps * (1 - 1e-9):
+        assert found is ON
+    elif distance > eps * (1 + 1e-9):
+        assert found is exact
+        assert found is not ON
+
+
+@pytest.mark.req("REQ-G2D-150")
+@shared_ctx
+@given(
+    r0=st.floats(2e-6, 1e-3),
+    radial=st.floats(-1e-6, 1e-6),
+    behind=st.floats(0.0, 1.0),
+    sweep=st.floats(1e-9, 1e-3),
+    samples=st.lists(st.tuples(st.floats(0.0, 1.0), st.floats(0.0, 1.0)), min_size=1, max_size=20),
+)
+def test_both_orientations_agree_for_a_short_arc_with_p1_behind_and_off(  # noqa: PLR0913
+    ctx: Context,
+    r0: float,
+    radial: float,
+    behind: float,
+    sweep: float,
+    samples: list[tuple[float, float]],
+) -> None:
+    # Spec review of step 8b: a short arc whose P1 lies both off the circle (REQ-G2D-042) and
+    # just behind P0 (REQ-G2D-043) draws the wedge between P1's and P0's rays on |P0 - C| one
+    # way and on |P1 - C| the other. Where both orientations are valid input, points in the band
+    # between the radii must get one answer.
+    r1 = r0 + radial
+    over = behind * ctx.tolerances.length_eps_mm / max(r0, r1)
+    p0, p1 = (r0, 0.0), (r1 * math.cos(-over), r1 * math.sin(-over))
+    tail = [(p1[0], -1.0), (-1.0, -1.0), (-1.0, 0.0)]
+    corners = [p1, *tail, p0]
+    rows = [[*p0, *p1, 0.0, 0.0, sweep]] + [
+        [*a, *b, math.nan, math.nan, 0.0] for a, b in itertools.pairwise(corners)
+    ]
+    reversed_rows = [[x1, y1, x0, y0, cx, cy, -s] for x0, y0, x1, y1, cx, cy, s in rows[::-1]]
+    built = [
+        curve_rows(np.array(r), np.arange(len(r)), np.zeros(1, np.int64), ctx).value
+        for r in (rows, reversed_rows)
+    ]
+    forward, backward = built
+    if forward is None or backward is None:  # only one orientation is valid input
+        reject()
+    low, high = min(r0, r1), max(r0, r1)
+    q = np.array(
+        [
+            (
+                (low + u * (high - low)) * math.cos(-v * over),
+                (low + u * (high - low)) * math.sin(-v * over),
+            )
+            for u, v in samples
+        ]
+    )
+    assert point_in_region(q, forward, ctx).tolist() == point_in_region(q, backward, ctx).tolist()
+
+
+@pytest.mark.req("REQ-G2D-150")
+@shared_ctx
+@given(
+    angle=st.integers(1, 2**20 - 1).map(lambda k: k * (math.pi / 2) / 2**20),
+    along=st.floats(0.05, 0.95),
+    offset=st.floats(0.9e-6, 1.1e-6),
+    inward=st.booleans(),
+)
+def test_both_orientations_agree_next_to_a_slanted_edge(
+    ctx: Context, angle: float, along: float, offset: float, inward: bool
+) -> None:
+    # A square of side 10 turned by `angle`: the foot a + t·(b - a) and b + t'·(a - b) round
+    # differently on a slanted edge, so a point about eps_len from it must not depend on which
+    # end the edge starts at (spec review of step 8b).
+    c, s = math.cos(angle), math.sin(angle)
+    corners = [
+        (10 * (c * x - s * y), 10 * (s * x + c * y)) for x, y in [(0, 0), (1, 0), (1, 1), (0, 1)]
+    ]
+    (ax, ay), (bx, by) = corners[0], corners[1]
+    normal = (s, -c) if not inward else (-s, c)  # (s, -c) points out of the square
+    q = np.array(
+        [[ax + along * (bx - ax) + offset * normal[0], ay + along * (by - ay) + offset * normal[1]]]
+    )
+    forward = point_in_region(q, polygon(corners, ctx), ctx)
+    backward = point_in_region(q, polygon(corners[::-1], ctx), ctx)
+    assert forward.tolist() == backward.tolist()
