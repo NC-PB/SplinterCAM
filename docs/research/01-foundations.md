@@ -152,7 +152,15 @@ The signed area of a loop of lines and arcs (ours, Green's theorem; the first su
 A = \tfrac12\sum_i (x_i y_{i+1} - x_{i+1} y_i) \;+\; \sum_{\text{arcs}} \tfrac12\, r^2 (\varphi - \sin\varphi)
 ```
 
-A full circle gives πr². Loops with ellipse or spline edges use their topology flattening (see Loop tree). The orientation is the sign of A, positive for CCW. This is the one sign decision made by a proven bound instead of an exact predicate (ours): after translating the loop to the centre of its bounding box, the rounding error of the sums stays below about n·2^−53·(√2·E·L + 3E²) for n vertices, half-extent E and length L ≥ 4E, which is below eps_len·L for n ≤ 10^6 and E up to 3355 mm, half the 2^26 range. Loops with more vertices sum the polygon part exactly with the expansion arithmetic (ours). A loop with |A| ≤ eps_len·L encloses nothing and is rejected as degenerate (`LOOP_DEGENERATE`).
+A full circle gives πr². Loops with ellipse or spline edges use their topology flattening (see Loop tree). The orientation is the sign of A, positive for CCW. This is the one sign decision made by a proven bound instead of an exact predicate (ours): after translating the loop to the centre of its end points' bounding box, the rounding error of the polygon sum stays below about n·u·(√2·E·L + 3E²), u = 2^−53, for n vertices, half-extent E and length L ≥ 4E, which is below eps_len·L for n ≤ 10^6 and E up to 3355 mm, half the 2^26 range. Loops with more vertices or a larger extent sum the polygon part exactly with the expansion arithmetic (ours); the rounding of the translated coordinates then moves A by at most 2u·E·L, below eps_len·L for E up to about 10^9 mm.
+
+The segment terms add their own error (ours, 2026-10-03). Each is formed as r̂²·p̂, where r̂² = r²(1 + θ) with |θ| ≤ 4u and p̂ is φ − sin φ from basic operations: within 16u·|p| for |φ| ≤ 1 (its series, no cancellation) and within 64u for |φ| > 1 (sin of φ reduced to [−π, π]). The products and their sum are formed exactly with the expansion arithmetic, on both paths, so the error does not grow with the number of arcs. With |p| ≤ |φ|³/6 for |φ| ≤ 1 and |p| ≤ 2|φ| beyond, one arc of radius r and length ℓ = r·|φ| adds at most 40u·r·ℓ·min(1, φ²), and the computed area satisfies
+
+```math
+|\hat A - A| \;\le\; B_{\text{poly}} + 40u \sum_{\text{arcs}} r\,\ell\,\min(1, \varphi^2) + u\,|\hat A|
+```
+
+At the float limits B_poly reaches 0.81·eps_len·L, so the arcs may add 0.19·eps_len·L: enough while every arc has r·min(1, φ²) ≤ 10^7 mm, with a factor of four to spare. The factor min(1, φ²) admits flat arcs of huge radius (a bulge of 1e-8 on a 1000 mm chord: r = 2.5e10 mm, r·φ² = 4e-5 mm). The two limits, r·min(1, φ²) ≤ 10^7 mm and E ≤ 10^9 mm, are preconditions of the sign guarantee, documented and not checked. A loop with |A| ≤ eps_len·L encloses nothing and is rejected as degenerate (`LOOP_DEGENERATE`).
 
 ### Point in region
 

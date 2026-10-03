@@ -147,6 +147,17 @@ def test_the_float_limits_keep_research_01s_bound_below_eps_len() -> None:
 
 
 @pytest.mark.req("REQ-G2D-131", "REQ-G2D-132")
+def test_the_arc_precondition_keeps_the_whole_bound_below_eps_len() -> None:
+    # DEC-G2D-016: arcs add at most 40u·r·min(1, φ²) per mm of loop length, r·min(1, φ²) <= 10^7 mm.
+    u, n, e, eps = 2.0**-53, 10**6, 3355.0, 1e-6
+    arcs_per_mm = 40 * u * 1e7
+    float_path = n * u * (math.sqrt(2) * e + 3 * e * e / (4 * e))  # per mm, at L = 4E
+    exact_path = 2 * u * 1e9  # the translation, per mm, at E = 10^9 mm
+    assert float_path + arcs_per_mm <= 0.9 * eps
+    assert exact_path + arcs_per_mm <= 0.3 * eps
+
+
+@pytest.mark.req("REQ-G2D-131", "REQ-G2D-132")
 @pytest.mark.parametrize(("n", "exact"), [(10**6, False), (10**6 + 1, True)])
 def test_a_loop_just_above_the_vertex_limit_sums_exactly(
     ctx: Context, monkeypatch: pytest.MonkeyPatch, n: int, exact: bool
