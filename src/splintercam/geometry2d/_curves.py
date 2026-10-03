@@ -76,10 +76,10 @@ def make_arc(
 ) -> Result[tuple[Curve, ...]]:
     """The arc from `p0` to `p1` about `centre`, checked in the order of the SPEC.
 
-    Returns `(Arc,)`; `(Line,)` when r <= eps_len and P0 != P1; `()` when r <= eps_len and
-    P0 = P1; a full circle for a nearly closed arc. Errors: `CURVE_INVALID` for a non-finite value
-    or a sweep of 0 or beyond ±2π, `ARC_INCONSISTENT` when P1 is off the circle or the sweep does
-    not fit the end points.
+    Returns `(Arc,)`; `(Line,)` when r <= eps_len, P0 != P1 and P1 lies within eps_len of the
+    circle; `()` when r <= eps_len and P0 = P1; a full circle for a nearly closed arc. Errors:
+    `CURVE_INVALID` for a non-finite value or a sweep of 0 or beyond ±2π, `ARC_INCONSISTENT` when
+    P1 is off the circle or the sweep does not fit the end points.
 
     Implements: REQ-G2D-037 to 045, REQ-G2D-047 to 049.
     """
@@ -91,7 +91,7 @@ def make_arc(
     eps = ctx.tolerances.length_eps_mm
     radius = arc.radius_mm
     if radius <= eps:
-        return Result(() if arc.p0 == arc.p1 else (Line(arc.p0, arc.p1),))
+        return _tiny_arc(arc, radius, eps)
     size = abs(arc.sweep_rad)
     if distance(arc.p0, arc.p1) <= eps and size > math.pi and (math.tau - size) * radius <= eps:
         return Result((Arc(arc.p0, arc.p0, arc.centre, math.copysign(math.tau, arc.sweep_rad)),))
@@ -99,6 +99,16 @@ def make_arc(
     if message is not None:
         return Result(None, (Diagnostic("ARC_INCONSISTENT", Severity.ERROR, f"{message}: {arc}"),))
     return Result((arc,))
+
+
+def _tiny_arc(arc: Arc, radius: float, eps: float) -> Result[tuple[Curve, ...]]:
+    """An arc with r <= eps_len: its chord, nothing when closed, or `ARC_INCONSISTENT` when P1
+    lies off the circle. The radial check comes first, so P1 far from a tiny circle gives no long
+    line (DEC-G2D-018)."""
+    if abs(distance(arc.p1, arc.centre) - radius) > eps:
+        message = f"P1 is off the arc's circle: {arc}"
+        return Result(None, (Diagnostic("ARC_INCONSISTENT", Severity.ERROR, message),))
+    return Result(() if arc.p0 == arc.p1 else (Line(arc.p0, arc.p1),))
 
 
 _ARC_CHECK_MESSAGES = {1: "P1 is off the arc's circle", 2: "the sweep does not fit the end points"}
