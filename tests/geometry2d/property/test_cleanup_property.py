@@ -41,6 +41,10 @@ def test_spikes_leave_the_area_unchanged(
     kept = [loop[i] for i in indices]
     if len(kept) >= 3:
         assert oracle.polygon_area(kept) == oracle.polygon_area(loop)
+    # What stays has no exactly collinear vertex between its neighbours and no spike.
+    if len(kept) > 3:
+        for prev, v, nxt in zip(kept[-1:] + kept[:-1], kept, kept[1:] + kept[:1], strict=True):
+            assert oracle.orient2d(prev, nxt, v) != 0 or v in (prev, nxt)
     again = cleanup(np.array(kept), ctx)
     assert again.value is not None
     assert again.value.tolist() == list(range(len(kept)))

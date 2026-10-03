@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-// Polyline cleanup (research 01, Helpers; ours): from the first vertex, a run of consecutive
-// vertices within eps_len of the run's first vertex becomes that vertex, and a last run within
-// eps_len of the first vertex joins it; then a vertex strictly between its neighbours with
-// orient2d exactly 0 is dropped, then a zero-width spike, where the loop turns back exactly onto
-// itself. The three passes repeat in this order until none changes the loop, and stop below three
-// vertices. Distances merge first, so the exact predicates see merged vertices (D-097).
+// Polyline cleanup (research 01, Helpers; ours; D-097): REQ-G2D-020, 204 to 212. Each kept vertex
+// carries the vertices merged into it, so a later round merges it only where all of them lie
+// within eps_len of the run's first vertex, and no vertex moves twice (spec review of step 9).
 #include "cleanup.hpp"
 
 #include "exact.hpp"
@@ -12,13 +9,19 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <numeric>
 #include <vector>
 
 namespace splintercam::geometry2d {
 namespace {
 
 using Indices = std::vector<std::size_t>;
-constexpr std::size_t min_vertices = 3; // a loop with fewer encloses nothing
+struct Vertex {
+    std::size_t index; // the vertex that stays
+    Indices merged;    // it and the vertices merged into it
+};
+using Loop = std::vector<Vertex>;
+constexpr std::size_t min_vertices = 3; // the drop passes stop here: fewer enclose nothing (ours)
 
 struct Polyline {
     std::span<const double> points;
@@ -29,28 +32,30 @@ struct Polyline {
         std::ranges::copy(points.subspan(2 * i, 2), p.begin());
         return p;
     }
-    [[nodiscard]] bool near(std::size_t i, std::size_t j) const {
-        const auto [ax, ay] = at(i);
-        const auto [bx, by] = at(j);
-        const double dx = ax - bx;
-        const double dy = ay - by;
-        return std::sqrt(dx * dx + dy * dy) <=
-               length_eps_mm; // basic operations: the same everywhere
+    // Whether every vertex of `vertex` lies within eps_len of `first`; IEEE 754's correctly rounded
+    // sqrt makes this the same everywhere (a tolerance test, not a sign decision).
+    [[nodiscard]] bool near(const Vertex& vertex, std::size_t first) const {
+        const auto [fx, fy] = at(first);
+        return std::ranges::all_of(vertex.merged, [&](std::size_t i) {
+            const auto [x, y] = at(i);
+            return std::sqrt((x - fx) * (x - fx) + (y - fy) * (y - fy)) <= length_eps_mm;
+        });
     }
 };
 
-Indices merge_runs(const Polyline& line, const Indices& kept) {
-    Indices merged{kept.front()};
-    std::size_t last_run = 0; // where the last run starts in `kept`
-    for (std::size_t k = 1; k < kept.size(); ++k) {
-        if (!line.near(kept.at(k), merged.back())) {
-            merged.push_back(kept.at(k));
-            last_run = k;
+Loop merge_runs(const Polyline& line, Loop loop) {
+    Loop merged;
+    std::size_t last_run = 0; // where the last run starts in `merged`
+    for (Vertex& vertex : loop) {
+        if (!merged.empty() && line.near(vertex, merged.back().index)) {
+            merged.back().merged.insert(merged.back().merged.end(), vertex.merged.begin(),
+                                        vertex.merged.end());
+        } else {
+            merged.push_back(std::move(vertex));
+            last_run = merged.size() - 1;
         }
     }
-    const auto last = std::span(kept).subspan(last_run);
-    if (last_run > 0 &&
-        std::ranges::all_of(last, [&](std::size_t i) { return line.near(i, kept.front()); })) {
+    if (last_run > 0 && line.near(merged.back(), merged.front().index)) {
         merged.pop_back(); // the last run joins the first (REQ-G2D-205)
     }
     return merged;
@@ -65,52 +70,54 @@ bool strictly_between(Point2 a, Point2 v, Point2 b) {
 }
 
 bool collinear_between(Point2 a, Point2 v, Point2 b) {
-    return a != b && orient_sign(a, b, v) == 0 && strictly_between(a, v, b);
+    return orient_sign(a, b, v) == 0 && strictly_between(a, v, b);
 }
 
+// Turns back exactly onto itself; equal neighbours are a duplicate, not a spike.
 bool spike(Point2 a, Point2 v, Point2 b) {
-    return v != a && v != b && orient_sign(a, b, v) == 0 && (a == b || !strictly_between(a, v, b));
+    return v != a && v != b && orient_sign(a, b, v) == 0 && !strictly_between(a, v, b);
 }
 
-// One pass of a vertex test, walking in order with the neighbours as they stand; marks drops.
+// One pass of a vertex test in order, with the neighbours as they stand; marks the drops.
 template <typename Test>
-Indices drop_pass(const Polyline& line, const Indices& kept, Test test,
-                  std::span<std::int8_t> marks) {
-    Indices out;
-    for (std::size_t i = 0; i < kept.size(); ++i) {
-        const std::size_t prev = out.empty() ? kept.back() : out.back();
-        const std::size_t next = i + 1 < kept.size() ? kept.at(i + 1) : out.front();
-        const bool room = out.size() + (kept.size() - i) > min_vertices;
-        if (room && test(line.at(prev), line.at(kept.at(i)), line.at(next))) {
-            if (!marks.empty()) {
-                marks.subspan(kept.at(i), 1).front() = 1;
-            }
+Loop drop_pass(const Polyline& line, Loop loop, Test test, Kept mark,
+               std::span<std::int8_t> status) {
+    Loop out;
+    for (std::size_t i = 0; i < loop.size(); ++i) {
+        const std::size_t prev = out.empty() ? loop.back().index : out.back().index;
+        const std::size_t next = i + 1 < loop.size() ? loop.at(i + 1).index : out.front().index;
+        const bool room = out.size() + (loop.size() - i) > min_vertices;
+        if (room && test(line.at(prev), line.at(loop.at(i).index), line.at(next))) {
+            status.subspan(loop.at(i).index, 1).front() = static_cast<std::int8_t>(mark);
             continue;
         }
-        out.push_back(kept.at(i));
+        out.push_back(std::move(loop.at(i)));
     }
     return out;
 }
 
 } // namespace
 
-void cleanup_loop(std::span<const double> points, double length_eps_mm, const CleanupOut& out) {
+void cleanup_loop(std::span<const double> points, double length_eps_mm,
+                  std::span<std::int8_t> status) {
     const Polyline line{points, length_eps_mm};
-    Indices kept(out.keep.size());
-    for (std::size_t i = 0; i < kept.size(); ++i) {
-        kept.at(i) = i;
+    std::ranges::fill(status, static_cast<std::int8_t>(Kept::dropped));
+    Indices order(status.size());
+    std::iota(order.begin(), order.end(), std::size_t{0});
+    Loop loop;
+    for (const std::size_t i : order) {
+        loop.push_back({i, {i}});
     }
-    for (std::size_t before = 0; !kept.empty() && before != kept.size();) {
-        before = kept.size();
-        kept = merge_runs(line, kept);
-        if (kept.size() >= min_vertices) {
-            kept = drop_pass(line, kept, collinear_between, {});
-            kept = drop_pass(line, kept, spike, out.spike);
+    for (std::size_t before = 0; !loop.empty() && before != loop.size();) {
+        before = loop.size();
+        loop = merge_runs(line, std::move(loop));
+        if (loop.size() >= min_vertices) {
+            loop = drop_pass(line, std::move(loop), collinear_between, Kept::dropped, status);
+            loop = drop_pass(line, std::move(loop), spike, Kept::spike, status);
         }
     }
-    std::ranges::fill(out.keep, std::int8_t{0});
-    for (const std::size_t i : kept) {
-        out.keep.subspan(i, 1).front() = 1;
+    for (const Vertex& vertex : loop) {
+        status.subspan(vertex.index, 1).front() = static_cast<std::int8_t>(Kept::kept);
     }
 }
 
