@@ -22,15 +22,6 @@ Every sign decision of the float stages (side, collinearity, inside or outside) 
   shewchuk-predicates: { licence: public domain, used_by: [geometry2d], note: "vendored predicates.c, ADR 0009" }
   ```
 
-- `NOTICE` gets this entry (`docs/plans/active/0003-notice.patch`; `NOTICE` is changed by a person):
-
-  ```text
-  Robust geometric predicates (src/splintercam/geometry2d/kernel/vendor/predicates.c)
-  Jonathan Richard Shewchuk, "Routines for Arbitrary Precision Floating-point Arithmetic and
-  Fast Robust Geometric Predicates", 1996, https://www.cs.cmu.edu/~quake/robust.html.
-  Placed in the public domain by its author; vendored unchanged.
-  ```
-
 ## Consequences
 
 - Exact orient2d and incircle, and the expansion arithmetic for our own arc predicate, without writing or maintaining that arithmetic ourselves.
