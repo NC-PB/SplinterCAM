@@ -8,7 +8,7 @@
 - Research: none
 - Branch: one branch and one pull request
 - Owner: Peter Burgener; agents: Claude Code cloud sessions
-- Status: step 1 done (plan 0003, session 1); the workflow of step 2 is applied
+- Status: complete (2026-10-04): `change-size` runs on every pull request and is a required check on `main`
 
 ## Context
 
@@ -21,7 +21,7 @@
      (docs/dev/12, section 3). -->
 
 - [x] 1. **`tools/size-check --change <base>`**: count the lines added by `git diff --numstat <merge base>...HEAD` in non-test code (removed lines do not count), report over 200 and fail over 400; `--large-change` turns the failure into a report that names the label. Non-test code: every file except tests (`tests/`, `testdata/`), Markdown and generated files (docs/dev/04 header); a pull request that changes only those passes without a count. Binary files (numstat `-`) are named, not counted. Without `--change`, `tools/check` keeps its present behaviour, so local runs do not depend on a base branch. Tests in `tests/tools/test_size_check.py` with a temporary git repository: under, at and over both limits, the label, a change that removes many lines, a Markdown-only and a generated-only change, a test-only change, a renamed file. Update `tools/README.md`. Size: about 60 lines of kept code + 80 of tests.
-- [ ] 2. **Workflow** (Peter): apply `docs/plans/completed/0002-workflow.patch` (applied in d1a0949; the label and the required check still to confirm), create the label `large-change` in GitHub, and make the `change-size` check required on `main` if wanted. The agent checks the run on its next pull request and records the result here. Size: the patch, 35 lines.
+- [x] 2. **Workflow** (Peter): apply `docs/plans/completed/0002-workflow.patch` (applied in d1a0949; the label and the required check still to confirm), create the label `large-change` in GitHub, and make the `change-size` check required on `main` if wanted. The agent checks the run on its next pull request and records the result here. Size: the patch, 35 lines.
 
 ## Decisions
 
@@ -31,6 +31,11 @@
 ## Progress log
 
 <!-- Newest first. What was done, what tools/check reported, what is next. At most about 30 lines per session. -->
+
+### 2026-10-04, step 2
+
+- Peter: the label `large-change` exists (answer 4 of 2026-10-03); he made `change-size` a required status check on `main` with `gh api --method POST repos/NC-PB/SplinterCAM/branches/main/protection/required_status_checks/contexts -f 'contexts[]=change-size'`. The required checks are now the three `check` jobs and `change-size`.
+- The run: `change-size` passed on pull request 32 (10 s), next to the `check` jobs on the three systems and `sanitize`. The plan is complete and moves to `docs/plans/completed/`.
 
 ### 2026-10-02, step 1 (during plan 0003)
 
