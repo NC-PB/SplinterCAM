@@ -22,6 +22,7 @@ out/
 failures/
 
 # Editors and operating systems
+.codegraph/
 .DS_Store
 ._*
 .idea/
