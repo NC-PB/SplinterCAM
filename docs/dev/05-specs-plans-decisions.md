@@ -68,7 +68,7 @@ Agents record what they learn when it happens, in the same commit as the change,
 | Peter answers a question | the module's `DECISIONS.md` (Peter, date); the SPEC and its change log if the contract changes |
 | Something cost time or surprised you, and could trip the next agent | the module's `AGENTS.md`, Known pitfalls (one or two lines) |
 | A rule every change in the module must follow | the module's `AGENTS.md`, Local rules |
-| A gap in the SPEC or the research | the plan's open questions or backlog |
+| A gap in the SPEC or the research | decide it yourself in `DECISIONS.md` when a test, measurement or source supports a choice; otherwise a research request in `docs/research/REQUESTS.md`; only questions for Peter's judgement go into the plan's open questions ([07](07-agent-workflow.md), "Questions: who answers") |
 | A new domain term | `docs/glossary.md` |
 | A step is done, or the session stops | the plan's progress log and next step |
 
