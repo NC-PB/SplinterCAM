@@ -61,6 +61,14 @@ of proprietary systems went in.>
 | --- | --- |
 | <…> | <…> |
 
+## Example parts
+
+<!-- Real geometry the module will meet, from Peter's shop practice, listed before the requirements are written:
+     for example an island tangent to the pocket wall, a boss touching a fillet, a thin rib, a slot exactly the
+     tool's width. Each becomes a golden case or a property-test generator in the Test plan. -->
+
+- <case: what it looks like, what the module must do with it>
+
 ## Test plan
 
 - Unit: <…>
@@ -78,6 +86,9 @@ of proprietary systems went in.>
 +20 % fails `tools/size-check` (docs/dev/12, section 3).>
 
 ## Open questions
+
+<!-- Box 1 questions for Peter only, in machining terms with a recommendation (docs/dev/07, "Questions: who answers").
+     Box 2 choices go to DECISIONS.md, box 3 to docs/research/REQUESTS.md. -->
 
 - <…>
 

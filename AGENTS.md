@@ -8,7 +8,7 @@ Status: early start of release 1 (D-156): `foundation` done; `geometry2d` slice 
 
 ## Start here
 
-- Current work: none. Work continues in local sessions. geometry2d slice 2: `docs/plans/active/0004-geometry2d-slice-2.md`, approved by Peter on 2026-10-07 (DEC-G2D-022); step 1, the SPEC cut, is done (pull request 34) and waits for his review and his answers to its four open questions; step 2 follows them. Slice 1's record: `docs/plans/completed/0003-geometry2d-slice-1.md` (Handover).
+- Current work: none. Work continues in local sessions. geometry2d slice 2: `docs/plans/active/0004-geometry2d-slice-2.md`, approved by Peter on 2026-10-07 (DEC-G2D-022); step 1, the SPEC cut, is done and reviewed (DEC-G2D-024 to 027); step 2, the polygon region arrays and the flattening of curve-row loops, is next. Slice 1's record: `docs/plans/completed/0003-geometry2d-slice-1.md` (Handover).
 - Work one plan step at a time. At the end of each step, tick it, write a progress-log entry in the plan, run `tools/check`, and commit. One pull request per session, with small code changes included; a new algorithm or a change over about 100 lines of non-test code gets its own (docs/dev/07, Branches, commits and pull requests). The plan says where to stop for the user's review.
 - Decisions (D-nnn) and sources (SRC-nnn) are registered in Project Spike until the handover; `docs/spike/` holds dated snapshots. Never edit them. If a decision seems wrong or missing, stop and write the question in the progress log.
 
@@ -49,7 +49,7 @@ After cloning, run `tools/bootstrap`; on Windows, run the `tools/` scripts from 
 4. Implement in small steps. Run `tools/test-one` after each step.
 5. Run `tools/check`. For geometry or toolpath changes run `tools/render` on the affected cases and look at the images.
 6. Update the SPEC's "Verified by" column, the plan's progress log, and the glossary if you introduced a term. Decisions and pitfalls are already recorded (see Keep the record).
-7. Report: files changed, tests added, commands run with their results, open questions.
+7. Report: files changed, tests added, commands run with their results, open questions. Name every file by its path from the repository root, for example `src/splintercam/geometry2d/SPEC.md`.
 
 ## Keep the record
 
@@ -92,11 +92,17 @@ Record as you go, in the same commit as the change, without being asked (docs/de
 - SPEC, plan and glossary are updated; every decision of the change is in the module's `DECISIONS.md`.
 - The change is reviewable: about 400 lines of non-test code at most, one module.
 
-## Stop and ask when
+## Questions
 
-- the spec is missing, ambiguous or contradicts the research;
-- you would need a new dependency, a `modules.yaml` change or a public interface change;
-- the same approach has failed three times.
+Sort every question before asking (docs/dev/07, "Questions: who answers"):
+
+1. **Peter's judgement** (scope, what the user sees, machine and controller behaviour, safety, licences, dependencies, `modules.yaml`, interfaces between modules, accepted decisions): ask Peter in machining terms, what happens on the machine under each option, with your recommendation.
+2. **Technical inside the module** (algorithms, numerics, edge cases, deviations from research backed by a test, a measurement or a source): decide it yourself as "(ours)", record it in `DECISIONS.md` with the evidence, list it in the pull request under "Deviations and decisions". Do not ask Peter.
+3. **Knowledge nobody has at hand:** write a research request in `docs/research/REQUESTS.md`. Do not ask Peter.
+
+Never block: take the conservative option, record it as provisional, continue. Stop at once only when a test looks wrong, a tolerance would have to be loosened, the same approach failed three times, or no requirement covers what the code needs.
+
+Every file you name, anywhere, is its path from the repository root in backticks: `src/splintercam/geometry2d/SPEC.md`, never "the SPEC".
 
 ## Gotchas
 

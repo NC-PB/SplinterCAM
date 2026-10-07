@@ -46,7 +46,7 @@
 - `tools/check`: <pass / fail: what>
 - Size: <added / removed in src, tests, tools, spikes; module budget used>
 - Next step: <…>
-- Open questions for a person: <…>
+- Open questions for Peter (box 1 only, machining terms, files by path from the repository root): <…>
 
 ## Backlog
 

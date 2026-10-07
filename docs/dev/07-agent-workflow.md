@@ -53,16 +53,25 @@ flowchart TD
 
 **At the end, always, even when unfinished:** run `tools/check` and record the result, update the plan's progress log (done, next step, open questions), check that every decision of the session is in `DECISIONS.md`, commit the work in progress on the task branch. When a plan or a slice ends, or work stops for longer than a few days, the plan gets a Handover section: what exists, what is in flight, open questions for Peter, how the work ran. The next session, or another agent, must be able to continue from the files alone.
 
-## When an agent must stop and ask
+## Questions: who answers
 
-- The spec is missing, ambiguous or contradicts the research.
-- A test looks wrong, or passing it would need a looser tolerance.
-- The task needs a new dependency, a `modules.yaml` change or a public interface change.
-- Machine or controller behaviour is unclear (G-code dialects, cycles, kinematics, safe heights): these are never guessed.
-- Anything touches licences, provenance or code from outside the repository.
-- The same approach has failed three times.
-- The code seems to need something no requirement covers: propose a requirement instead of writing the code.
-- A plan step passes its size estimate by 50 %.
+Peter is the domain expert for machining, not for computational geometry or numerics. A question reaches him only when it needs his judgement. Before writing any question, sort it into one of three boxes (D-163):
+
+| Box | Examples | Who answers, and how |
+| --- | --- | --- |
+| **1. Peter's judgement** | scope; what the user sees or must do; machine and controller behaviour (never guessed); safety; licences and provenance; new dependencies; `modules.yaml` and interfaces between modules; anything that changes an accepted decision (D-nnn, accepted ADR) | Peter, in machining terms (below), at most five per deliverable (D-160) |
+| **2. Technical, inside the module** | algorithms, numerics, tolerances inside the module's share, fill rules, edge cases, error codes, internal names; a deviation from the research or the SPEC that a test, a measurement or a cited source supports | The agent decides, marks it "(ours)", records it with its evidence in the module's `DECISIONS.md`, and lists it in the pull request under "Deviations and decisions". Merging the pull request approves it; Peter may still change it in review. |
+| **3. Knowledge nobody has at hand** | "is there a proven method for this?", a research text that is silent or wrong and no test settles it | A research request in `docs/research/REQUESTS.md`, answered from Project Spike with sources. It never goes to Peter as a question. |
+
+**Machining terms.** A box 1 question says what happens on the machine or for the user under each option, recommends one, and names the safe default already taken: "A pocket with an island tangent to its wall: with A it is machined, with B the operation stops with an error. Recommended: A." If a question cannot be phrased like that, it is not a box 1 question.
+
+**Never block on a question.** Take the conservative option (the one that cannot gouge, collide or silently drop material), record it as provisional in `DECISIONS.md`, keep working, and flag it. Stop only where every option could harm a part or a machine, or where the box 1 list says so explicitly.
+
+**Still stop at once** when: a test looks wrong or passing it would need a looser tolerance; the same approach has failed three times; the code needs something no requirement covers (propose the requirement instead); a plan step passes its size estimate by 50 %. These go into the plan's progress log, sorted into a box like any other question.
+
+## File references
+
+Every file named in a report, a question, a plan, a pull request, a commit message, a research request or a decision is written as its path relative to the repository root, in backticks: `src/splintercam/geometry2d/SPEC.md`, not "SPEC.md", "the SPEC" or "the plan". Add the section or line where it helps: `src/splintercam/geometry2d/SPEC.md`, "Open questions", or `src/splintercam/geometry2d/kernel/region.cpp:120`. Files outside the repository (Project Spike) are named with their repository and path: Project Spike `DECISIONS.md`. The reader must be able to open the file without searching.
 
 ## Human gates
 
