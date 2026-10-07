@@ -14,6 +14,7 @@ from ._polygon import FlatRegion, PolygonRegion, RegionKind, polygon_region
 from ._predicates import are_parallel, in_arc_circle, incircle, orient2d
 from ._region import PointLocation, point_in_region
 from ._rows import CurveRows, curve_rows
+from ._tree import loop_tree
 
 __all__ = [
     "AirSide",
@@ -42,6 +43,7 @@ __all__ = [
     "flatten_loops",
     "in_arc_circle",
     "incircle",
+    "loop_tree",
     "make_arc",
     "make_line",
     "orient2d",

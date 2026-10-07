@@ -285,3 +285,12 @@
 - Rejected: classifying each contact by the cyclic order of its edges (more code, and it still needs the depth rule for tangent arcs); reporting contacts of touching pairs (REQ-G2D-161 reports crossings only).
 - Where: REQ-G2D-160, 161, 163, 237; `_crossings.py`, `kernel/distance.cpp`.
 
+## DEC-G2D-032: parents, depths and normalisation
+
+- Date: 2026-10-08; decided by: ours (plan 0004, step 5)
+- Status: Active; the "no probe" rule is provisional until the rule 5 fallback (step 7)
+- Decision: `loop_tree` runs `screen_loops`, then tests each pair of kept loops whose boxes overlap: one way when their areas differ by more than t_topo·(L_A + L_B), the smaller in the larger, both ways otherwise (`both_ways`). A probe is the first candidate farther than t_topo from A's flattening (`polyline_distances`), located against A's exact rows alone; projections are taken onto the nearest segment of B, the lowest index on a tie. Without a probe the answer is "not contained" for now. A loop's parent is its smallest container, the lower input index on a tie. Depth is the number of ancestors. A loop whose sign of area (of its cleaned flattening) disagrees with its depth's parity is reversed: rows in reverse order, ends swapped, sweeps negated, IDs with their rows. Any crossing, by REQ-G2D-237 or by two probes (REQ-G2D-173), gives a tree with no loops. The `LOOPS_CROSS` of REQ-G2D-173 comes after the screen's diagnostics; it is unreachable in practice once REQ-G2D-237 has run (two probes finding each loop in the other mean they reach through each other, or are duplicates).
+- Why: the "no probe" rule, provisional: with both ways tested, a probe in the other direction decides by REQ-G2D-170 anyway, as in research 01 test 24's notched square; with one way, a loop without a far probe lies within t_topo of the other's boundary and the thinness test has most often dropped it, so at worst a sliver of width t_topo is misplaced. Conservative enough to keep working (D-163: never block).
+- Rejected: refusing the tree when no probe exists (it would stop test 24's notched pair, which has an answer); "contained" as the provisional answer (it invents nesting for loops beside each other).
+- Where: REQ-G2D-151, 153, 154, 162, 164 to 168, 170, 173 to 175; `_tree.py`.
+
