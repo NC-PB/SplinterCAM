@@ -293,3 +293,42 @@ def test_polygon_area_length_is_exact_and_translation_free() -> None:
     assert polygon_area_length(square) == (100.0, 40.0)
     assert polygon_area_length(square[::-1].copy()) == (-100.0, 40.0)
     assert polygon_area_length(square + 1e6) == (100.0, 40.0)
+
+
+@pytest.mark.req("REQ-G2D-158")
+def test_a_loop_with_a_slot_reaching_the_wall_is_no_duplicate(ctx: Context) -> None:
+    # Spec review: every vertex of each lies within t_topo of the other, but the V-slot's edges
+    # are millimetres from the square's (DEC-G2D-030: the edges must be covered, not only vertices).
+    slot: Points = [(0, 0), (10, 0), (10, 10), (6, 10), (5, 1e-4), (4, 10), (0, 10)]
+    result = screen_loops(_loops([_square(), slot], ctx), ctx)
+    assert result.value is not None
+    assert result.value.kept.tolist() == [0, 1]
+
+
+@pytest.mark.req("REQ-G2D-158")
+def test_loops_with_the_same_vertices_in_another_order_are_no_duplicates(ctx: Context) -> None:
+    a: Points = [(0, 0), (10, 0), (10, 10), (5, 5), (0, 10)]
+    b: Points = [(0, 0), (10, 0), (5, 5), (10, 10), (0, 10)]
+    result = screen_loops(_loops([a, b], ctx), ctx)
+    assert result.value is not None
+    assert "LOOP_DUPLICATE" not in codes(result)
+
+
+@pytest.mark.req("REQ-G2D-158")
+def test_a_reversed_circle_of_arcs_is_a_duplicate(ctx: Context) -> None:
+    forward = _circle_rows(0.3, 2)
+    backward = [[x1, y1, x0, y0, cx, cy, -s] for x0, y0, x1, y1, cx, cy, s in forward[::-1]]
+    rows = np.array(forward + backward, dtype=np.float64)
+    built = curve_rows(rows, np.arange(4, dtype=np.int64), np.array([0, 2], np.int64), ctx)
+    assert built.value is not None, built.diagnostics
+    result = screen_loops(built.value, ctx)
+    assert result.value is not None
+    assert result.value.kept.tolist() == [0]
+
+
+@pytest.mark.req("REQ-G2D-155", "REQ-G2D-236")
+def test_a_spike_is_named_by_its_point(ctx: Context) -> None:
+    spike = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (10.0, 20.0), (10.0, 10.0), (0.0, 10.0)]
+    result = screen_loops(_loops([spike], ctx), ctx)
+    assert result.diagnostics[0].location == "loop 0"
+    assert "(10, 20)" in result.diagnostics[0].message

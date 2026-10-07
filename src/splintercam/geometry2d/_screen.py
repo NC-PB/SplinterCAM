@@ -8,17 +8,25 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
+from splintercam import _kernels
 from splintercam.foundation import Context, Diagnostic, Result, Severity
 
 from ._area import polygon_area_length, signed_area
 from ._cleanup import cleanup
-from ._distances import polyline_distances
 from ._loops import topology_flattening
 from ._rows import CurveRows
 
 # Rule 2: a loop whose topology flattening has |A| <= 1.5·t_topo·L, thinner than about 3·t_topo on
 # average, is dropped (research 01, Loop tree, rule 2). A rule of the research, not a tuning share.
 _THINNESS_FACTOR = 1.5
+
+
+def _spike_note(diagnostic: Diagnostic, points: NDArray[np.float64], where: str) -> Diagnostic:
+    """`cleanup`'s spike, located by its loop and named by its point (REQ-G2D-236)."""
+    vertex = int((diagnostic.location or "vertex 0").split()[-1])
+    x, y = points[vertex].tolist()
+    message = f"{diagnostic.message} at ({x:.6g}, {y:.6g})"
+    return dataclasses.replace(diagnostic, message=message, location=where)
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,20 +49,24 @@ class _Candidate:
     length: float
 
 
-def _within(a: NDArray[np.float64], b: NDArray[np.float64], t_topo: float) -> bool:
-    distances = polyline_distances(a, b, np.zeros(1, np.int64), t_topo)
-    return bool(np.isfinite(distances).all())
+def _covered(a: NDArray[np.float64], b: NDArray[np.float64], t_topo: float) -> bool:
+    inside, outside = _kernels.geometry2d.crossing_depth(a, b, t_topo)
+    return not (inside or outside)  # no point of a farther than t_topo from b
 
 
 def _duplicate_of(
-    candidate: _Candidate, kept: list[_Candidate], t_topo: float
+    candidate: _Candidate, kept: list[_Candidate], boxes: NDArray[np.float64], ctx: Context
 ) -> _Candidate | None:
-    low, high = candidate.polyline.min(axis=0), candidate.polyline.max(axis=0)
-    for other in kept:
-        other_low, other_high = other.polyline.min(axis=0), other.polyline.max(axis=0)
-        if np.any(other_low > high + t_topo) or np.any(low > other_high + t_topo):
-            continue
-        if _within(candidate.polyline, other.polyline, t_topo) and _within(
+    t_topo = ctx.tolerances.topology_tol_mm
+    # Loops within t_topo of each other both ways have boxes within t_topo of each other; eps_len
+    # absorbs the rounding of the cover (DEC-G2D-030).
+    box = np.concatenate([candidate.polyline.min(axis=0), candidate.polyline.max(axis=0)])
+    near = np.flatnonzero(
+        (np.abs(boxes - box) <= t_topo + ctx.tolerances.length_eps_mm).all(axis=1)
+    )
+    for k in near.tolist():
+        other = kept[k]
+        if _covered(candidate.polyline, other.polyline, t_topo) and _covered(
             other.polyline, candidate.polyline, t_topo
         ):
             return other
@@ -83,7 +95,7 @@ def screen_loops(loops: CurveRows, ctx: Context) -> Result[Screened]:
     for i, (points, rows, ids) in enumerate(pieces):
         where = f"loop {i}"
         cleaned = cleanup(points, ctx)
-        notes += [(i, dataclasses.replace(d, location=where)) for d in cleaned.diagnostics]
+        notes += [(i, _spike_note(d, points, where)) for d in cleaned.diagnostics]
         if cleaned.value is None:  # cleanup always returns the kept indices
             raise RuntimeError(f"cleanup returned no vertices for {where}")
         area_test = signed_area(CurveRows(rows, ids, np.zeros(1, np.int64)), ctx)
@@ -97,7 +109,8 @@ def screen_loops(loops: CurveRows, ctx: Context) -> Result[Screened]:
             notes.append((i, Diagnostic("LOOP_DEGENERATE", Severity.WARNING, message, where)))
             continue
         candidate = _Candidate(i, polyline, area, length)
-        original = _duplicate_of(candidate, kept, t_topo)
+        boxes = np.array([[*c.polyline.min(axis=0), *c.polyline.max(axis=0)] for c in kept])
+        original = _duplicate_of(candidate, kept, boxes.reshape(-1, 4), ctx)
         if original is not None:
             message = f"loop {i} duplicates loop {original.index} within t_topo; removed"
             location = f"loops {original.index} and {i}"

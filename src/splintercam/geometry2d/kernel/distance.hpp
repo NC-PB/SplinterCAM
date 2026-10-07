@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <span>
+#include <vector>
 
 namespace splintercam::geometry2d {
 
@@ -26,5 +27,14 @@ struct Polylines {
 // `limit` (> 0), and +inf elsewhere.
 void polyline_distances(std::span<const double> q, const Polylines& lines, double limit,
                         std::span<double> out);
+
+// Whether polyline set `a` reaches more than `limit` into the region of `b` (inside) and more
+// than `limit` out of it (outside): a point of a's segments farther than `limit` from every
+// segment of b, classified by point in region against b (REQ-G2D-237).
+struct Depth {
+    bool inside = false;
+    bool outside = false;
+};
+[[nodiscard]] Depth crossing_depth(const Polylines& a, const Polylines& b, double limit);
 
 } // namespace splintercam::geometry2d

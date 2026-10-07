@@ -88,6 +88,11 @@ def polyline_distances(q: Annotated[NDArray[numpy.float64], dict(shape=(None, 2)
     Write per point its distance to the closed polylines where at most limit, else inf.
     """
 
+def crossing_depth(a: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], b: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], limit: float) -> tuple[bool, bool]:
+    """
+    Whether closed polyline a reaches farther than limit inside and outside closed polyline b.
+    """
+
 def basic_sin_cos(angles: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu', writable=False)], sines: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu')], cosines: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu')]) -> None:
     """
     The sine and cosine the topology flattening turns with, for tests (REQ-G2D-152).
