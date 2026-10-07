@@ -88,4 +88,38 @@ double phi_minus_sin(double phi) {
     return phi - sine;
 }
 
+// Cody–Waite reduction by π/2 with the split constants of fdlibm's __ieee754_rem_pio2 (Sun
+// Microsystems, 1993, freely redistributable): pio2_hi holds the first 33 bits of π/2, so n·pio2_hi
+// is exact for |n| < 2^20, and pio2_lo the next 53. The reduced r lies in [−π/4, π/4], where nine
+// terms of each Taylor series leave a truncation error below 0.786^18/18! < 3e-18, far below a
+// rounding unit of 1 (ours, 2026-10-08). Every step is a correctly rounded IEEE operation in a
+// fixed order.
+SinCos basic_sin_cos(double angle) {
+    constexpr double pio2_hi = 1.57079632673412561417e+00;
+    constexpr double pio2_lo = 6.07710050650619224932e-11;
+    constexpr int terms = 9;
+    const double n = std::nearbyint(angle / half_pi);
+    // Unreduced when n = 0, which also keeps sin(−0) = −0.
+    const double r = n == 0.0 ? angle : (angle - n * pio2_hi) - n * pio2_lo;
+    const double r2 = r * r;
+    // Horner forms of sin r = r·Σ (−r²)^k/(2k+1)! and cos r = Σ (−r²)^k/(2k)!.
+    double sine = 1.0;
+    double cosine = 1.0;
+    for (int k = terms - 1; k >= 1; --k) {
+        sine = 1.0 - r2 * sine / static_cast<double>((2 * k) * (2 * k + 1));
+        cosine = 1.0 - r2 * cosine / static_cast<double>((2 * k - 1) * (2 * k));
+    }
+    sine *= r;
+    switch (static_cast<int>(n) & 3) {
+    case 0:
+        return {.sin = sine, .cos = cosine};
+    case 1:
+        return {.sin = cosine, .cos = -sine};
+    case 2:
+        return {.sin = -sine, .cos = -cosine};
+    default:
+        return {.sin = -cosine, .cos = sine};
+    }
+}
+
 } // namespace splintercam::geometry2d

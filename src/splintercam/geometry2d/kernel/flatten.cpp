@@ -22,12 +22,22 @@ double step_within(double radius, double t_mm, bool inscribed) {
     return 2 * basic_atan2(std::sqrt(t_mm * (2 * radius + t_mm)), radius);
 }
 
-// Writes C + R(angle)·(P0 − C)·scale at `out`, the next two places.
-void put_turned(const CurveRow& arc, double angle, double scale, std::span<double>::iterator out) {
+// Writes C + R(angle)·(P0 − C)·scale at `out`, the next two places; with `portable`, sin and cos
+// from basic operations (REQ-G2D-152), else from libm.
+struct Turn {
+    double angle;
+    double scale;
+    bool portable;
+};
+
+void put_turned(const CurveRow& arc, Turn turn, std::span<double>::iterator out) {
     const double ax = arc.x0 - arc.cx;
     const double ay = arc.y0 - arc.cy;
-    const double c = std::cos(angle) * scale;
-    const double s = std::sin(angle) * scale;
+    const SinCos sc = turn.portable
+                          ? basic_sin_cos(turn.angle)
+                          : SinCos{.sin = std::sin(turn.angle), .cos = std::cos(turn.angle)};
+    const double c = sc.cos * turn.scale;
+    const double s = sc.sin * turn.scale;
     *out = arc.cx + (ax * c - ay * s);
     *(out + 1) = arc.cy + (ax * s + ay * c);
 }
@@ -53,22 +63,33 @@ int arc_steps(const CurveRow& arc, double t_mm, bool inscribed, double max_step_
 
 namespace {
 
+struct Placement {
+    bool inscribed;
+    bool portable; // sin and cos from basic operations
+};
+
 // Writes P0 and the arc's inner vertices from `next` on, without P1: n points inscribed, n + 1
 // circumscribed. Returns where P1 would go.
-std::span<double>::iterator put_arc_start(const CurveRow& arc, int steps, bool inscribed,
+std::span<double>::iterator put_arc_start(const CurveRow& arc, int steps, Placement placement,
                                           std::span<double>::iterator next) {
+    const bool inscribed = placement.inscribed;
     const double step = arc.sweep / steps; // signed: the sense of the arc
     *next = arc.x0;
     *(next + 1) = arc.y0;
     next += 2;
     if (inscribed) {
         for (int k = 1; k < steps; ++k, next += 2) {
-            put_turned(arc, k * step, 1.0, next);
+            put_turned(arc, {.angle = k * step, .scale = 1.0, .portable = placement.portable},
+                       next);
         }
     } else {
-        const double outward = 1.0 / std::cos(step / 2);
+        const double half = step / 2;
+        const double outward =
+            1.0 / (placement.portable ? basic_sin_cos(half).cos : std::cos(half));
         for (int k = 0; k < steps; ++k, next += 2) {
-            put_turned(arc, (2 * k + 1) * step / 2, outward, next); // the middle of step k
+            const double middle = (2 * k + 1) * step / 2; // the middle of step k
+            put_turned(arc, {.angle = middle, .scale = outward, .portable = placement.portable},
+                       next);
         }
     }
     return next;
@@ -77,7 +98,8 @@ std::span<double>::iterator put_arc_start(const CurveRow& arc, int steps, bool i
 } // namespace
 
 void flatten_arc(const CurveRow& arc, int steps, bool inscribed, std::span<double> out) {
-    const auto next = put_arc_start(arc, steps, inscribed, out.begin());
+    const auto next =
+        put_arc_start(arc, steps, {.inscribed = inscribed, .portable = false}, out.begin());
     *next = arc.x1;
     *(next + 1) = arc.y1;
 }
@@ -97,7 +119,7 @@ void row_vertex_counts(std::span<const double> rows, std::span<const std::uint8_
 }
 
 void flatten_rows(std::span<const double> rows, std::span<const std::uint8_t> inscribed,
-                  std::span<const std::int64_t> counts, std::span<double> out) {
+                  std::span<const std::int64_t> counts, bool portable, std::span<double> out) {
     auto next = out.begin();
     for (std::size_t i = 0; i < counts.size(); ++i) {
         const CurveRow row = unpack_row(rows.subspan(i * row_width, row_width));
@@ -109,7 +131,7 @@ void flatten_rows(std::span<const double> rows, std::span<const std::uint8_t> in
         } else {
             const bool inner = inscribed.subspan(i, 1).front() != 0;
             const auto steps = static_cast<int>(inner ? count : count - 1);
-            next = put_arc_start(row, steps, inner, next);
+            next = put_arc_start(row, steps, {.inscribed = inner, .portable = portable}, next);
         }
     }
 }

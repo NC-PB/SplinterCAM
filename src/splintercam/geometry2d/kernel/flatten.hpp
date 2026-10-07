@@ -31,8 +31,9 @@ void row_vertex_counts(std::span<const double> rows, std::span<const std::uint8_
                        FlattenLimits limits, std::span<std::int64_t> out);
 
 // Writes each row's vertices after the previous row's, `counts` from row_vertex_counts; `out`
-// holds exactly 2·Σ counts doubles. An arc's vertices are those of flatten_arc, bit for bit.
+// holds exactly 2·Σ counts doubles. An arc's vertices are those of flatten_arc, bit for bit, or
+// with `portable` turned with basic_sin_cos, the same on every platform (REQ-G2D-152).
 void flatten_rows(std::span<const double> rows, std::span<const std::uint8_t> inscribed,
-                  std::span<const std::int64_t> counts, std::span<double> out);
+                  std::span<const std::int64_t> counts, bool portable, std::span<double> out);
 
 } // namespace splintercam::geometry2d

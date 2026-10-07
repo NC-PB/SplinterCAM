@@ -13,4 +13,14 @@ namespace splintercam::geometry2d {
 // orientation), within a few rounding units, from basic operations only like basic_atan2.
 [[nodiscard]] double phi_minus_sin(double phi);
 
+struct SinCos {
+    double sin;
+    double cos;
+};
+
+// sin and cos of an angle with |angle| <= 4π, within a few rounding units of 1, from basic
+// operations only like basic_atan2: the topology flattening's vertices are the same everywhere
+// (REQ-G2D-152). sin(±0) = ±0, cos(0) = 1.
+[[nodiscard]] SinCos basic_sin_cos(double angle);
+
 } // namespace splintercam::geometry2d

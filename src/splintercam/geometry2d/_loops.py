@@ -54,25 +54,15 @@ def _vertex_counts(loops: CurveRows, flags: NDArray[np.uint8], t_mm: float) -> N
     return counts
 
 
-def flatten_loops(tree: LoopTree, kind: RegionKind, ctx: Context) -> FlatRegion:
-    """The tree's loops flattened within t_flat with every arc's error in air (DEC-G2D-028): each
-    joint held once, as the first vertex of the row after it; each vertex carrying the ID of the
-    row whose flattened edge starts there; no fixed nodes; lines and arcs only, so the extra
-    clearance is 0. A step count beyond an int is a `ValueError`.
-
-    Implements: REQ-G2D-115, REQ-G2D-116, REQ-G2D-119, REQ-G2D-127, REQ-G2D-185, REQ-G2D-186,
-    REQ-G2D-199, REQ-G2D-200, REQ-G2D-230.
-    """
-    loops = tree.loops
-    # Normalised loops have the inside on the left: air lies right of every arc of a material
-    # region and left of every arc of an air region.
-    sweep = loops.rows[:, 6]
-    inscribed = sweep < 0.0 if kind is RegionKind.MATERIAL else sweep > 0.0
-    flags = inscribed.astype(np.uint8)
-    counts = _vertex_counts(loops, flags, ctx.tolerances.flatten_tol_mm)
+def _flattened(
+    loops: CurveRows, flags: NDArray[np.uint8], t_mm: float, portable: bool
+) -> PolygonRegion:
+    # Each joint once, as the first vertex of the row after it; each vertex the ID of its row.
+    counts = _vertex_counts(loops, flags, t_mm)
     kept = counts > 0
     points = np.empty((int(counts.sum()), 2), dtype=np.float64)
-    _kernels.geometry2d.flatten_rows(loops.rows[kept], flags[kept], counts[kept], points)
+    rows = loops.rows[kept]
+    _kernels.geometry2d.flatten_rows(rows, flags[kept], counts[kept], portable, points)
     offsets = np.concatenate(([0], np.cumsum(counts)))
     arrays = (
         points,
@@ -82,4 +72,34 @@ def flatten_loops(tree: LoopTree, kind: RegionKind, ctx: Context) -> FlatRegion:
     )
     for array in arrays:
         array.flags.writeable = False
-    return FlatRegion(PolygonRegion(*arrays), 0.0)
+    return PolygonRegion(*arrays)
+
+
+def flatten_loops(tree: LoopTree, kind: RegionKind, ctx: Context) -> FlatRegion:
+    """The tree's loops flattened within t_flat with every arc's error in air (DEC-G2D-028): each
+    joint held once, as the first vertex of the row after it; each vertex carrying the ID of the
+    row whose flattened edge starts there; no row that ends where it starts adds a vertex, and no
+    loop keeps fewer than 3; no fixed nodes; lines and arcs only, so the extra clearance is 0. A
+    step count beyond an int is a `ValueError`.
+
+    Implements: REQ-G2D-115, REQ-G2D-116, REQ-G2D-119, REQ-G2D-127, REQ-G2D-185, REQ-G2D-186,
+    REQ-G2D-199, REQ-G2D-200, REQ-G2D-230.
+    """
+    # Normalised loops have the inside on the left: air lies right of every arc of a material
+    # region and left of every arc of an air region.
+    sweep = tree.loops.rows[:, 6]
+    inscribed = sweep < 0.0 if kind is RegionKind.MATERIAL else sweep > 0.0
+    flags = inscribed.astype(np.uint8)
+    region = _flattened(tree.loops, flags, ctx.tolerances.flatten_tol_mm, portable=False)
+    return FlatRegion(region, 0.0)
+
+
+def topology_flattening(loops: CurveRows, ctx: Context) -> PolygonRegion:
+    """The loops with every arc replaced by its inscribed flattening within u, its vertices
+    turned with the kernel's own sine and cosine, so they are the same on every platform; for the
+    loop tree's decisions only (internal).
+
+    Implements: REQ-G2D-029, REQ-G2D-152.
+    """
+    flags = np.ones(loops.rows.shape[0], dtype=np.uint8)
+    return _flattened(loops, flags, ctx.tolerances.grid_unit_mm, portable=True)

@@ -4,10 +4,14 @@
 import math
 from dataclasses import dataclass
 
+import numpy as np
+from numpy.typing import NDArray
+
+from splintercam import _kernels
 from splintercam.foundation import Context
 
 from ._curves import Arc, Curve, Line, Point, distance
-from ._predicates import in_arc_circle, orient2d
+from ._predicates import in_arc_circle, orient2d, point_rows
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,3 +103,20 @@ def closest_point(curve: Curve, q: Point, ctx: Context) -> ClosestPoint:
     if not (math.isfinite(q[0]) and math.isfinite(q[1])):
         raise ValueError(f"the query point must be finite, got {q}")
     return _closest_on_arc(curve, q) if isinstance(curve, Arc) else _closest_on_line(curve, q)
+
+
+def polyline_distances(
+    q: NDArray[np.float64],
+    points: NDArray[np.float64],
+    loop_starts: NDArray[np.int64],
+    limit_mm: float,
+) -> NDArray[np.float64]:
+    """Capped distances to closed polylines (SPEC, Public interface, internal entries; DEC-G2D-013;
+    research 01, Loop tree, rules 3 and 5)."""
+    (query,) = point_rows(q)
+    out = np.empty(query.shape[0], dtype=np.float64)
+    vertices = np.ascontiguousarray(points, dtype=np.float64)
+    starts = np.ascontiguousarray(loop_starts, dtype=np.int64)
+    _kernels.geometry2d.polyline_distances(query, vertices, starts, limit_mm, out)
+    out.flags.writeable = False
+    return out
