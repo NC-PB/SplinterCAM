@@ -255,25 +255,23 @@ void far_parts(const Segment& s, std::vector<Span>& spans, std::vector<FarPart>&
     }
 }
 
-// The far parts of each segment of `mine` against `theirs`; `visit` returns false to stop.
 struct FarQuery {
     std::span<const Segment> mine;
     std::span<const Segment> theirs;
     double limit;
 };
 
+// The far parts of each segment of `mine` against `theirs`; `visit` returns false to stop.
 template <typename Visit> void each_far_part(const FarQuery& query, Visit visit) {
     const std::vector<Segment> theirs(query.theirs.begin(), query.theirs.end());
     const Grid grid = build_grid(theirs, query.limit);
-    const double limit = query.limit;
-    const std::span<const Segment> mine = query.mine;
     std::vector<Span> spans;
     std::vector<FarPart> parts;
-    for (const Segment& s : mine) {
+    for (const Segment& s : query.mine) {
         spans.clear();
         parts.clear();
         for (const std::size_t i : segments_near(grid, s)) {
-            const Span part = covered(s, theirs.at(i), limit);
+            const Span part = covered(s, theirs.at(i), query.limit);
             if (part.low <= part.high) {
                 spans.push_back(part);
             }
