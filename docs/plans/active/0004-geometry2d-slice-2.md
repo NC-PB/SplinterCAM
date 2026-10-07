@@ -8,7 +8,7 @@
 - Research: `docs/research/01-foundations.md`: Loop tree, Kernel arrays (polygon region), Tolerances (resolution chain), Flattening (side rule); tests 7, 16, 19, 21 and 24
 - Branch: one pull request per session (docs/dev/07); a step with a new algorithm or over about 100 lines of non-test code gets its own, from `main` after the previous merge, never stacked
 - Owner: Peter Burgener; agents: Claude Code sessions
-- Status (2026-10-07): approved by Peter with his answers below (DEC-G2D-022); steps 1 and 2 done; step 3 next.
+- Status (2026-10-07): approved by Peter with his answers below (DEC-G2D-022); step 1 done and reviewed (DEC-G2D-024 to 027); step 2 done; step 3 next.
 
 ## Questions for Peter before step 1
 
@@ -29,9 +29,9 @@ Answered 2026-10-07: yes to all six, as proposed (DEC-G2D-022).
 - [x] 1. **SPEC cut for slice 2.** Release the drafted requirements chosen by the answers above, with their tests from research 01. Mark the rest Later parts. Record the interface, failure modes and diagnostics (`LOOP_DUPLICATE`, `LOOPS_CROSS`, a span refusal); raise the budget in `modules.yaml`; spec-reviewer round. Size: docs only.
 - [x] 2. **Polygon region arrays and the flattening of curve-row loops.** `points`, `loop_starts`, `source_ids` and fixed-node flags, checked before any kernel work (REQ-G2D-183 to 187). The flattening of a loop of curve rows holds each joint once and gives each vertex its row's ID (199, 200). The side rule for regions of each kind, material or air (115, 116, 119, 127). Research 01 test 16. Size: about 250 lines of code + 350 of tests.
 - [ ] 3. **Topology flattening and batched distances.** The inscribed flattening within u with the kernel's own sine and cosine, for topology only (152). u and t_topo come from the `Context` (026, 029). A kernel for point-to-polyline distances in batches, which the loop tree and the probes need; it replaces Python loops (backlog of plan 0003, step 6). Size: about 250 + 300.
-- [ ] 4. **Loop tree I: cleaning and the pair tests.** Per loop: cleanup, the area test and the 1.5·t_topo·L test (155 to 157). Duplicates within t_topo, the first in input order kept (158, 159). Crossings by exact segment tests with their points, and touching loops accepted (160 to 163). Research 01 tests 7 and 19. Size: about 300 + 400.
+- [ ] 4. **Loop tree I: cleaning and the pair tests.** Per loop: cleanup, the area test and the 1.5·t_topo·L test (155 to 157). Duplicates within t_topo, the first in input order kept (158, 159). Crossings by exact segment tests with their points, counted only when deeper than t_topo, and touching loops accepted (160 to 163, 237, 238). Research 01 tests 7 and 19. Size: about 300 + 400.
 - [ ] 5. **Loop tree II: parents, depths, normalisation.** The containment probes in their order (164 to 168), depth and orientation (174, 175), a winding of 1 inside normalised regions (151), and independence of tol (154). Research 01 test 7. Size: about 250 + 350.
-- [ ] 6. **The Clipper2 bridge.** Re-centre on the bounding box and round to u (033); refuse a span of 2^26 grid units or more with an error diagnostic (034); the resolution chain property, no point moved by more than 2.83 grid units and point in region unchanged beyond t_topo (030, 031). Research 01 test 21. Size: about 200 + 300.
+- [ ] 6. **The Clipper2 bridge.** Re-centre on the bounding box and round to u (033); refuse a span of 2^26 grid units or more with an error diagnostic (034); the resolution chain property, every output vertex within 2.83 grid units of the input polylines and point in region unchanged beyond t_topo (030, 031). Research 01 test 21. Size: about 200 + 300.
 - [ ] 7. **The rule 5 fallback.** The Clipper2 difference with NonZero, and the tie rules for loops tested both ways (166, 169 to 173). Research 01 test 24. Size: about 150 + 300.
 - [ ] 8. **`build_region`.** The PolyTree of the side-correct flattened, normalised loops (118, 176, 177); compared with the loop tree as point sets and by depth parity (178, 179); topology from the integer result only (032); source IDs by the nearest input edge (180); pinch points split by exact integer tests and marked as fixed nodes (181); an extra clearance of 0 (124, lines and arcs). Size: about 350 + 400; split into 8 and 8b if the review fixes push it past 400.
 - [ ] 9. **`build_chain` for open chains.** The tool's side as the air side of every arc (117), and an extra clearance of 0 (125, lines and arcs). Size: about 100 + 150.
@@ -53,6 +53,14 @@ Total: about 1850 added lines of code (about 1300 NLOC) and 2550 of tests, in ni
 - Reviews: simplifier (6 of 9 taken), test-auditor (missing cases added: strided input, t from the `Context`, reversed arcs, step limit, overflow, slack from REQ-G2D-110), spec-reviewer (reproduced and fixed: a 2-vertex loop from a shallow arc in a pocket at tol = 0.05 mm, a zero-length row repeating a vertex; the binding now refuses counts that could write past its buffer).
 - Property test: 10 000 cases passed (`HYPOTHESIS_PROFILE=thorough`, 427 s, 4 samples per segment); default run 2.0 s. Research 01 test 16 rendered and checked by eye: every flattened arc lies on the air side.
 - `tools/check`: PASS (11 of 14; arch-check, trace-check, licence-check not written yet). Next: step 3.
+
+### 2026-10-07, Peter's answers to the SPEC cut
+
+- Pull request 34 merged. Peter answered the four open questions: crossings count only when a loop reaches more than t_topo into the other on both sides (new REQ-G2D-237, 238); Positive fill rule (176, 177 released); the PolyTree's rounding goes to plan 0005, preferably inside the offset's kernel call; the deviations from research 01 approved. DEC-G2D-024 to 027; research 01, rules 4 and 7 and tests 7 and 21, updated.
+- His instruction: questions inside the module are decided as "(ours)" with reasoning; only safety and scope go to him.
+- Step 4 grows by REQ-G2D-237 and 238: the depth of a crossing along the pieces between crossings, and the Seifert resolution of self-crossings (the nesting of cycles reuses step 5's probes, so 238 may move to step 5).
+- Spec-reviewer and test-auditor on the answers: the first depth rule (probe points) missed a T of slots 1 mm deep, and the one-crossing split of a self-crossing was undefined for several crossings and wrong for a sliver; both reproduced, both rules rewritten (DEC-G2D-024). Second round: the bow-tie of area 0 was dropped before its crossing test, the 0.0015 mm fishtail hid winding −1, the pairing rule was ambiguous; all reproduced, 238 rewritten (resolution before the area tests, depth cover for cycles, balanced pairing). Measured by dense sampling: 88 tangent placements touch, T crosses, pokes of 0.5 and 2·t_topo touch and cross.
+- Next: step 2.
 
 ### 2026-10-07, step 1: the SPEC cut
 
