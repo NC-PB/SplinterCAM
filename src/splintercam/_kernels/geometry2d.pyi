@@ -78,7 +78,17 @@ def row_vertex_counts(rows: Annotated[NDArray[numpy.float64], dict(shape=(None, 
     Write per row the vertices it adds to its flattened loop, -1 beyond an int (REQ-G2D-199).
     """
 
-def flatten_rows(rows: Annotated[NDArray[numpy.float64], dict(shape=(None, 7), order='C', device='cpu', writable=False)], inscribed: Annotated[NDArray[numpy.uint8], dict(shape=(None,), order='C', device='cpu', writable=False)], counts: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu', writable=False)], out: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu')]) -> None:
+def flatten_rows(rows: Annotated[NDArray[numpy.float64], dict(shape=(None, 7), order='C', device='cpu', writable=False)], inscribed: Annotated[NDArray[numpy.uint8], dict(shape=(None,), order='C', device='cpu', writable=False)], counts: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu', writable=False)], portable: bool, out: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu')]) -> None:
     """
     Write the loops' rows flattened one after another, each joint once (REQ-G2D-199).
+    """
+
+def polyline_distances(q: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], points: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], loop_starts: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu', writable=False)], limit: float, out: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu')]) -> None:
+    """
+    Write per point its distance to the closed polylines where at most limit, else inf.
+    """
+
+def basic_sin_cos(angles: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu', writable=False)], sines: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu')], cosines: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu')]) -> None:
+    """
+    The sine and cosine the topology flattening turns with, for tests (REQ-G2D-152).
     """

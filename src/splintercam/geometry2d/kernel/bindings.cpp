@@ -5,17 +5,20 @@
 #include "arcs.hpp"
 #include "area.hpp"
 #include "cleanup.hpp"
+#include "distance.hpp"
 #include "exact.hpp"
 #include "flatten.hpp"
 #include "region.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <initializer_list>
 #include <limits>
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/array.h>
 #include <nanobind/stl/pair.h>
+#include <numbers>
 #include <span>
 #include <utility>
 
@@ -189,6 +192,9 @@ void check_counts(std::span<const double> rows, std::span<const std::uint8_t> in
     for (std::size_t i = 0; i < counts.size(); ++i) {
         const CurveRow row = unpack_row(rows.subspan(i * row_width, row_width));
         const std::int64_t count = counts.subspan(i, 1).front();
+        if (!(std::abs(row.sweep) <= 2 * std::numbers::pi)) {
+            throw nb::value_error("an arc row's sweep must lie within ±2π");
+        }
         const auto [low, high] = count_range(row, inscribed.subspan(i, 1).front() != 0);
         if (count < low || count > high) {
             throw nb::value_error("a count that row_vertex_counts cannot give");
@@ -219,15 +225,74 @@ void bind_flatten_rows(nb::module_& m) {
         "(REQ-G2D-199).");
     m.def(
         "flatten_rows",
-        [](const Rows& rows, const Flags& inscribed, const Counts& counts, const PointsOut& out) {
+        [](const Rows& rows, const Flags& inscribed, const Counts& counts, bool portable,
+           const PointsOut& out) {
             check_rows(rows.shape(0), {inscribed.shape(0), counts.shape(0)});
             const std::span<const std::int64_t> per_row{counts.data(), counts.size()};
             check_counts(view(rows), {inscribed.data(), inscribed.size()}, per_row, out.shape(0));
-            flatten_rows(view(rows), {inscribed.data(), inscribed.size()}, per_row,
+            flatten_rows(view(rows), {inscribed.data(), inscribed.size()}, per_row, portable,
                          {out.data(), out.size()});
         },
-        nb::arg("rows"), nb::arg("inscribed"), nb::arg("counts"), nb::arg("out"),
+        nb::arg("rows"), nb::arg("inscribed"), nb::arg("counts"), nb::arg("portable"),
+        nb::arg("out"),
         "Write the loops' rows flattened one after another, each joint once (REQ-G2D-199).");
+}
+
+// loop_starts start at 0 and ascend strictly below the vertex count; every vertex is finite.
+void check_polylines(std::span<const std::int64_t> starts, std::span<const double> vertices) {
+    const auto count = static_cast<std::int64_t>(vertices.size() / 2);
+    std::int64_t previous = -1;
+    for (const std::int64_t start : starts) {
+        if (start <= previous || start >= count) {
+            throw nb::value_error("loop_starts must ascend strictly below the point count");
+        }
+        previous = start;
+    }
+    if (!starts.empty() && starts.front() != 0) {
+        throw nb::value_error("loop_starts must start at 0");
+    }
+    if (starts.empty() && !vertices.empty()) {
+        throw nb::value_error("loop_starts must name the loops of the points");
+    }
+    if (!std::ranges::all_of(vertices, [](double v) { return std::isfinite(v); })) {
+        throw nb::value_error("every polyline vertex must be finite");
+    }
+}
+
+void bind_distances(nb::module_& m) {
+    m.def(
+        "polyline_distances",
+        [](const PointRows& q, const PointRows& vertices, const Counts& loop_starts, double limit,
+           const DoubleOut& out) {
+            check_rows(q.shape(0), {out.shape(0)});
+            if (!(limit > 0.0) || !std::isfinite(limit)) {
+                throw nb::value_error("limit must be finite and > 0");
+            }
+            const std::span<const std::int64_t> starts{loop_starts.data(), loop_starts.size()};
+            check_polylines(starts, {vertices.data(), vertices.size()});
+            const nb::gil_scoped_release unlocked; // a long loop over plain arrays
+            polyline_distances({q.data(), q.size()},
+                               {.points = points(vertices), .loop_starts = starts}, limit,
+                               {out.data(), out.size()});
+        },
+        nb::arg("q"), nb::arg("points"), nb::arg("loop_starts"), nb::arg("limit"), nb::arg("out"),
+        "Write per point its distance to the closed polylines where at most limit, else inf.");
+    m.def(
+        "basic_sin_cos",
+        [](const Values& angles, const DoubleOut& sines, const DoubleOut& cosines) {
+            check_rows(angles.shape(0), {sines.shape(0), cosines.shape(0)});
+            constexpr double max_angle = 4 * std::numbers::pi;
+            for (std::size_t i = 0; i < angles.shape(0); ++i) {
+                if (!(std::abs(angles(i)) <= max_angle)) { // also NaN
+                    throw nb::value_error("every angle must lie within ±4π");
+                }
+                const SinCos turn = basic_sin_cos(angles(i));
+                sines(i) = turn.sin;
+                cosines(i) = turn.cos;
+            }
+        },
+        nb::arg("angles"), nb::arg("sines"), nb::arg("cosines"),
+        "The sine and cosine the topology flattening turns with, for tests (REQ-G2D-152).");
 }
 
 } // namespace
@@ -280,6 +345,7 @@ void bind(nb::module_& m) {
         nb::arg("arc"), nb::arg("steps"), nb::arg("inscribed"), nb::arg("out"),
         "Write the arc flattened in `steps` steps, inscribed or circumscribed.");
     bind_flatten_rows(m);
+    bind_distances(m);
 }
 
 } // namespace splintercam::geometry2d

@@ -8,7 +8,7 @@
 - Research: `docs/research/01-foundations.md`: Loop tree, Kernel arrays (polygon region), Tolerances (resolution chain), Flattening (side rule); tests 7, 16, 19, 21 and 24
 - Branch: one pull request per session (docs/dev/07); a step with a new algorithm or over about 100 lines of non-test code gets its own, from `main` after the previous merge, never stacked
 - Owner: Peter Burgener; agents: Claude Code sessions
-- Status (2026-10-07): approved by Peter with his answers below (DEC-G2D-022); step 1 done and reviewed (DEC-G2D-024 to 027); step 2 done; step 3 next.
+- Status (2026-10-07): approved by Peter with his answers below (DEC-G2D-022); step 1 done and reviewed (DEC-G2D-024 to 027); steps 2 and 3 done; step 4 next.
 
 ## Questions for Peter before step 1
 
@@ -28,7 +28,7 @@ Answered 2026-10-07: yes to all six, as proposed (DEC-G2D-022).
 
 - [x] 1. **SPEC cut for slice 2.** Release the drafted requirements chosen by the answers above, with their tests from research 01. Mark the rest Later parts. Record the interface, failure modes and diagnostics (`LOOP_DUPLICATE`, `LOOPS_CROSS`, a span refusal); raise the budget in `modules.yaml`; spec-reviewer round. Size: docs only.
 - [x] 2. **Polygon region arrays and the flattening of curve-row loops.** `points`, `loop_starts`, `source_ids` and fixed-node flags, checked before any kernel work (REQ-G2D-183 to 187). The flattening of a loop of curve rows holds each joint once and gives each vertex its row's ID (199, 200). The side rule for regions of each kind, material or air (115, 116, 119, 127). Research 01 test 16. Size: about 250 lines of code + 350 of tests.
-- [ ] 3. **Topology flattening and batched distances.** The inscribed flattening within u with the kernel's own sine and cosine, for topology only (152). u and t_topo come from the `Context` (026, 029). A kernel for point-to-polyline distances in batches, which the loop tree and the probes need; it replaces Python loops (backlog of plan 0003, step 6). Size: about 250 + 300.
+- [x] 3. **Topology flattening and batched distances.** The inscribed flattening within u with the kernel's own sine and cosine, for topology only (152). u and t_topo come from the `Context` (026, 029). A kernel for point-to-polyline distances in batches, which the loop tree and the probes need; it replaces Python loops (backlog of plan 0003, step 6). Size: about 250 + 300.
 - [ ] 4. **Loop tree I: cleaning and the pair tests.** Per loop: cleanup, the area test and the 1.5·t_topo·L test (155 to 157). Duplicates within t_topo, the first in input order kept (158, 159). Crossings by exact segment tests with their points, counted only when deeper than t_topo, and touching loops accepted (160 to 163, 237, 238). Research 01 tests 7 and 19. Size: about 300 + 400.
 - [ ] 5. **Loop tree II: parents, depths, normalisation.** The containment probes in their order (164 to 168), depth and orientation (174, 175), a winding of 1 inside normalised regions (151), and independence of tol (154). Research 01 test 7. Size: about 250 + 350.
 - [ ] 6. **The Clipper2 bridge.** Re-centre on the bounding box and round to u (033); refuse a span of 2^26 grid units or more with an error diagnostic (034); the resolution chain property, every output vertex within 2.83 grid units of the input polylines and point in region unchanged beyond t_topo (030, 031). Research 01 test 21. Size: about 200 + 300.
@@ -46,6 +46,14 @@ Total: about 1850 added lines of code (about 1300 NLOC) and 2550 of tests, in ni
 
 <!-- Newest first. What was done, what tools/check reported, what is next. At most about 30 lines per session;
      numbers go into tables. Above 300 lines, older entries move to an archive file next to the plan. -->
+
+### 2026-10-08, step 3: topology flattening and batched distances
+
+- `topology_flattening` (REQ-G2D-152, 029): every arc inscribed within u, its vertices turned with the kernel's new `basic_sin_cos`, the same bits on every platform (pinned in a test). `polyline_distances`: capped point-to-polyline distances through a sorted uniform grid; `segment_distance` now shared with point in region. Choices in DEC-G2D-029.
+- The backlog's shared sweep kernel is not needed by polyline distances; it stays in the backlog for the arc distances of later steps.
+- Reviews: simplifier (trims taken; one sine and cosine for every flattening declined, DEC-G2D-029), test-auditor (missing cases, input guards, tighter bounds, REQ-G2D-239 and 240 so the helpers do not claim 158 and 168), spec-reviewer (blocker reproduced and fixed: a near-vertical edge beside a column boundary was missed; cast overflow, empty loop_starts and the portable circumscribed cosine fixed; REQ-G2D-152 states P1's allowance).
+- Property tests: 10 000 cases each passed (`HYPOTHESIS_PROFILE=thorough`).
+- `tools/check`: PASS (11 of 14). Next: step 4.
 
 ### 2026-10-07, step 2: polygon regions and the flattening of curve-row loops
 
@@ -86,6 +94,9 @@ Total: about 1850 added lines of code (about 1300 NLOC) and 2550 of tests, in ni
 
 - From plan 0003: the sweep test exists four times (`_box.py`, `_distances.py`, `region.cpp` twice); a shared kernel would stop them drifting apart. Worth doing before step 3 adds distance code.
 - From plan 0003: the region kernel holds the interpreter lock for n points × m rows; long kernels of this plan (loop tree, Clipper2 calls) need the release and the cancellation check of the kernel rules.
+
+- From step 3: `polyline_distances` releases the interpreter lock but takes no cancellation flag yet (`.claude/rules/kernels.md`); add it with the other long kernels.
+- From step 3: REQ-G2D-168 projects vertices onto the nearest segment, so step 5 needs `polyline_distances` to return that segment's index too (ties to the lowest index, for determinism).
 
 ## Blockers
 

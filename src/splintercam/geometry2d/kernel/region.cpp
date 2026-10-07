@@ -6,6 +6,7 @@
 #include "region.hpp"
 
 #include "arcs.hpp"
+#include "distance.hpp"
 #include "exact.hpp"
 
 #include <algorithm>
@@ -204,21 +205,6 @@ bool on_arc(Point2 q, const Arc& arc) {
            circle * arc_circle_sign(q, {arc.c, arc.p1}) <= 0;
 }
 
-double length(double dx, double dy) {
-    return std::sqrt(dx * dx + dy * dy); // correctly rounded operations: the same everywhere
-}
-
-double line_distance(Point2 q, Point2 a, Point2 b) {
-    const double dx = x(b) - x(a);
-    const double dy = y(b) - y(a);
-    const double length2 = dx * dx + dy * dy;
-    const double t =
-        length2 == 0.0 ? 0.0
-                       : std::clamp(((x(q) - x(a)) * dx + (y(q) - y(a)) * dy) / length2, 0.0, 1.0);
-    const Point2 foot = t == 0.0 ? a : (t == 1.0 ? b : Point2{x(a) + t * dx, y(a) + t * dy});
-    return length(x(q) - x(foot), y(q) - y(foot));
-}
-
 // The distance to the nearer of the circles of radius |P0 − C| and |P1 − C| in the sweep, so both
 // orientations agree (Peter, 2026-10-03), else to the nearer end point.
 double arc_distance(Point2 q, const Arc& arc) {
@@ -243,8 +229,7 @@ Location locate(Point2 q, const RegionQuery& query) {
         const Point2 a{row.x0, row.y0};
         const Point2 b{row.x1, row.y1};
         if (row.sweep == 0.0) {
-            // Both directions: the feet round differently, and both orientations must agree.
-            const double distance = std::min(line_distance(q, a, b), line_distance(q, b, a));
+            const double distance = segment_distance(q, a, b);
             if (on_line(q, a, b) || (eps > 0.0 && distance <= eps)) {
                 return Location::on;
             }

@@ -23,7 +23,7 @@ Layer 1. Implements docs/research/01 (slices 1 and 2; the rest is under "Later p
 - Decisions that need an angle or φ − sin φ use `angle.cpp` (`basic_atan2`, `phi_minus_sin`); tolerance tests on lengths use sqrt of a sum of squares, never `hypot` (libm).
 - Buffers handed to `predicates.c` have two spare elements: it reads past an expansion's end, `e[0]` and `e[1]` when it is empty. ASan is off for that code (Peter, 2026-10-03), so nothing else catches a short buffer.
 - The sweep test exists four times: `_box.py` (octants), `_distances.py` (halves), `region.cpp` (octant splits and `in_sweep`). Change them together; the plan's backlog proposes one shared kernel.
-- Tests reach internals only where the SPEC names them: `point_in_region_exact`, the kernel bindings `two_sums`, `two_products`, `basic_atan2`, `phi_minus_sin`, `ray_height_sign`. Test oracles (exact rationals) live in `tests/support/geometry2d_oracles.py`, loop builders in `geometry2d_checks.py`; import them as top-level modules.
+- Tests reach internals only where the SPEC names them: `point_in_region_exact`, the kernel bindings `two_sums`, `two_products`, `basic_atan2`, `phi_minus_sin`, `ray_height_sign`, `basic_sin_cos`; `topology_flattening` and `polyline_distances` (slice 2). Test oracles (exact rationals) live in `tests/support/geometry2d_oracles.py`, loop builders in `geometry2d_checks.py`; import them as top-level modules.
 
 ## Known pitfalls
 
