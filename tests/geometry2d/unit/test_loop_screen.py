@@ -47,7 +47,7 @@ def test_a_spike_is_cleaned_and_reported(ctx: Context) -> None:
     assert result.diagnostics[0].location == "loop 0"
     polyline = result.value.polylines[0]
     assert (10.0, 20.0) not in [tuple(p) for p in polyline.tolist()]
-    assert result.value.areas[0] == pytest.approx(100.0)
+    assert result.value.areas[0] == 100.0
 
 
 @pytest.mark.req("REQ-G2D-156")
@@ -139,3 +139,157 @@ def test_diagnostics_follow_input_loop_order(ctx: Context) -> None:
         ("CLEANUP_SPIKE", "loop 2"),
         ("LOOP_DUPLICATE", "loops 1 and 3"),
     ]
+
+
+@pytest.mark.req("REQ-G2D-157")
+@pytest.mark.parametrize(("factor", "kept"), [(1 - 1e-6, False), (1 + 1e-6, True)])
+def test_the_thinness_limit_itself(ctx: Context, factor: float, kept: bool) -> None:
+    # A 10 mm strip of width w: |A| = 10·w against 1.5·t_topo·(20 + 2·w).
+    t_topo = ctx.tolerances.topology_tol_mm
+    limit = 30 * t_topo / (10 - 3 * t_topo)
+    result = screen_loops(_loops([_strip(limit * factor)], ctx), ctx)
+    assert result.value is not None
+    assert result.value.kept.tolist() == ([0] if kept else [])
+
+
+@pytest.mark.req("REQ-G2D-158")
+@pytest.mark.parametrize(("shift", "duplicate"), [(0.0002, True), (0.00021, False)])
+def test_duplicates_at_and_beyond_t_topo(ctx: Context, shift: float, duplicate: bool) -> None:
+    result = screen_loops(_loops([_square(), _square(shift)], ctx), ctx)
+    assert result.value is not None
+    assert result.value.kept.tolist() == ([0] if duplicate else [0, 1])
+
+
+@pytest.mark.req("REQ-G2D-158", "REQ-G2D-159")
+def test_a_chain_of_near_duplicates_compares_with_kept_loops_only(ctx: Context) -> None:
+    # 0 and 1 are duplicates, 1 and 2 too, 0 and 2 not: 1 is removed, 2 stays (DEC-G2D-030).
+    result = screen_loops(_loops([_square(), _square(0.00015), _square(0.0003)], ctx), ctx)
+    assert result.value is not None
+    assert result.value.kept.tolist() == [0, 2]
+    assert [d.location for d in result.diagnostics] == ["loops 0 and 1"]
+
+
+NOTCH_TENTH = [(0, 0), (2, 0), (2, 5), (2.1, 5), (2.1, 0), (10, 0), (10, 10), (0, 10)]
+NOTCH_TEST_24 = [(0, 0), (2, 0), (2, 5), (2.002, 5), (2.002, 0), (10, 0), (10, 10), (0, 10)]
+
+
+@pytest.mark.req("REQ-G2D-158")
+@pytest.mark.parametrize("notched", [NOTCH_TENTH, NOTCH_TEST_24])
+@pytest.mark.parametrize("notched_first", [True, False])
+def test_a_notched_copy_is_no_duplicate_in_either_order(
+    ctx: Context, notched: Points, notched_first: bool
+) -> None:
+    order = [notched, _square()] if notched_first else [_square(), notched]
+    result = screen_loops(_loops(order, ctx), ctx)
+    assert result.value is not None
+    assert result.value.kept.tolist() == [0, 1]
+
+
+@pytest.mark.req("REQ-G2D-159")
+@pytest.mark.parametrize("notched_first", [True, False])
+def test_the_kept_duplicate_is_the_first_given(ctx: Context, notched_first: bool) -> None:
+    shallow = [
+        (0, 0),
+        (2, 0),
+        (2, 0.00005),
+        (2.0001, 0.00005),
+        (2.0001, 0),
+        (10, 0),
+        (10, 10),
+        (0, 10),
+    ]
+    order = [shallow, _square()] if notched_first else [_square(), shallow]
+    result = screen_loops(_loops(order, ctx), ctx)
+    assert result.value is not None
+    assert result.value.kept.tolist() == [0]
+    assert result.value.polylines[0].shape[0] == (8 if notched_first else 4)
+
+
+def _circle_rows(start: float, pieces: int) -> list[list[float]]:
+    angles = [start + k * math.tau / pieces for k in range(pieces + 1)]
+    points = [(5.0 * math.cos(a), 5.0 * math.sin(a)) for a in angles]
+    points[-1] = points[0]
+    return [[*points[k], *points[k + 1], 0.0, 0.0, math.tau / pieces] for k in range(pieces)]
+
+
+@pytest.mark.req("REQ-G2D-152", "REQ-G2D-158")
+def test_the_same_circle_given_twice_differently_is_a_duplicate(ctx: Context) -> None:
+    rows = np.array(_circle_rows(0.0, 1) + _circle_rows(0.7, 2), dtype=np.float64)
+    built = curve_rows(rows, np.arange(3, dtype=np.int64), np.array([0, 1], np.int64), ctx)
+    assert built.value is not None, built.diagnostics
+    result = screen_loops(built.value, ctx)
+    assert result.value is not None
+    assert result.value.kept.tolist() == [0]
+    assert codes(result) == ["LOOP_DUPLICATE"]
+
+
+def _shallow_arc_loop(sagitta: float) -> list[list[float]]:
+    # A line from (0, 0) to (10, 0) closed by a CCW arc of the given sagitta above it.
+    r = (25.0 + sagitta * sagitta) / (2 * sagitta)
+    half = math.asin(5.0 / r)
+    return [[0.0, 0.0, 10.0, 0.0, NAN, NAN, 0.0], [10.0, 0.0, 0.0, 0.0, 5.0, sagitta - r, 2 * half]]
+
+
+@pytest.mark.req("REQ-G2D-157", "REQ-G2D-154")
+@pytest.mark.parametrize(("sagitta", "kept"), [(1e-5, False), (0.01, True)])
+def test_a_thin_loop_with_an_arc(ctx: Context, sagitta: float, kept: bool) -> None:
+    built = ToleranceSet.for_operation(0.05)
+    assert built.value is not None
+    for context in (ctx, dataclasses.replace(ctx, tolerances=built.value)):
+        rows = np.array(_shallow_arc_loop(sagitta), dtype=np.float64)
+        loops = curve_rows(rows, np.arange(2, dtype=np.int64), np.zeros(1, np.int64), context)
+        assert loops.value is not None, loops.diagnostics
+        result = screen_loops(loops.value, context)
+        assert result.value is not None
+        assert result.value.kept.tolist() == ([0] if kept else [])
+        if kept:
+            reference = screen_loops(loops.value, ctx).value
+            assert reference is not None
+            assert result.value.polylines[0].tobytes() == reference.polylines[0].tobytes()
+
+
+@pytest.mark.req("REQ-G2D-155", "REQ-G2D-157")
+def test_the_thinness_test_uses_the_cleaned_flattening(ctx: Context) -> None:
+    # A strip 0.001 mm wide with a spike 1000 mm long: kept only once the spike is cleaned.
+    spiked = [
+        (0.0, 0.0),
+        (10.0, 0.0),
+        (10.0, 0.001),
+        (5.0, 0.001),
+        (5.0, 1000.0),
+        (5.0, 0.001),
+        (0.0, 0.001),
+    ]
+    result = screen_loops(_loops([spiked], ctx), ctx)
+    assert result.value is not None
+    assert result.value.kept.tolist() == [0]
+    assert result.value.lengths[0] == pytest.approx(20.002)
+
+
+@pytest.mark.req("REQ-G2D-155", "REQ-G2D-158")
+def test_the_duplicate_test_uses_the_cleaned_flattening(ctx: Context) -> None:
+    spiked = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (10.0, 20.0), (10.0, 10.0), (0.0, 10.0)]
+    result = screen_loops(_loops([_square(), spiked], ctx), ctx)
+    assert result.value is not None
+    assert result.value.kept.tolist() == [0]
+    assert codes(result) == ["CLEANUP_SPIKE", "LOOP_DUPLICATE"]
+
+
+@pytest.mark.req("REQ-G2D-155")
+def test_a_loop_starting_at_its_spike_tip_is_cleaned(ctx: Context) -> None:
+    tip_first = [(10.0, 20.0), (10.0, 10.0), (0.0, 10.0), (0.0, 0.0), (10.0, 0.0), (10.0, 10.0)]
+    result = screen_loops(_loops([tip_first], ctx), ctx)
+    assert result.value is not None
+    assert result.value.kept.tolist() == [0]
+    assert (10.0, 20.0) not in [tuple(p) for p in result.value.polylines[0].tolist()]
+    assert result.value.areas[0] == 100.0
+
+
+@pytest.mark.req("REQ-G2D-157")
+def test_polygon_area_length_is_exact_and_translation_free() -> None:
+    from splintercam.geometry2d._area import polygon_area_length
+
+    square = np.array(_square(), dtype=np.float64)
+    assert polygon_area_length(square) == (100.0, 40.0)
+    assert polygon_area_length(square[::-1].copy()) == (-100.0, 40.0)
+    assert polygon_area_length(square + 1e6) == (100.0, 40.0)

@@ -2,6 +2,7 @@
 """The loop tree's first rules: each loop cleaned, degenerate and thin loops dropped, duplicates
 removed (research 01, Loop tree, rules 1 to 3)."""
 
+import dataclasses
 from dataclasses import dataclass
 
 import numpy as np
@@ -40,18 +41,7 @@ class _Candidate:
     length: float
 
 
-def _located(diagnostic: Diagnostic, location: str) -> Diagnostic:
-    return Diagnostic(diagnostic.code, diagnostic.severity, diagnostic.message, location)
-
-
-def _one_loop(loops: CurveRows, i: int) -> CurveRows:
-    first = int(loops.row_starts[i])
-    end = int(loops.row_starts[i + 1]) if i + 1 < loops.row_starts.size else loops.rows.shape[0]
-    return CurveRows(loops.rows[first:end], loops.ids[first:end], np.zeros(1, np.int64))
-
-
 def _within(a: NDArray[np.float64], b: NDArray[np.float64], t_topo: float) -> bool:
-    """Every vertex of polyline a lies within t_topo of polyline b."""
     distances = polyline_distances(a, b, np.zeros(1, np.int64), t_topo)
     return bool(np.isfinite(distances).all())
 
@@ -59,8 +49,6 @@ def _within(a: NDArray[np.float64], b: NDArray[np.float64], t_topo: float) -> bo
 def _duplicate_of(
     candidate: _Candidate, kept: list[_Candidate], t_topo: float
 ) -> _Candidate | None:
-    """The first kept loop the candidate duplicates (rule 3), comparing only loops whose bounding
-    boxes come within t_topo of each other."""
     low, high = candidate.polyline.min(axis=0), candidate.polyline.max(axis=0)
     for other in kept:
         other_low, other_high = other.polyline.min(axis=0), other.polyline.max(axis=0)
@@ -84,22 +72,25 @@ def screen_loops(loops: CurveRows, ctx: Context) -> Result[Screened]:
     """
     t_topo = ctx.tolerances.topology_tol_mm
     topology = topology_flattening(loops, ctx)
-    ends = np.append(topology.loop_starts[1:], topology.points.shape[0])
+    pieces = zip(
+        np.split(topology.points, topology.loop_starts[1:]),
+        np.split(loops.rows, loops.row_starts[1:]),
+        np.split(loops.ids, loops.row_starts[1:]),
+        strict=True,
+    )
     notes: list[tuple[int, Diagnostic]] = []
     kept: list[_Candidate] = []
-    for i, (start, end) in enumerate(
-        zip(topology.loop_starts.tolist(), ends.tolist(), strict=True)
-    ):
+    for i, (points, rows, ids) in enumerate(pieces):
         where = f"loop {i}"
-        cleaned = cleanup(topology.points[start:end], ctx)
-        notes += [(i, _located(d, where)) for d in cleaned.diagnostics]
+        cleaned = cleanup(points, ctx)
+        notes += [(i, dataclasses.replace(d, location=where)) for d in cleaned.diagnostics]
         if cleaned.value is None:  # cleanup always returns the kept indices
             raise RuntimeError(f"cleanup returned no vertices for {where}")
-        area_test = signed_area(_one_loop(loops, i), ctx)
+        area_test = signed_area(CurveRows(rows, ids, np.zeros(1, np.int64)), ctx)
         if area_test.value is None:
-            notes += [(i, _located(d, where)) for d in area_test.diagnostics]
+            notes += [(i, dataclasses.replace(d, location=where)) for d in area_test.diagnostics]
             continue
-        polyline = topology.points[start:end][cleaned.value]
+        polyline = points[cleaned.value]
         area, length = polygon_area_length(polyline)
         if abs(area) <= _THINNESS_FACTOR * t_topo * length:
             message = f"|A| = {abs(area):.3g} mm² of its flattening is at most 1.5·t_topo·L"
