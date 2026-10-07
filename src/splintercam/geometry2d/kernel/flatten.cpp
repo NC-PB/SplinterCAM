@@ -51,9 +51,13 @@ int arc_steps(const CurveRow& arc, double t_mm, bool inscribed, double max_step_
     return steps;
 }
 
-void flatten_arc(const CurveRow& arc, int steps, bool inscribed, std::span<double> out) {
+namespace {
+
+// Writes P0 and the arc's inner vertices from `next` on, without P1: n points inscribed, n + 1
+// circumscribed. Returns where P1 would go.
+std::span<double>::iterator put_arc_start(const CurveRow& arc, int steps, bool inscribed,
+                                          std::span<double>::iterator next) {
     const double step = arc.sweep / steps; // signed: the sense of the arc
-    auto next = out.begin();
     *next = arc.x0;
     *(next + 1) = arc.y0;
     next += 2;
@@ -67,8 +71,47 @@ void flatten_arc(const CurveRow& arc, int steps, bool inscribed, std::span<doubl
             put_turned(arc, (2 * k + 1) * step / 2, outward, next); // the middle of step k
         }
     }
+    return next;
+}
+
+} // namespace
+
+void flatten_arc(const CurveRow& arc, int steps, bool inscribed, std::span<double> out) {
+    const auto next = put_arc_start(arc, steps, inscribed, out.begin());
     *next = arc.x1;
     *(next + 1) = arc.y1;
+}
+
+void row_vertex_counts(std::span<const double> rows, std::span<const std::uint8_t> inscribed,
+                       FlattenLimits limits, std::span<std::int64_t> out) {
+    for (std::size_t i = 0; i < out.size(); ++i) {
+        const CurveRow row = unpack_row(rows.subspan(i * row_width, row_width));
+        std::int64_t count = 1; // a line adds its P0
+        if (row.sweep != 0.0) {
+            const bool inner = inscribed.subspan(i, 1).front() != 0;
+            const int steps = arc_steps(row, limits.t_mm, inner, limits.max_step_rad);
+            count = steps < 0 ? -1 : steps + (inner ? 0 : 1);
+        }
+        out.subspan(i, 1).front() = count;
+    }
+}
+
+void flatten_rows(std::span<const double> rows, std::span<const std::uint8_t> inscribed,
+                  std::span<const std::int64_t> counts, std::span<double> out) {
+    auto next = out.begin();
+    for (std::size_t i = 0; i < counts.size(); ++i) {
+        const CurveRow row = unpack_row(rows.subspan(i * row_width, row_width));
+        const std::int64_t count = counts.subspan(i, 1).front();
+        if (row.sweep == 0.0) {
+            *next = row.x0;
+            *(next + 1) = row.y0;
+            next += 2;
+        } else {
+            const bool inner = inscribed.subspan(i, 1).front() != 0;
+            const auto steps = static_cast<int>(inner ? count : count - 1);
+            next = put_arc_start(row, steps, inner, next);
+        }
+    }
 }
 
 } // namespace splintercam::geometry2d

@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <initializer_list>
+#include <limits>
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/array.h>
@@ -29,6 +30,9 @@ using DoubleOut = nb::ndarray<double, nb::shape<-1>, nb::c_contig, nb::device::c
 using PointsOut = nb::ndarray<double, nb::shape<-1, 2>, nb::c_contig, nb::device::cpu>;
 using PointRows = nb::ndarray<const double, nb::shape<-1, 2>, nb::c_contig, nb::device::cpu>;
 using Int8Out = nb::ndarray<std::int8_t, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
+using Flags = nb::ndarray<const std::uint8_t, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
+using Counts = nb::ndarray<const std::int64_t, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
+using CountsOut = nb::ndarray<std::int64_t, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
 using Pair = std::array<double, 2>;
 
 std::span<const double> view(const Rows& rows) {
@@ -166,6 +170,66 @@ void bind_area(nb::module_& m) {
         "212).");
 }
 
+// The counts row_vertex_counts can give a row: a line 1, an inscribed arc 1 to INT_MAX, a
+// circumscribed arc 2 to INT_MAX + 1.
+std::pair<std::int64_t, std::int64_t> count_range(const CurveRow& row, bool inscribed) {
+    constexpr std::int64_t max_steps = std::numeric_limits<int>::max();
+    if (row.sweep == 0.0) {
+        return {1, 1};
+    }
+    return inscribed ? std::pair<std::int64_t, std::int64_t>{1, max_steps}
+                     : std::pair<std::int64_t, std::int64_t>{2, max_steps + 1};
+}
+
+// Every count is one that row_vertex_counts can give, and they add up to exactly `points`, so
+// flatten_rows writes inside `out` whatever the caller passes.
+void check_counts(std::span<const double> rows, std::span<const std::uint8_t> inscribed,
+                  std::span<const std::int64_t> counts, std::size_t points) {
+    std::size_t total = 0;
+    for (std::size_t i = 0; i < counts.size(); ++i) {
+        const CurveRow row = unpack_row(rows.subspan(i * row_width, row_width));
+        const std::int64_t count = counts.subspan(i, 1).front();
+        const auto [low, high] = count_range(row, inscribed.subspan(i, 1).front() != 0);
+        if (count < low || count > high) {
+            throw nb::value_error("a count that row_vertex_counts cannot give");
+        }
+        total += static_cast<std::size_t>(count);
+        if (total > points) {
+            throw nb::value_error("out needs one point per counted vertex");
+        }
+    }
+    if (total != points) {
+        throw nb::value_error("out needs one point per counted vertex");
+    }
+}
+
+void bind_flatten_rows(nb::module_& m) {
+    m.def(
+        "row_vertex_counts",
+        [](const Rows& rows, const Flags& inscribed, double t_mm, double max_step_rad,
+           const CountsOut& out) {
+            check_rows(rows.shape(0), {inscribed.shape(0), out.shape(0)});
+            row_vertex_counts(view(rows), {inscribed.data(), inscribed.size()},
+                              {.t_mm = t_mm, .max_step_rad = max_step_rad},
+                              {out.data(), out.size()});
+        },
+        nb::arg("rows"), nb::arg("inscribed"), nb::arg("t_mm"), nb::arg("max_step_rad"),
+        nb::arg("out"),
+        "Write per row the vertices it adds to its flattened loop, -1 beyond an int "
+        "(REQ-G2D-199).");
+    m.def(
+        "flatten_rows",
+        [](const Rows& rows, const Flags& inscribed, const Counts& counts, const PointsOut& out) {
+            check_rows(rows.shape(0), {inscribed.shape(0), counts.shape(0)});
+            const std::span<const std::int64_t> per_row{counts.data(), counts.size()};
+            check_counts(view(rows), {inscribed.data(), inscribed.size()}, per_row, out.shape(0));
+            flatten_rows(view(rows), {inscribed.data(), inscribed.size()}, per_row,
+                         {out.data(), out.size()});
+        },
+        nb::arg("rows"), nb::arg("inscribed"), nb::arg("counts"), nb::arg("out"),
+        "Write the loops' rows flattened one after another, each joint once (REQ-G2D-199).");
+}
+
 } // namespace
 
 void bind(nb::module_& m) {
@@ -215,6 +279,7 @@ void bind(nb::module_& m) {
         },
         nb::arg("arc"), nb::arg("steps"), nb::arg("inscribed"), nb::arg("out"),
         "Write the arc flattened in `steps` steps, inscribed or circumscribed.");
+    bind_flatten_rows(m);
 }
 
 } // namespace splintercam::geometry2d
