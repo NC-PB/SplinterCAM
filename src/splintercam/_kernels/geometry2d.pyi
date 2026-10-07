@@ -72,3 +72,13 @@ def arc_steps(arc: Annotated[NDArray[numpy.float64], dict(shape=(None, 7), order
 
 def flatten_arc(arc: Annotated[NDArray[numpy.float64], dict(shape=(None, 7), order='C', device='cpu', writable=False)], steps: int, inscribed: bool, out: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu')]) -> None:
     """Write the arc flattened in `steps` steps, inscribed or circumscribed."""
+
+def row_vertex_counts(rows: Annotated[NDArray[numpy.float64], dict(shape=(None, 7), order='C', device='cpu', writable=False)], inscribed: Annotated[NDArray[numpy.uint8], dict(shape=(None,), order='C', device='cpu', writable=False)], t_mm: float, max_step_rad: float, out: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu')]) -> None:
+    """
+    Write per row the vertices it adds to its flattened loop, -1 beyond an int (REQ-G2D-199).
+    """
+
+def flatten_rows(rows: Annotated[NDArray[numpy.float64], dict(shape=(None, 7), order='C', device='cpu', writable=False)], inscribed: Annotated[NDArray[numpy.uint8], dict(shape=(None,), order='C', device='cpu', writable=False)], counts: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu', writable=False)], out: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu')]) -> None:
+    """
+    Write the loops' rows flattened one after another, each joint once (REQ-G2D-199).
+    """

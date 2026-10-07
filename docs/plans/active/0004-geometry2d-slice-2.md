@@ -8,7 +8,7 @@
 - Research: `docs/research/01-foundations.md`: Loop tree, Kernel arrays (polygon region), Tolerances (resolution chain), Flattening (side rule); tests 7, 16, 19, 21 and 24
 - Branch: one pull request per session (docs/dev/07); a step with a new algorithm or over about 100 lines of non-test code gets its own, from `main` after the previous merge, never stacked
 - Owner: Peter Burgener; agents: Claude Code sessions
-- Status (2026-10-07): approved by Peter with his answers below (DEC-G2D-022); step 1 done, waiting for Peter's review of the SPEC cut and its three open questions.
+- Status (2026-10-07): approved by Peter with his answers below (DEC-G2D-022); steps 1 and 2 done; step 3 next.
 
 ## Questions for Peter before step 1
 
@@ -27,7 +27,7 @@ Answered 2026-10-07: yes to all six, as proposed (DEC-G2D-022).
      (docs/dev/12, section 3). Every step: at most 400 added lines of non-test code per pull request. -->
 
 - [x] 1. **SPEC cut for slice 2.** Release the drafted requirements chosen by the answers above, with their tests from research 01. Mark the rest Later parts. Record the interface, failure modes and diagnostics (`LOOP_DUPLICATE`, `LOOPS_CROSS`, a span refusal); raise the budget in `modules.yaml`; spec-reviewer round. Size: docs only.
-- [ ] 2. **Polygon region arrays and the flattening of curve-row loops.** `points`, `loop_starts`, `source_ids` and fixed-node flags, checked before any kernel work (REQ-G2D-183 to 187). The flattening of a loop of curve rows holds each joint once and gives each vertex its row's ID (199, 200). The side rule for regions of each kind, material or air (115, 116, 119, 127). Research 01 test 16. Size: about 250 lines of code + 350 of tests.
+- [x] 2. **Polygon region arrays and the flattening of curve-row loops.** `points`, `loop_starts`, `source_ids` and fixed-node flags, checked before any kernel work (REQ-G2D-183 to 187). The flattening of a loop of curve rows holds each joint once and gives each vertex its row's ID (199, 200). The side rule for regions of each kind, material or air (115, 116, 119, 127). Research 01 test 16. Size: about 250 lines of code + 350 of tests.
 - [ ] 3. **Topology flattening and batched distances.** The inscribed flattening within u with the kernel's own sine and cosine, for topology only (152). u and t_topo come from the `Context` (026, 029). A kernel for point-to-polyline distances in batches, which the loop tree and the probes need; it replaces Python loops (backlog of plan 0003, step 6). Size: about 250 + 300.
 - [ ] 4. **Loop tree I: cleaning and the pair tests.** Per loop: cleanup, the area test and the 1.5·t_topo·L test (155 to 157). Duplicates within t_topo, the first in input order kept (158, 159). Crossings by exact segment tests with their points, and touching loops accepted (160 to 163). Research 01 tests 7 and 19. Size: about 300 + 400.
 - [ ] 5. **Loop tree II: parents, depths, normalisation.** The containment probes in their order (164 to 168), depth and orientation (174, 175), a winding of 1 inside normalised regions (151), and independence of tol (154). Research 01 test 7. Size: about 250 + 350.
@@ -46,6 +46,13 @@ Total: about 1850 added lines of code (about 1300 NLOC) and 2550 of tests, in ni
 
 <!-- Newest first. What was done, what tools/check reported, what is next. At most about 30 lines per session;
      numbers go into tables. Above 300 lines, older entries move to an archive file next to the plan. -->
+
+### 2026-10-07, step 2: polygon regions and the flattening of curve-row loops
+
+- `polygon_region` (REQ-G2D-183 to 187, `REGION_INVALID`), `flatten_loops` with the side rule (115, 116, 119, 127) and the `LoopTree` type; kernel `row_vertex_counts` and `flatten_rows` (199, 200). Choices in DEC-G2D-028.
+- Reviews: simplifier (6 of 9 taken), test-auditor (missing cases added: strided input, t from the `Context`, reversed arcs, step limit, overflow, slack from REQ-G2D-110), spec-reviewer (reproduced and fixed: a 2-vertex loop from a shallow arc in a pocket at tol = 0.05 mm, a zero-length row repeating a vertex; the binding now refuses counts that could write past its buffer).
+- Property test: 10 000 cases passed (`HYPOTHESIS_PROFILE=thorough`, 427 s, 4 samples per segment); default run 2.0 s. Research 01 test 16 rendered and checked by eye: every flattened arc lies on the air side.
+- `tools/check`: PASS (11 of 14; arch-check, trace-check, licence-check not written yet). Next: step 3.
 
 ### 2026-10-07, step 1: the SPEC cut
 
