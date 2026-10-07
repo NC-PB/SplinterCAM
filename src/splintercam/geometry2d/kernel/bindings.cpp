@@ -238,6 +238,13 @@ void bind_flatten_rows(nb::module_& m) {
         "Write the loops' rows flattened one after another, each joint once (REQ-G2D-199).");
 }
 
+// One closed loop of `rows` (none when it is empty), for the pair kernels.
+std::span<const std::int64_t> loop_of(const PointRows& rows,
+                                      const std::array<std::int64_t, 1>& start) {
+    return rows.shape(0) == 0 ? std::span<const std::int64_t>{}
+                              : std::span<const std::int64_t>{start};
+}
+
 void check_polylines(std::span<const std::int64_t> starts, std::span<const double> vertices) {
     const auto count = static_cast<std::int64_t>(vertices.size() / 2);
     std::int64_t previous = -1;
@@ -276,6 +283,36 @@ void bind_distances(nb::module_& m) {
         },
         nb::arg("q"), nb::arg("points"), nb::arg("loop_starts"), nb::arg("limit"), nb::arg("out"),
         "Write per point its distance to the closed polylines where at most limit, else inf.");
+    m.def(
+        "crossing_depth",
+        [](const PointRows& a, const PointRows& b, double limit) {
+            const std::array<std::int64_t, 1> start{0};
+            const nb::gil_scoped_release unlocked;
+            const Depth depth =
+                crossing_depth({.points = points(a), .loop_starts = loop_of(a, start)},
+                               {.points = points(b), .loop_starts = loop_of(b, start)}, limit);
+            return std::pair{depth.inside, depth.outside};
+        },
+        nb::arg("a"), nb::arg("b"), nb::arg("limit"),
+        "Whether closed polyline a reaches farther than limit inside and outside closed polyline "
+        "b.");
+    m.def(
+        "contact_points",
+        [](const PointRows& a, const PointRows& b, double limit, const PointsOut& out) {
+            const std::array<std::int64_t, 1> start{0};
+            const std::vector<Point2> found =
+                contact_points({.points = points(a), .loop_starts = loop_of(a, start)},
+                               {.points = points(b), .loop_starts = loop_of(b, start)}, limit);
+            const std::size_t written = std::min(found.size(), out.shape(0));
+            for (std::size_t i = 0; i < written; ++i) {
+                out(i, 0) = std::get<0>(found.at(i));
+                out(i, 1) = std::get<1>(found.at(i));
+            }
+            return found.size();
+        },
+        nb::arg("a"), nb::arg("b"), nb::arg("limit"), nb::arg("out"),
+        "Write where closed polylines a and b meet, sorted; return their count (out may be "
+        "short).");
     m.def(
         "basic_sin_cos",
         [](const Values& angles, const DoubleOut& sines, const DoubleOut& cosines) {

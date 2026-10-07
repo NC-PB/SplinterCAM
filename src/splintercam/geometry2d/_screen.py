@@ -12,6 +12,7 @@ from splintercam.foundation import Context, Diagnostic, Result, Severity
 
 from ._area import polygon_area_length, signed_area
 from ._cleanup import cleanup
+from ._crossings import find_crossings
 from ._distances import polyline_distances
 from ._loops import topology_flattening
 from ._rows import CurveRows
@@ -25,12 +26,14 @@ _THINNESS_FACTOR = 1.5
 class Screened:
     """The loops that survive rules 1 to 3: `kept` their input indices, ascending; per kept loop
     its cleaned topology flattening ((n, 2), as given, not yet normalised) and that polyline's
-    signed area and length."""
+    signed area and length; the crossings among the kept loops (rule 4)."""
 
     kept: NDArray[np.int64]
     polylines: tuple[NDArray[np.float64], ...]
     areas: NDArray[np.float64]
     lengths: NDArray[np.float64]
+    crossing_points: NDArray[np.float64]
+    crossing_loops: NDArray[np.int64]
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,11 +67,12 @@ def _duplicate_of(
 def screen_loops(loops: CurveRows, ctx: Context) -> Result[Screened]:
     """Rules 1 to 3 of the loop tree on the loops' topology flattenings, in this order: cleanup
     (spikes reported), the area test of REQ-G2D-133, the thinness test |A| <= 1.5·t_topo·L, and
-    duplicates (each loop against the kept loops before it in input order, the earlier kept).
+    duplicates (each loop against the kept loops before it in input order, the earlier kept),
+    then the crossings among the kept loops (REQ-G2D-237).
     Diagnostics name the input loops and follow input-loop order. Internal (SPEC, Public
     interface).
 
-    Implements: REQ-G2D-154 to 159, REQ-G2D-236.
+    Implements: REQ-G2D-154 to 161, REQ-G2D-163, REQ-G2D-236, REQ-G2D-237.
     """
     t_topo = ctx.tolerances.topology_tol_mm
     topology = topology_flattening(loops, ctx)
@@ -104,11 +108,17 @@ def screen_loops(loops: CurveRows, ctx: Context) -> Result[Screened]:
             notes.append((i, Diagnostic("LOOP_DUPLICATE", Severity.WARNING, message, location)))
             continue
         kept.append(candidate)
+    crossing_points, crossing_loops, crossing_notes = find_crossings(
+        [c.index for c in kept], [c.polyline for c in kept], t_topo
+    )
+    notes += crossing_notes
     screened = Screened(
         kept=np.array([c.index for c in kept], dtype=np.int64),
         polylines=tuple(c.polyline for c in kept),
         areas=np.array([c.area for c in kept], dtype=np.float64),
         lengths=np.array([c.length for c in kept], dtype=np.float64),
+        crossing_points=crossing_points,
+        crossing_loops=crossing_loops,
     )
     ordered = [note for _, note in sorted(notes, key=lambda pair: pair[0])]  # stable
     return Result(screened, tuple(ordered))
