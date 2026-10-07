@@ -194,3 +194,12 @@
 - Why: the angle check and the flattening count rest on it, but it was tested only under the requirements that use it, so a change to it had no contract to fail against.
 - Rejected: leaving it under REQ-G2D-018 and 043 (the gap); a correctly rounded arctangent (more code, and nothing needs it: the decisions only need the same bits everywhere and a known error).
 - Where: REQ-G2D-233; `kernel/angle.cpp`; `tests/geometry2d/unit/test_angle.py`. See DEC-G2D-003.
+
+## DEC-G2D-022: the scope of slice 2
+
+- Date: 2026-10-07; decided by: Peter (approval of plan 0004, yes to its six questions)
+- Status: Active
+- Decision: slice 2 (plan 0004) builds regions for loops of lines and arcs: the loop tree, the side-correct flattening, `build_region` with the Clipper2 PolyTree and its grid bridge (re-centre, round to u, refuse a span of 2^26 grid units), and `build_chain`. The offsets of topic 02 follow in plan 0005, once research 02 is in the repository. Ellipse and spline edges and REQ-G2D-019 (any thread count) stay in Later parts. The module budget rises from 1700 to 3000 NLOC in plan 0004, step 1. The interface keeps research 01's proposed names (`loop_tree`, `build_region`, `flatten_loops`, `build_chain`).
+- Why: `docs/research/` holds only research 01, so the offsets have nothing to cite; no ellipse or spline types exist yet; `build_region` needs the PolyTree and the rule 5 fallback a Clipper2 difference; release 1 kernels are single-threaded (DEC-G2D-001); slice 2 is estimated at about 1300 NLOC.
+- Rejected: offsets in slice 2 (no research to implement from); spline and ellipse rules now (no curve types to test them on).
+- Where: `docs/plans/active/0004-geometry2d-slice-2.md`; SPEC, Later parts (cut in plan 0004, step 1).

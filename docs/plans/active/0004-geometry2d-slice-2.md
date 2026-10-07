@@ -8,9 +8,11 @@
 - Research: `docs/research/01-foundations.md`: Loop tree, Kernel arrays (polygon region), Tolerances (resolution chain), Flattening (side rule); tests 7, 16, 19, 21 and 24
 - Branch: one pull request per session (docs/dev/07); a step with a new algorithm or over about 100 lines of non-test code gets its own, from `main` after the previous merge, never stacked
 - Owner: Peter Burgener; agents: Claude Code sessions
-- Status (2026-10-03): **proposed, not started.** Waiting for Peter's approval and his answers to the questions below.
+- Status (2026-10-07): approved by Peter with his answers below (DEC-G2D-022); step 1 is next.
 
 ## Questions for Peter before step 1
+
+Answered 2026-10-07: yes to all six, as proposed (DEC-G2D-022).
 
 1. **Scope: offsets in a plan of their own?** The SPEC's Later parts put "the topic 02 offsets and the D-132 kernel changes" into slice 2, and `architecture/modules.yaml` gives geometry2d research 02 and 03. But `docs/research/` holds only 01, so there is no research for the offsets to cite. Proposal: this plan builds regions only (topic 01). The offsets follow in plan 0005, once research 02 is in the repository (through `/research-to-spec`, your review).
 2. **Ellipse and spline edges stay in Later parts.** Proposal: slice 2 handles loops of lines and arcs only. The rules for spline and ellipse edges (REQ-G2D-120 to 123; the t/2 parts of 124 and 125; the u band of replaced edges) wait until those curve types exist. Here `build_region` and `build_chain` return an extra clearance of 0.
@@ -45,6 +47,11 @@ Total: about 1850 added lines of code (about 1300 NLOC) and 2550 of tests, in ni
 <!-- Newest first. What was done, what tools/check reported, what is next. At most about 30 lines per session;
      numbers go into tables. Above 300 lines, older entries move to an archive file next to the plan. -->
 
+### 2026-10-07, approval
+
+- Peter approved the plan and answered yes to all six questions: offsets in plan 0005 after research 02 is in the repository; lines and arcs only; Clipper2 with its grid bridge enters here; REQ-G2D-019 stays later; the budget goes to 3000 NLOC in step 1; research 01's interface names are kept. Recorded as DEC-G2D-022.
+- Next step: 1, the SPEC cut. Stop after it for Peter's review.
+
 ### 2026-10-03, proposal
 
 - Drafted from the SPEC's Later parts, the draft requirements of commit d1a0949 (REQ-G2D-019, 026, 029 to 034, 115 to 127, 151 to 187, 198 to 200) and research 01, Loop tree. Nothing implemented.
@@ -57,4 +64,4 @@ Total: about 1850 added lines of code (about 1300 NLOC) and 2550 of tests, in ni
 
 ## Blockers
 
-- Approval of this plan, and the answers to the questions above.
+- None.
