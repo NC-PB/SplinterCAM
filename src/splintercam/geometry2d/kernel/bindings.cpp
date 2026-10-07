@@ -238,7 +238,6 @@ void bind_flatten_rows(nb::module_& m) {
         "Write the loops' rows flattened one after another, each joint once (REQ-G2D-199).");
 }
 
-// loop_starts start at 0 and ascend strictly below the vertex count; every vertex is finite.
 void check_polylines(std::span<const std::int64_t> starts, std::span<const double> vertices) {
     const auto count = static_cast<std::int64_t>(vertices.size() / 2);
     std::int64_t previous = -1;

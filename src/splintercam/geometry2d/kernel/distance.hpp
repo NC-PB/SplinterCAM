@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Distances to segments and closed polylines (research 01, Distances and closest points; Loop tree,
-// rules 3 and 5).
+// Distances to segments and closed polylines (research 01, Distances; Loop tree, rules 3, 5).
 #pragma once
 
 #include "exact.hpp"
