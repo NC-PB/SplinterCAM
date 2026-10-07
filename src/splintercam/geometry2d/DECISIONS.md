@@ -276,3 +276,12 @@
 - Rejected: research 01's vertex test (above); testing segment midpoints as well (cheaper, but not exact); NumPy's shoelace sum for the thinness test (tier 2 at best); comparing with removed loops too (chains would depend on more than the input order); a kernel for the pair loop (loops are few; the per-pair work is already in `polyline_distances`).
 - Where: REQ-G2D-154 to 159, 236; `_screen.py`, `_area.py`.
 
+## DEC-G2D-031: crossings between loops
+
+- Date: 2026-10-08; decided by: ours (plan 0004, step 4b), on Peter's answer of DEC-G2D-024
+- Status: Active
+- Decision: two kept loops whose bounding boxes overlap cross exactly when one reaches more than t_topo inside and outside the other (`crossing_depth`, both ways). Only then are their contact points computed (`contact_points`: the constructed point of each proper segment crossing, and every segment end lying on the other loop's segment, by exact signs; sorted, unique) and one `LOOPS_CROSS` (error) reported, filed with the lower loop. REQ-G2D-160 is restated as finding the points where flattenings meet: if one loop reaches beyond t_topo on both sides of the other, their boundaries must meet, whether properly or through a shared vertex or stretch, so the depth rule alone decides crossing against touching and research 01's cyclic order of edges is not needed.
+- Why: one rule for every configuration that the spec reviews raised (proper crossings, the overlapping squares meeting only at vertices and stretches, the T of slots, tangent arcs); the contacts are needed only to report where.
+- Rejected: classifying each contact by the cyclic order of its edges (more code, and it still needs the depth rule for tangent arcs); reporting contacts of touching pairs (REQ-G2D-161 reports crossings only).
+- Where: REQ-G2D-160, 161, 163, 237; `_crossings.py`, `kernel/distance.cpp`.
+

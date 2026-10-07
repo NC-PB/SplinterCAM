@@ -64,3 +64,18 @@ def nested_tree(loops: list[list[list[float]]], ctx: Context) -> LoopTree:
         crossing_points=np.empty((0, 2)),
         crossing_loops=np.empty((0, 2), dtype=np.int64),
     )
+
+
+def polygons(loops: list[list[tuple[float, float]]], ctx: Context) -> CurveRows:
+    """Closed polygons as line rows, one loop each, row IDs 100, 101, ..., checked by curve_rows."""
+    nan = math.nan
+    rows = [
+        [*p, *q, nan, nan, 0.0]
+        for points in loops
+        for p, q in zip(points, points[1:] + points[:1], strict=True)
+    ]
+    starts = np.cumsum([0] + [len(p) for p in loops[:-1]], dtype=np.int64)
+    ids = 100 + np.arange(len(rows), dtype=np.int64)
+    built = curve_rows(np.array(rows, dtype=np.float64), ids, starts, ctx)
+    assert built.value is not None, built.diagnostics
+    return built.value

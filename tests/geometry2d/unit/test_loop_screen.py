@@ -166,7 +166,11 @@ def test_a_chain_of_near_duplicates_compares_with_kept_loops_only(ctx: Context) 
     result = screen_loops(_loops([_square(), _square(0.00015), _square(0.0003)], ctx), ctx)
     assert result.value is not None
     assert result.value.kept.tolist() == [0, 2]
-    assert [d.location for d in result.diagnostics] == ["loops 0 and 1"]
+    # The kept 0 and 2, 0.0003 mm apart, then cross: each reaches beyond t_topo into the other.
+    assert [(d.code, d.location) for d in result.diagnostics] == [
+        ("LOOPS_CROSS", "loops 0 and 2"),  # placed with its lower loop, 0
+        ("LOOP_DUPLICATE", "loops 0 and 1"),  # placed with the loop it removes, 1
+    ]
 
 
 NOTCH_TENTH = [(0, 0), (2, 0), (2, 5), (2.1, 5), (2.1, 0), (10, 0), (10, 10), (0, 10)]

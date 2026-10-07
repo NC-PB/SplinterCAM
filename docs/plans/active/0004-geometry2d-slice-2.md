@@ -8,7 +8,7 @@
 - Research: `docs/research/01-foundations.md`: Loop tree, Kernel arrays (polygon region), Tolerances (resolution chain), Flattening (side rule); tests 7, 16, 19, 21 and 24
 - Branch: one pull request per session (docs/dev/07); a step with a new algorithm or over about 100 lines of non-test code gets its own, from `main` after the previous merge, never stacked
 - Owner: Peter Burgener; agents: Claude Code sessions
-- Status (2026-10-07): approved by Peter with his answers below (DEC-G2D-022); step 1 done and reviewed (DEC-G2D-024 to 027); steps 2 and 3 done; step 4a done; 4b next.
+- Status (2026-10-07): approved by Peter with his answers below (DEC-G2D-022); step 1 done and reviewed (DEC-G2D-024 to 027); steps 2 and 3 done; steps 4a and 4b done; 4c next.
 
 ## Questions for Peter before step 1
 
@@ -46,6 +46,11 @@ Total: about 1850 added lines of code (about 1300 NLOC) and 2550 of tests, in ni
 
 <!-- Newest first. What was done, what tools/check reported, what is next. At most about 30 lines per session;
      numbers go into tables. Above 300 lines, older entries move to an archive file next to the plan. -->
+
+### 2026-10-08, step 4b: crossings between loops
+
+- `find_crossings` (REQ-G2D-160, 161, 163, 237): the depth rule decides crossing against touching; `contact_points` reports where crossing loops meet. REQ-G2D-160 restated (DEC-G2D-031). The 88 tangent placements touch, though at least 80 of their flattenings cross properly. REQ-G2D-162 (no loops when any cross) comes with the tree in step 5.
+- `tools/check`: PASS (11 of 14). Next: 4c.
 
 ### 2026-10-08, step 4a: cleanup, area tests, duplicates
 
