@@ -8,6 +8,7 @@
 #include "region.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <vector>
@@ -179,24 +180,26 @@ struct Ray { // the points p + t·d
     Point2 d;
 };
 
-// t with |p + t·d − c| <= r (a quadratic).
+// t with |p + t·d − c| <= r, about the foot of c so it stays accurate far from p (DEC-G2D-030).
 Span disc_span(const Ray& ray, Point2 c, double r) {
-    const Point2 p = ray.p;
-    const Point2 d = ray.d;
-    const double fx = x(p) - x(c);
-    const double fy = y(p) - y(c);
-    const double a = x(d) * x(d) + y(d) * y(d);
-    const double b = 2 * (fx * x(d) + fy * y(d));
-    const double discriminant = b * b - 4 * a * (fx * fx + fy * fy - r * r);
-    if (a == 0.0 || discriminant < 0.0) {
+    const double fx = x(ray.p) - x(c);
+    const double fy = y(ray.p) - y(c);
+    const double dd = x(ray.d) * x(ray.d) + y(ray.d) * y(ray.d);
+    if (dd == 0.0) {
+        constexpr double all = std::numeric_limits<double>::infinity();
+        return fx * fx + fy * fy <= r * r ? Span{-all, all} : empty_span;
+    }
+    const double t0 = -(fx * x(ray.d) + fy * y(ray.d)) / dd;
+    const double h = (fx * y(ray.d) - fy * x(ray.d)) / std::sqrt(dd);
+    const double rest = r * r - h * h;
+    if (rest < 0.0) {
         return empty_span;
     }
-    const double root = std::sqrt(discriminant);
-    return {(-b - root) / (2 * a), (-b + root) / (2 * a)};
+    const double half = std::sqrt(rest / dd);
+    return {t0 - half, t0 + half};
 }
 
-// The part of segment s (t in [0, 1]) within r of segment e: the capsule around e is convex, so
-// its discs and strip give one interval (ours, 2026-10-08).
+// The part of s (t in [0, 1]) within r of e: e's capsule is convex, so one interval (ours).
 Span covered(const Segment& s, const Segment& e, double r) {
     const Point2 d{x(s.b) - x(s.a), y(s.b) - y(s.a)};
     const Point2 w{x(e.b) - x(e.a), y(e.b) - y(e.a)};
@@ -223,14 +226,23 @@ Span covered(const Segment& s, const Segment& e, double r) {
     return {std::max(all.low, 0.0), std::min(all.high, 1.0)};
 }
 
-// A point of each maximal part of s farther than r from every segment near it: the middles of
-// the gaps the covered intervals leave in [0, 1].
-void far_middles(const Segment& s, std::vector<Span>& spans, std::vector<Point2>& out) {
+// A part of a segment farther than the limit from the other polylines, and whether it reaches the
+// segment's ends.
+struct FarPart {
+    Point2 middle;
+    bool from_start;
+    bool to_end;
+};
+
+// The far parts of s: the gaps the covered intervals leave in [0, 1].
+void far_parts(const Segment& s, std::vector<Span>& spans, std::vector<FarPart>& out) {
     std::ranges::sort(spans, {}, &Span::low);
     double cursor = 0.0;
     const auto gap = [&](double end) {
         const double t = (cursor + end) / 2;
-        out.push_back({x(s.a) + t * (x(s.b) - x(s.a)), y(s.a) + t * (y(s.b) - y(s.a))});
+        out.push_back({.middle = {x(s.a) + t * (x(s.b) - x(s.a)), y(s.a) + t * (y(s.b) - y(s.a))},
+                       .from_start = cursor == 0.0,
+                       .to_end = end == 1.0});
     };
     for (const Span& span : spans) {
         if (span.low > cursor) {
@@ -240,6 +252,36 @@ void far_middles(const Segment& s, std::vector<Span>& spans, std::vector<Point2>
     }
     if (cursor < 1.0) {
         gap(1.0);
+    }
+}
+
+struct FarQuery {
+    std::span<const Segment> mine;
+    std::span<const Segment> theirs;
+    double limit;
+};
+
+// The far parts of each segment of `mine` against `theirs`; `visit` returns false to stop.
+template <typename Visit> void each_far_part(const FarQuery& query, Visit visit) {
+    const std::vector<Segment> theirs(query.theirs.begin(), query.theirs.end());
+    const Grid grid = build_grid(theirs, query.limit);
+    std::vector<Span> spans;
+    std::vector<FarPart> parts;
+    for (const Segment& s : query.mine) {
+        spans.clear();
+        parts.clear();
+        for (const std::size_t i : segments_near(grid, s)) {
+            const Span part = covered(s, theirs.at(i), query.limit);
+            if (part.low <= part.high) {
+                spans.push_back(part);
+            }
+        }
+        far_parts(s, spans, parts);
+        for (const FarPart& part : parts) {
+            if (!visit(part)) {
+                return;
+            }
+        }
     }
 }
 
@@ -301,36 +343,42 @@ Depth crossing_depth(const Polylines& a, const Polylines& b, double limit) {
     if (mine.empty() || theirs.empty()) {
         return {};
     }
-    const Grid grid = build_grid(theirs, limit);
-    std::vector<Point2> far;
-    std::vector<Span> spans;
-    for (const Segment& s : mine) {
-        spans.clear();
-        for (const std::size_t i : segments_near(grid, s)) {
-            const Span part = covered(s, theirs.at(i), limit);
-            if (part.low <= part.high) {
-                spans.push_back(part);
-            }
-        }
-        far_middles(s, spans, far);
-    }
     std::vector<double> rows;
     for (const Segment& e : theirs) {
         const double nan = std::numeric_limits<double>::quiet_NaN();
         rows.insert(rows.end(), {x(e.a), y(e.a), x(e.b), y(e.b), nan, nan, 0.0});
     }
-    std::vector<double> flat;
-    for (const Point2& p : far) {
-        flat.insert(flat.end(), {x(p), y(p)});
-    }
-    std::vector<std::int8_t> where(far.size());
-    point_locations(flat, {.rows = rows, .length_eps_mm = 0.0}, where);
     Depth depth;
-    for (const std::int8_t location : where) {
-        depth.inside = depth.inside || location == static_cast<std::int8_t>(Location::in);
-        depth.outside = depth.outside || location == static_cast<std::int8_t>(Location::out);
-    }
+    bool run_open = false; // the previous part reached its segment's end
+    each_far_part({.mine = mine, .theirs = theirs, .limit = limit}, [&](const FarPart& part) {
+        // A connected far part lies on one side of b: one point per run of joined parts.
+        if (!(part.from_start && run_open)) {
+            const std::array<double, 2> q{x(part.middle), y(part.middle)};
+            std::array<std::int8_t, 1> where{};
+            point_locations(q, {.rows = rows, .length_eps_mm = 0.0}, where);
+            depth.inside =
+                depth.inside || std::get<0>(where) == static_cast<std::int8_t>(Location::in);
+            depth.outside =
+                depth.outside || std::get<0>(where) == static_cast<std::int8_t>(Location::out);
+        }
+        run_open = part.to_end;
+        return !(depth.inside && depth.outside);
+    });
     return depth;
+}
+
+bool covered_by(const Polylines& a, const Polylines& b, double limit) {
+    const std::vector<Segment> mine = segments_of(a);
+    const std::vector<Segment> theirs = segments_of(b);
+    if (theirs.empty()) {
+        return mine.empty();
+    }
+    bool covered = true;
+    each_far_part({.mine = mine, .theirs = theirs, .limit = limit}, [&](const FarPart&) {
+        covered = false;
+        return false; // the first far part decides
+    });
+    return covered;
 }
 
 std::vector<Point2> contact_points(const Polylines& a, const Polylines& b, double limit) {

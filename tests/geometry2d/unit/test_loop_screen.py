@@ -336,3 +336,42 @@ def test_a_spike_is_named_by_its_point(ctx: Context) -> None:
     result = screen_loops(_loops([spike], ctx), ctx)
     assert result.diagnostics[0].location == "loop 0"
     assert "(10, 20)" in result.diagnostics[0].message
+
+
+@pytest.mark.req("REQ-G2D-158")
+@pytest.mark.parametrize(("shift", "duplicate"), [(1.3e-4, True), (1.5e-4, False)])
+def test_duplicates_of_a_6_metre_square(ctx: Context, shift: float, duplicate: bool) -> None:
+    # Spec review: the disc of the cover must keep its accuracy 6000 mm from a segment's start
+    # (shifted diagonally, the Hausdorff distance is 1.84e-4 and 2.12e-4 mm against t_topo 2e-4).
+    big = _square(0.0, 0.0, 6000.0)
+    result = screen_loops(_loops([big, _square(shift, shift, 6000.0)], ctx), ctx)
+    assert result.value is not None
+    assert result.value.kept.tolist() == ([0] if duplicate else [0, 1])
+
+
+def _cover(a: Points, b: Points, limit: float) -> bool:
+    from splintercam import _kernels
+
+    pa, pb = np.array(a, float).reshape(-1, 2), np.array(b, float).reshape(-1, 2)
+    return _kernels.geometry2d.covered_by(pa, pb, limit)
+
+
+@pytest.mark.req("REQ-G2D-158")
+def test_the_cover_of_a_zero_length_segment_and_an_empty_polyline() -> None:
+    shifted = _square(1e-4, 1e-4, 10.0)
+    repeated: Points = [(0.0, 0.0), (0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]
+    assert _cover(repeated, shifted, 2e-4)  # (0, 0) lies 1.41e-4 mm from the corner (1e-4, 1e-4)
+    assert not _cover(_square(), [], 2e-4)  # nothing covers a loop but itself
+    assert _cover([], _square(), 2e-4)
+
+
+@pytest.mark.req("REQ-G2D-158", "REQ-G2D-237")
+@pytest.mark.parametrize("limit", [0.0, -1.0, math.nan, math.inf])
+def test_the_pair_kernels_refuse_a_bad_limit(limit: float) -> None:
+    from splintercam import _kernels
+
+    square = np.array(_square(), dtype=np.float64)
+    with pytest.raises(ValueError, match="limit"):
+        _kernels.geometry2d.covered_by(square, square, limit)
+    with pytest.raises(ValueError, match="limit"):
+        _kernels.geometry2d.crossing_depth(square, square, limit)

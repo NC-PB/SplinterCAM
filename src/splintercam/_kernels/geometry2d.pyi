@@ -93,6 +93,11 @@ def crossing_depth(a: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), or
     Whether closed polyline a reaches farther than limit inside and outside closed polyline b.
     """
 
+def covered_by(a: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], b: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], limit: float) -> bool:
+    """
+    Whether every point of closed polyline a lies within limit of closed polyline b.
+    """
+
 def contact_points(a: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], b: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], limit: float, out: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu')]) -> int:
     """
     Write where closed polylines a and b meet, sorted; return their count (out may be short).
