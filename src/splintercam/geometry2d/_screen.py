@@ -58,8 +58,7 @@ def _duplicate_of(
     candidate: _Candidate, kept: list[_Candidate], boxes: NDArray[np.float64], ctx: Context
 ) -> _Candidate | None:
     t_topo = ctx.tolerances.topology_tol_mm
-    # Loops within t_topo of each other both ways have boxes within t_topo of each other; eps_len
-    # absorbs the rounding of the cover (DEC-G2D-030).
+    # Duplicates have boxes within t_topo, eps_len for rounding (DEC-G2D-030).
     slack = t_topo + ctx.tolerances.length_eps_mm
     near = np.flatnonzero((np.abs(boxes - candidate.box) <= slack).all(axis=1))
     for k in near.tolist():

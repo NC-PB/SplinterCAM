@@ -180,9 +180,7 @@ struct Ray { // the points p + t·d
     Point2 d;
 };
 
-// t with |p + t·d − c| <= r: about the foot t0 of c, half-width from the distance h of c to the
-// line, a form that keeps its accuracy far from p (spec review, 2026-10-08). A zero-length segment
-// is the point p: all t or none.
+// t with |p + t·d − c| <= r, about the foot of c so it stays accurate far from p (DEC-G2D-030).
 Span disc_span(const Ray& ray, Point2 c, double r) {
     const double fx = x(ray.p) - x(c);
     const double fy = y(ray.p) - y(c);
@@ -201,8 +199,7 @@ Span disc_span(const Ray& ray, Point2 c, double r) {
     return {t0 - half, t0 + half};
 }
 
-// The part of segment s (t in [0, 1]) within r of segment e: the capsule around e is convex, so
-// its discs and strip give one interval (ours, 2026-10-08).
+// The part of s (t in [0, 1]) within r of e: e's capsule is convex, so one interval (ours).
 Span covered(const Segment& s, const Segment& e, double r) {
     const Point2 d{x(s.b) - x(s.a), y(s.b) - y(s.a)};
     const Point2 w{x(e.b) - x(e.a), y(e.b) - y(e.a)};
@@ -229,8 +226,8 @@ Span covered(const Segment& s, const Segment& e, double r) {
     return {std::max(all.low, 0.0), std::min(all.high, 1.0)};
 }
 
-// A part of a segment farther than the limit from every segment of the other polylines: a point
-// of it, and whether it reaches the segment's start or end (so it joins its neighbours' parts).
+// A part of a segment farther than the limit from the other polylines, and whether it reaches the
+// segment's ends.
 struct FarPart {
     Point2 middle;
     bool from_start;
@@ -258,9 +255,7 @@ void far_parts(const Segment& s, std::vector<Span>& spans, std::vector<FarPart>&
     }
 }
 
-// The far parts of each segment of `mine` against `theirs`, filed in `grid`; `visit` gets them
-// segment by segment and returns false to stop.
-// The segments to test, those to test them against, and the limit.
+// The far parts of each segment of `mine` against `theirs`; `visit` returns false to stop.
 struct FarQuery {
     std::span<const Segment> mine;
     std::span<const Segment> theirs;
@@ -330,8 +325,7 @@ Depth crossing_depth(const Polylines& a, const Polylines& b, double limit) {
     Depth depth;
     bool run_open = false; // the previous part reached its segment's end
     each_far_part({.mine = mine, .theirs = theirs, .limit = limit}, [&](const FarPart& part) {
-        // A connected part that stays farther than the limit from b lies on one side of it: one
-        // point per run of joined parts is enough.
+        // A connected far part lies on one side of b: one point per run of joined parts.
         if (!(part.from_start && run_open)) {
             const std::array<double, 2> q{x(part.middle), y(part.middle)};
             std::array<std::int8_t, 1> where{};
