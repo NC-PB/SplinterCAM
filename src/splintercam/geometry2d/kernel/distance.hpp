@@ -37,6 +37,10 @@ struct Depth {
 };
 [[nodiscard]] Depth crossing_depth(const Polylines& a, const Polylines& b, double limit);
 
+// Whether every point of `a` lies within `limit` of a segment of `b`: the closed neighbourhoods
+// of b's segments cover a's (REQ-G2D-158). An empty b covers only an empty a.
+[[nodiscard]] bool covered_by(const Polylines& a, const Polylines& b, double limit);
+
 // The points where the segments of `a` and `b` meet, by exact signs: proper crossings (their
 // constructed point) and ends lying on the other segment; sorted by x, then y, unique
 // (REQ-G2D-160). `limit` (> 0) sizes the search grid only.
