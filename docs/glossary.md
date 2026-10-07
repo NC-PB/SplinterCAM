@@ -40,6 +40,13 @@
 | point location | `PointLocation` (`IN`, `OUT`, `ON`) | Punktlage | Where a point lies against a region: ON within eps_len of the boundary, else IN where the winding number is not 0 (research 01, Point in region) | 01 |
 | zero-width spike | `CLEANUP_SPIKE` | Nullbreiten-Spitze | A vertex where a loop turns back exactly onto itself; cleanup drops it without changing the region (research 01, Helpers) | 01 |
 | curve rows | `CurveRows` | Kurvenzeilen | Lines and arcs of closed loops as arrays at the kernel boundary: [x0, y0, x1, y1, cx, cy, sweep] per row, IDs, loop starts | 01 |
+| loop tree | `loop_tree`, `LoopTree` | Konturbaum | Closed loops checked and nested: degenerate, duplicate and crossing loops reported, parents and depths found, even depth CCW and odd depth CW (research 01, Loop tree) | 01 |
+| topology flattening | (inside `loop_tree`) | Topologie-Diskretisierung | Arcs replaced by polylines within u, for the loop tree's decisions only (research 01, Loop tree, rule 1) | 01 |
+| side-correct flattening | `flatten_loops` | seitenrichtige Diskretisierung | Flattening of a region's loops within t_flat with every arc's error in air (research 01, Flattening) | 01 |
+| region kind | `RegionKind` (`MATERIAL`, `AIR`) | Bereichsart | What fills the region a set of loops bounds; it decides the air side of each arc. Not the edge classes of D-059 | 01 |
+| polygon region | `PolygonRegion` | Polygonbereich | A region as flat loops at the kernel boundary: points, loop starts, a source ID and a fixed-node flag per vertex; outer loops CCW, holes CW | 01, 02 |
+| machining region | `build_region`, `FlatRegion` | Bearbeitungsbereich | The region an operation works in: the Clipper2 PolyTree of the side-correct flattened loops, with the extra clearance its offsets must add | 01, 02 |
+| fixed node | `fixed` | Fixpunkt | A vertex that later steps must not move or merge, such as a pinch point (D-084) | 01, 02 |
 | scallop height | `scallop_height` | Kammhöhe | Height of the ridge left between passes | 09 |
 | toolpath | `Toolpath` | Werkzeugweg | Ordered passes and links of one operation | 10 |
 | CL data | `ClData` | CL-Daten | Neutral cutter-location output before the post | 13 |

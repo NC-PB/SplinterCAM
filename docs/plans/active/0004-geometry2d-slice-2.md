@@ -8,9 +8,11 @@
 - Research: `docs/research/01-foundations.md`: Loop tree, Kernel arrays (polygon region), Tolerances (resolution chain), Flattening (side rule); tests 7, 16, 19, 21 and 24
 - Branch: one pull request per session (docs/dev/07); a step with a new algorithm or over about 100 lines of non-test code gets its own, from `main` after the previous merge, never stacked
 - Owner: Peter Burgener; agents: Claude Code sessions
-- Status (2026-10-03): **proposed, not started.** Waiting for Peter's approval and his answers to the questions below.
+- Status (2026-10-07): approved by Peter with his answers below (DEC-G2D-022); step 1 done, waiting for Peter's review of the SPEC cut and its three open questions.
 
 ## Questions for Peter before step 1
+
+Answered 2026-10-07: yes to all six, as proposed (DEC-G2D-022).
 
 1. **Scope: offsets in a plan of their own?** The SPEC's Later parts put "the topic 02 offsets and the D-132 kernel changes" into slice 2, and `architecture/modules.yaml` gives geometry2d research 02 and 03. But `docs/research/` holds only 01, so there is no research for the offsets to cite. Proposal: this plan builds regions only (topic 01). The offsets follow in plan 0005, once research 02 is in the repository (through `/research-to-spec`, your review).
 2. **Ellipse and spline edges stay in Later parts.** Proposal: slice 2 handles loops of lines and arcs only. The rules for spline and ellipse edges (REQ-G2D-120 to 123; the t/2 parts of 124 and 125; the u band of replaced edges) wait until those curve types exist. Here `build_region` and `build_chain` return an extra clearance of 0.
@@ -24,9 +26,9 @@
 <!-- Each step has a size estimate (kept code and tests). At 50 % over it, stop and ask, as for a timebox
      (docs/dev/12, section 3). Every step: at most 400 added lines of non-test code per pull request. -->
 
-- [ ] 1. **SPEC cut for slice 2.** Release the drafted requirements chosen by the answers above, with their tests from research 01. Mark the rest Later parts. Record the interface, failure modes and diagnostics (`LOOP_DUPLICATE`, `LOOPS_CROSS`, a span refusal); raise the budget in `modules.yaml`; spec-reviewer round. Size: docs only.
+- [x] 1. **SPEC cut for slice 2.** Release the drafted requirements chosen by the answers above, with their tests from research 01. Mark the rest Later parts. Record the interface, failure modes and diagnostics (`LOOP_DUPLICATE`, `LOOPS_CROSS`, a span refusal); raise the budget in `modules.yaml`; spec-reviewer round. Size: docs only.
 - [ ] 2. **Polygon region arrays and the flattening of curve-row loops.** `points`, `loop_starts`, `source_ids` and fixed-node flags, checked before any kernel work (REQ-G2D-183 to 187). The flattening of a loop of curve rows holds each joint once and gives each vertex its row's ID (199, 200). The side rule for regions of each kind, material or air (115, 116, 119, 127). Research 01 test 16. Size: about 250 lines of code + 350 of tests.
-- [ ] 3. **Topology flattening and batched distances.** The two-sided flattening within u, for topology only (152). u and t_topo come from the `Context` (026, 029). A kernel for point-to-polyline distances in batches, which the loop tree and the probes need; it replaces Python loops (backlog of plan 0003, step 6). Size: about 250 + 300.
+- [ ] 3. **Topology flattening and batched distances.** The inscribed flattening within u with the kernel's own sine and cosine, for topology only (152). u and t_topo come from the `Context` (026, 029). A kernel for point-to-polyline distances in batches, which the loop tree and the probes need; it replaces Python loops (backlog of plan 0003, step 6). Size: about 250 + 300.
 - [ ] 4. **Loop tree I: cleaning and the pair tests.** Per loop: cleanup, the area test and the 1.5·t_topo·L test (155 to 157). Duplicates within t_topo, the first in input order kept (158, 159). Crossings by exact segment tests with their points, and touching loops accepted (160 to 163). Research 01 tests 7 and 19. Size: about 300 + 400.
 - [ ] 5. **Loop tree II: parents, depths, normalisation.** The containment probes in their order (164 to 168), depth and orientation (174, 175), a winding of 1 inside normalised regions (151), and independence of tol (154). Research 01 test 7. Size: about 250 + 350.
 - [ ] 6. **The Clipper2 bridge.** Re-centre on the bounding box and round to u (033); refuse a span of 2^26 grid units or more with an error diagnostic (034); the resolution chain property, no point moved by more than 2.83 grid units and point in region unchanged beyond t_topo (030, 031). Research 01 test 21. Size: about 200 + 300.
@@ -45,6 +47,21 @@ Total: about 1850 added lines of code (about 1300 NLOC) and 2550 of tests, in ni
 <!-- Newest first. What was done, what tools/check reported, what is next. At most about 30 lines per session;
      numbers go into tables. Above 300 lines, older entries move to an archive file next to the plan. -->
 
+### 2026-10-07, step 1: the SPEC cut
+
+- Released REQ-G2D-026, 029 to 034, 115 to 119, 124 and 125 (clearance 0), 127, 151 to 181, 183 to 187, 199, 200 and the new 234 to 236 (`build_chain`'s rows, `REGION_EMPTY`, order of diagnostics); 176 and 177 held. 182 stays in Later parts with curve transforms. Interface, failure modes (`REGION_TOO_LARGE`, `REGION_FAILED`, `REGION_INVALID`, `REGION_EMPTY`), glossary terms. Budget 1700 → 3000 NLOC in `architecture/modules.yaml`. Choices in DEC-G2D-023.
+- Spec-reviewer round: 1 blocker, 8 major, minors; all taken. Reproduced before acting: [0, 10]² and [5, 15] × [0, 10] give no proper crossing and winding 2; a spike tip as first probe makes a nested loop a root; the blocker (REQ-G2D-178 at t_topo against flattened arcs) by the chord's sagitta.
+- Measured: the u-flattenings of a circle tangent inside another cross properly in 42 of 44 placements (open question 1).
+- Test audit: no test or golden file touched, slice 1 requirements only extended; its gaps taken (REQ-G2D-235, 236, invariant properties, the deviations from research 01 as question 4).
+- Open questions for Peter in the SPEC: 1 touching curves cross in their topology flattenings (step 4); 2 the fill rule where flattened loops overlap, Positive proposed, against research 01, rule 7 (step 8); 3 the PolyTree's rounding against D-132's bias (plan 0005); 4 the deviations from research 01 in REQ-G2D-030, 119, 178, 179.
+- Later steps take on: basic-operation sine and cosine for the topology flattening (step 3, REQ-G2D-152); the 2^26 limit as a foundation parameter and Clipper2 under the strict float flags (step 6).
+- `tools/check`: PASS (11 of 14; arch-check, trace-check, licence-check not written yet). Next: Peter's review; then step 2.
+
+### 2026-10-07, approval
+
+- Peter approved the plan and answered yes to all six questions: offsets in plan 0005 after research 02 is in the repository; lines and arcs only; Clipper2 with its grid bridge enters here; REQ-G2D-019 stays later; the budget goes to 3000 NLOC in step 1; research 01's interface names are kept. Recorded as DEC-G2D-022.
+- Next step: 1, the SPEC cut. Stop after it for Peter's review.
+
 ### 2026-10-03, proposal
 
 - Drafted from the SPEC's Later parts, the draft requirements of commit d1a0949 (REQ-G2D-019, 026, 029 to 034, 115 to 127, 151 to 187, 198 to 200) and research 01, Loop tree. Nothing implemented.
@@ -57,4 +74,4 @@ Total: about 1850 added lines of code (about 1300 NLOC) and 2550 of tests, in ni
 
 ## Blockers
 
-- Approval of this plan, and the answers to the questions above.
+- None.

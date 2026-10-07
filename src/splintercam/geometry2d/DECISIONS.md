@@ -152,7 +152,7 @@
 ## DEC-G2D-017: the module budget is 1700 NLOC
 
 - Date: 2026-10-03; decided by: Peter (answer 6 of 2026-10-03)
-- Status: Active
+- Status: Superseded by DEC-G2D-022 (3000 NLOC for slice 2, set in plan 0004, step 1)
 - Decision: `architecture/modules.yaml` gives geometry2d a budget of 1700 NLOC, the SPEC's estimate for slice 1. `tools/size-check` reports the module above it and fails it above 2040.
 - Why: slice 1 measured 1561 NLOC on 2026-10-03; a budget makes growth visible. The slice 2 plan raises it, and must give a reason.
 - Rejected: no budget until slice 2 (growth would go unnoticed); a budget that already counts slice 2 (it would not be based on anything measured).
@@ -194,3 +194,21 @@
 - Why: the angle check and the flattening count rest on it, but it was tested only under the requirements that use it, so a change to it had no contract to fail against.
 - Rejected: leaving it under REQ-G2D-018 and 043 (the gap); a correctly rounded arctangent (more code, and nothing needs it: the decisions only need the same bits everywhere and a known error).
 - Where: REQ-G2D-233; `kernel/angle.cpp`; `tests/geometry2d/unit/test_angle.py`. See DEC-G2D-003.
+
+## DEC-G2D-022: the scope of slice 2
+
+- Date: 2026-10-07; decided by: Peter (approval of plan 0004, yes to its six questions)
+- Status: Active
+- Decision: slice 2 (plan 0004) builds regions for loops of lines and arcs: the loop tree, the side-correct flattening, `build_region` with the Clipper2 PolyTree and its grid bridge (re-centre, round to u, refuse a span of 2^26 grid units), and `build_chain`. The offsets of topic 02 follow in plan 0005, once research 02 is in the repository. Ellipse and spline edges and REQ-G2D-019 (any thread count) stay in Later parts. The module budget rises from 1700 to 3000 NLOC in plan 0004, step 1. The interface keeps research 01's proposed names (`loop_tree`, `build_region`, `flatten_loops`, `build_chain`).
+- Why: `docs/research/` holds only research 01, so the offsets have nothing to cite; no ellipse or spline types exist yet; `build_region` needs the PolyTree and the rule 5 fallback a Clipper2 difference; release 1 kernels are single-threaded (DEC-G2D-001); slice 2 is estimated at about 1300 NLOC.
+- Rejected: offsets in slice 2 (no research to implement from); spline and ellipse rules now (no curve types to test them on).
+- Where: `docs/plans/active/0004-geometry2d-slice-2.md`; SPEC, Later parts (cut in plan 0004, step 1).
+
+## DEC-G2D-023: the contract choices of slice 2
+
+- Date: 2026-10-07; decided by: ours (D-159), on Peter's answers of DEC-G2D-022; Peter reviews them in the pull request of plan 0004, step 1
+- Status: Active
+- Decision: the draft's open questions for slice 2 are answered as the SPEC marks "(ours)": loops come in as `CurveRows`; `flatten_loops` is public and returns no diagnostics; `build_chain` takes raw rows of one open chain, checked by the curve-row rules without closure (new REQ-G2D-234); crossing points in `LoopTree.crossing_points`; one diagnostic per loop, in input order; the loop tree cleans the topology flattening, not the rows; normalising reverses rows without validating them again; the region is flat loops (CCW outer, CW holes), only pinch points fixed; probes measured to A's topology flattening, in stored row order; the fallback compares grid areas; source-ID ties go to the lower row index; new codes `REGION_TOO_LARGE`, `REGION_FAILED`, `REGION_INVALID`, `REGION_EMPTY`; the 2^26 span is checked at run time and declared as a parameter. After the spec-reviewer round: when loops cross, the tree holds no loops and `build_region` returns no region; crossings are found exactly also where boundaries pass through each other at a shared vertex or stretch (cyclic order of the edges); probes and later tests come from the cleaned topology flattening; the topology flattening uses the kernel's own sine and cosine, so REQ-G2D-018 covers the loop tree with arcs; REQ-G2D-178 and 179 compare beyond the side-correct flattening (t_flat + 3u, 2·t_flat + 6u) instead of research 01's t_topo; REQ-G2D-176 and 177 are held for Peter; Clipper2 is built with REQ-G2D-014's strict flags. Four questions stay open for Peter (SPEC, Open questions): touching curves crossing in their topology flattenings, the fill rule where flattened loops overlap, the PolyTree's rounding in the budget, and the deviations from research 01 in REQ-G2D-030, 119, 178 and 179.
+- Why: plan 0004, step 1 releases slice 2; D-159 lets the draft's proposals stand without asking again. The span is checked, unlike slice 1's numeric preconditions (Peter prefers those documented), because Clipper2 decides in double beyond it and fails silently (research 01, trap 17; draft REQ-OFF-018). The tangent-arc question was measured: the flattenings within u of a circle of radius 5 mm tangent inside one of 10 mm cross properly in 42 of 44 placements of their start points.
+- Rejected: returning the other loops when some cross (an island inside a dropped crossing wall loses its parent and flips between material and air); probes from the uncleaned rows (a spike tip outside A made a nested loop a root); libm sine and cosine for the topology flattening (tier 1 lost for arcs); research 01's t_topo in REQ-G2D-178 and 179 (false for any arc region: inscribed chords lie up to t_flat = 12·t_topo inside at tol = 0.05 mm); measuring REQ-G2D-030 both ways (input vertices inside a union have no counterpart); loops as `Sequence[Curve]` (a Python loop per edge, against the split rule); cleaning the rows in the loop tree (cleanup of curve loops is a later part); re-nesting pinch-split parts (the flat region needs none); a `ValueError` for broken polygon regions (they may come from other modules' code, so a diagnostic like `curve_rows`); the 2^26 limit as a documented precondition (see Why); `OFFSET_FAILED` for the region's Clipper2 calls (D-132 gives it to the offset only).
+- Where: SPEC, Public interface, Failure modes, Open questions and the slice 2 tables; change log of 2026-10-07.
