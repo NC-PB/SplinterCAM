@@ -1,24 +1,24 @@
 # SPEC: geometry2d
 
-<!-- The planar geometry of every later module. Slice 1 of the topic 01 part, cut on 2026-10-02 from the draft of plan 0001, step 4 (plan 0003, step 1). Requirement IDs keep the draft's numbers; the change log names the IDs merged into a neighbour, and Later parts the rest. -->
+<!-- The planar geometry of every later module. Slice 1 of the topic 01 part, cut on 2026-10-02 from the draft of plan 0001, step 4 (plan 0003, step 1); slice 2 cut on 2026-10-07 from the same draft (plan 0004, step 1). Requirement IDs keep the draft's numbers; the change log names the IDs merged into a neighbour, and Later parts the rest. -->
 
 | | |
 | --- | --- |
-| Status | Slice 1 released by [plan 0003](../../../docs/plans/completed/0003-geometry2d-slice-1.md) on Peter's answers of 2026-10-02; Peter reviews this text in the pull request of plan 0003, step 1. Choices marked "(ours)" answer open questions of the draft without asking again (D-159) |
+| Status | Slice 1 released by [plan 0003](../../../docs/plans/completed/0003-geometry2d-slice-1.md) on Peter's answers of 2026-10-02, implemented and reviewed. Slice 2 released by [plan 0004](../../../docs/plans/active/0004-geometry2d-slice-2.md) on Peter's answers of 2026-10-07 (DEC-G2D-022); Peter reviews its text in the pull request of plan 0004, step 1. Choices marked "(ours)" answer open questions of the draft without asking again (D-159) |
 | Layer | 1 (see architecture/modules.yaml) |
 | Depends on | foundation |
 | Research | [01][r01]: the main text is normative, the literature notes are evidence. This SPEC links to it instead of restating it |
-| Decisions | D-028 (units), D-049 (no values buried in code), D-055 (determinism), D-057 (curve type, arc form, bulge), D-097 (exact predicates, strict float flags, snapping first); ADR 0009 (vendored `predicates.c`, proposed); text in [docs/spike/decisions-snapshot.md](../../../docs/spike/decisions-snapshot.md) |
+| Decisions | D-025 (open chains for profiles), D-028 (units), D-049 (no values buried in code), D-055 (determinism), D-057 (curve type, arc form, bulge), D-058 and D-132 (grid of 10⁴ per mm, chords in air), D-059 (source IDs), D-060 (no external Python Clipper2 binding), D-084 (pinch points, fixed nodes), D-097 (exact predicates, strict float flags, snapping first); ADR 0009 (vendored `predicates.c`, proposed); text in [docs/spike/decisions-snapshot.md](../../../docs/spike/decisions-snapshot.md) |
 | Owner | Peter Burgener |
 
 ## Purpose
 
-The planar geometry every later module builds on. Slice 1 gives exact sign tests, lines and arcs with their validation, DXF bulge conversion, distances and closest points, the circle through three points, flattening with a known error side, signed area and orientation, point in region, polyline cleanup and bounding boxes. Its users are io (curves from DXF), the loop tree of slice 2, arc fitting in toolpath (topic 11) and the strategies.
+The planar geometry every later module builds on. Slice 1 gives exact sign tests, lines and arcs with their validation, DXF bulge conversion, distances and closest points, the circle through three points, flattening with a known error side, signed area and orientation, point in region, polyline cleanup and bounding boxes. Slice 2 turns closed loops of lines and arcs into the machining region of an operation: the loop tree (degenerate, duplicate and crossing loops reported; parents, depths and normalised orientation), the side-correct flattening, and the Clipper2 PolyTree with source IDs and fixed nodes; it also flattens open chains for profiles. Its users are io (curves from DXF), the offsets of topic 02 (plan 0005), arc fitting in toolpath (topic 11) and the strategies.
 
 ## Scope
 
-- In: [research 01][r01], sections Units and conventions, Vectors and exact signs (planar), Curves (lines and arcs), Distances and closest points, Circle through three points, Flattening (single curves), Area and orientation, Point in region (lines and arcs), Kernel arrays (curve rows) and Helpers (cleanup of polylines, bounding boxes of lines and arcs).
-- Out: everything under [Later parts](#later-parts); `ToleranceSet` and the budget (foundation); reading DXF and STEP (io).
+- In: [research 01][r01], sections Units and conventions, Vectors and exact signs (planar), Curves (lines and arcs), Distances and closest points, Circle through three points, Flattening (single curves; regions and open chains of lines and arcs), Area and orientation, Point in region (lines and arcs), Loop tree, Tolerances (t_topo, u and the resolution chain up to the PolyTree), Kernel arrays (curve rows and polygon regions) and Helpers (cleanup of polylines, bounding boxes of lines and arcs).
+- Out: everything under [Later parts](#later-parts), among them the offsets and Booleans of topic 02 (plan 0005) and ellipse and spline edges; `ToleranceSet` and the budget (foundation); reading DXF and STEP (io); chaining selections into loops and resolving crossings before the loop tree (topic 25).
 - Non-goals: an epsilon in any sign test; exact constructions (centres and flattened points are rounded, D-055 tier 3); a linear algebra library; a convex hull.
 
 ## Public interface
@@ -44,6 +44,23 @@ class Box: x_min_mm: float; y_min_mm: float; x_max_mm: float; y_max_mm: float
 @dataclass(frozen=True, slots=True)
 class Circle: centre: Point; radius_mm: float
 
+# Slice 2
+class RegionKind(Enum): MATERIAL; AIR                  # what fills the region the loops bound
+@dataclass(frozen=True, slots=True)
+class PolygonRegion: points: NDArray[np.float64]; loop_starts: NDArray[np.int64]; source_ids: NDArray[np.int64]; fixed: NDArray[np.uint8]
+@dataclass(frozen=True, slots=True)
+class FlatRegion: region: PolygonRegion; extra_clearance_mm: float
+@dataclass(frozen=True, slots=True)
+class FlatChain: points: NDArray[np.float64]; source_ids: NDArray[np.int64]; extra_clearance_mm: float   # (n, 2), open; (n − 1,)
+@dataclass(frozen=True, slots=True)
+class LoopTree:
+    loops: CurveRows                                   # kept loops, normalised, in input order
+    parent: NDArray[np.int64]                          # (k,), index into loops, −1 for none
+    depth: NDArray[np.int64]                           # (k,)
+    input_index: NDArray[np.int64]                     # (k,), the loop's index in the input
+    crossing_points: NDArray[np.float64]               # (c, 2), the crossings of LOOPS_CROSS
+    crossing_loops: NDArray[np.int64]                  # (c, 2), their input loops, equal for a self-crossing
+
 # Exact predicates: (n, 2) float64 arrays in, (n,) int8 signs out. kernel: exact.cpp, vendor/predicates.c
 def orient2d(a, b, c) -> NDArray[np.int8]: ...
 def incircle(a, b, c, d) -> NDArray[np.int8]: ...
@@ -62,6 +79,13 @@ def flatten(curve, t_mm, side: AirSide | None, ctx) -> NDArray[np.float64]: ... 
 def signed_area(loop: CurveRows, ctx) -> Result[float]: ...                   # one loop; kernel: area.cpp
 def point_in_region(q, loops: CurveRows, ctx) -> NDArray[np.int8]: ...         # PointLocation; kernel: region.cpp
 def cleanup(points, ctx) -> Result[NDArray[np.int64]]: ...                    # kept vertex indices; kernel: cleanup.cpp
+
+# Slice 2. kernel: flatten.cpp, distance.cpp, loop_tree.cpp, polytree.cpp (Clipper2)
+def polygon_region(points, loop_starts, source_ids, fixed, ctx) -> Result[PolygonRegion]: ...   # read-only copies
+def loop_tree(loops: CurveRows, ctx) -> Result[LoopTree]: ...
+def flatten_loops(tree: LoopTree, kind: RegionKind, ctx) -> FlatRegion: ...   # side-correct, before Clipper2
+def build_region(loops: CurveRows, kind: RegionKind, ctx) -> Result[FlatRegion]: ...   # the PolyTree
+def build_chain(rows, ids, air_side: AirSide, ctx) -> Result[FlatChain]: ...  # one open chain (D-025)
 ```
 
 - Loops cross module boundaries as `CurveRows`, single curves as `Line` and `Arc` (ours). A `Line` or `Arc` built directly is unchecked; `make_line`, `make_arc`, `arc_from_bulge` and `curve_rows` are the validating entries, and the other functions expect their output.
@@ -72,11 +96,18 @@ def cleanup(points, ctx) -> Result[NDArray[np.int64]]: ...                    # 
 - For eps_len ≥ 1e-6 mm (the default), `signed_area` guarantees its sign for loops whose arcs all have r·min(1, φ²) ≤ 10^7 mm and whose end points have a half-extent E ≤ 10^9 mm (DEC-G2D-016, ours); the float limits of REQ-G2D-131 assume the same eps_len: beyond them the rounding of the segment terms or of the translation could reach eps_len·L. A precondition, not checked (Peter, 2026-10-03).
 - Arcs are valid input up to a radius of 10^9 mm (DEC-G2D-019, ours): beyond it the rounding of |P − C| can exceed eps_len, and `make_arc`, `arc_from_bulge` and `curve_rows` may reject a valid arc with `ARC_INCONSISTENT` (at 10^10 mm about a third of valid bulges were). A precondition, not checked (Peter, 2026-10-03). `signed_area` has a tighter one (DEC-G2D-016). REQ-G2D-047 and 048 apply to `make_arc` only; `curve_rows` checks every arc row by REQ-G2D-042 and 043 at any radius (ours).
 - `flatten` expects t ≥ eps_len (DEC-G2D-020, ours). Within that and the radius limit a full circle needs fewer than 2^31 steps; the `ValueError` for a count beyond an int fires only outside them. A precondition, not checked.
-- Internal entries for tests, not in `__all__`: `two_sum`, `two_product` (exact.cpp) and `point_in_region_exact`, the exact layer alone.
+- Internal entries for tests, not in `__all__`: `two_sum`, `two_product` (exact.cpp) and `point_in_region_exact`, the exact layer alone. Slice 2 adds `contained_by_difference(b, a, ctx) -> tuple[bool, float]` (the rule 5 fallback: B ⊂ A, and the area of B minus A in mm²), `fallback_inner(a, b, ctx) -> int` (the tie of two fallback results: 0 when a is the inner loop, 1 when b; a precedes b in input order), both on single loops as `CurveRows`, and `grid_union(points, loop_starts, ctx) -> Result[PolygonRegion]`, Clipper2's union through the grid bridge, for research 01 test 21 (D-060 allows no external Python binding; ours).
+- Slice 2 names (ours, Peter, 2026-10-07: DEC-G2D-022 keeps research 01's `loop_tree`, `build_region(loops, kind, ctx)`, `flatten_loops` and `build_chain`): loops come in as `CurveRows`, like every loop that crosses a module boundary; `flatten_loops` is public, so the side rule can be tested without Clipper2, and returns no diagnostics, since the tree's loops have passed the area tests. `build_chain` takes the rows and IDs of one open chain, which `curve_rows` cannot hold (its loops close), validated by REQ-G2D-234.
+- When loops cross, `loop_tree` returns a tree with no loops, only `crossing_points` and `crossing_loops`, together with `LOOPS_CROSS` (error), and `build_region` returns no region (REQ-G2D-162, ours). One `LOOPS_CROSS` per crossing pair or self-crossing loop, `crossing_loops` with the lower input index first; one `LOOP_DEGENERATE` or `LOOP_DUPLICATE` per dropped or removed loop. Each diagnostic's `location` names the input indices ("loop 3", "loops 2 and 5"); diagnostics in input-loop order, crossing points sorted by their loop pair, then x, then y (ours, D-055). A region the PolyTree merges or drops loops of gets no diagnostic of its own (REQ-G2D-032); an empty region gets `REGION_EMPTY` (warning; ours).
+- The topology flattening and the region work on the loops as curve rows; the rows themselves are not cleaned (cleanup of curve loops is a later part). The loop tree cleans the topology flattening, a polyline, with `cleanup` (ours).
+- Normalising reverses a loop's rows, the last row first, each as [x1, y1, x0, y0, cx, cy, −sweep], not validated again. The reversed arc's radius is |P_1 − C|, up to eps_len from the original (research 01, Point in region, radial connector; DEC-G2D-012); point in region and `flatten` already allow for it (REQ-G2D-110, 150; ours).
+- A `PolygonRegion` built directly is unchecked, like `Line` and `Arc`; `polygon_region` is the validating entry (ours).
+- `PolygonRegion` holds the region as flat loops: an outer boundary is CCW, a hole CW, with no nesting stored; the parts of a loop split at a pinch point keep the traversal of their vertices (ours). The fixed flag is 0 or 1; in slice 2 only pinch points are fixed (ours). A region may hold no loop (k = 0).
+- Clipper2 calls re-centre on the input's bounding box and round to u = `ctx.tolerances.grid_unit_mm` (REQ-G2D-033). The input of one call may span less than 2^26 grid units, about 6711 mm (REQ-G2D-034); this is checked, unlike the numeric preconditions of slice 1, because Clipper2's own double-precision decisions break silently beyond it (research 01, trap 17).
 
 ## Requirements
 
-"test N" is research 01's list of [tests][tests]; "note test N" the test ideas of its [Shewchuk note][shewchuk]. Status "Released" means released by plan 0003.
+"test N" is research 01's list of [tests][tests]; "note test N" the test ideas of its [Shewchuk note][shewchuk]. Status "Released" means released by plan 0003 (slice 1) or plan 0004 (slice 2, the sections from [Grid and topology tolerances](#grid-and-topology-tolerances-research-01-tolerances) on); "Held" marks a slice 2 requirement that waits for one of Peter's answers (Open questions) and is not implemented before it.
 
 ### Exact signs and determinism ([research 01, Vectors and exact signs][signs])
 
@@ -90,12 +121,12 @@ def cleanup(points, ctx) -> Result[NDArray[np.int64]]: ...                    # 
 | REQ-G2D-010 | WHEN the arguments are shifted cyclically, THE `orient2d` predicate SHALL return the same sign. | property: note test 3 | Released |
 | REQ-G2D-011 | THE `incircle` predicate SHALL return the exact sign of the incircle determinant: +1 when d lies inside the circle through a, b, c given CCW, −1 outside, 0 cocircular, the opposite for CW. | note test 4 | Released |
 | REQ-G2D-013 | THE geometry2d kernel SHALL call the initialisation routine of `predicates.c` once when the kernel module loads. | note test 1 as the first call in a fresh interpreter; review | Released |
-| REQ-G2D-014 | THE build SHALL compile `predicates.c` and the geometry2d kernel without floating-point contraction, fast-math or reassociation: `-ffp-contract=off` and `-fno-fast-math` on GCC and Clang, `/fp:precise` on MSVC from Visual Studio 2022 (17.0), which no longer contracts under it (D-097). | note test 7 in every build (the C++ arithmetic); note test 1's grid, which reaches stages B to D of `predicates.c` (the C flags); review of `CMakeLists.txt` | Released |
+| REQ-G2D-014 | THE build SHALL compile `predicates.c`, the geometry2d kernel and, from slice 2, Clipper2 (its intersection points decide vertex counts, REQ-G2D-232; ours) without floating-point contraction, fast-math or reassociation: `-ffp-contract=off` and `-fno-fast-math` on GCC and Clang, `/fp:precise` on MSVC from Visual Studio 2022 (17.0), which no longer contracts under it (D-097). | note test 7 in every build (the C++ arithmetic); note test 1's grid, which reaches stages B to D of `predicates.c` (the C flags); review of `CMakeLists.txt` | Released |
 | REQ-G2D-015 | THE geometry2d kernel SHALL do its exact arithmetic in IEEE 754 binary64, round to nearest even, without extended-precision intermediates. | note test 7 | Released |
 | REQ-G2D-016 | THE kernel's `two_sum` and `two_product` SHALL return a pair (x, y) with x + y equal to a + b, or a·b, exactly. | property: note test 7 | Released |
 | REQ-G2D-017 | THE continuous integration SHALL run the build guard (note test 7) in every configuration that builds the kernel. | review of `check.yml` and `sanitize.yml` | Released |
-| REQ-G2D-018 | THE geometry2d module SHALL make the same decisions for the same input doubles on macOS, Windows and Linux: predicate signs, point locations, kept vertices and diagnostic codes and severities (D-055, tier 1). | cross-platform CI: tests 1, 2, 5 and 6 (test 23), and test 12 (ours) | Released |
-| REQ-G2D-231 | THE geometry2d module SHALL return bit-identical results (arrays, curves, diagnostics and their order) for the same input and `Context` on one platform under the pinned build profile (D-055, tier 2; Peter, 2026-10-02). | tests 3, 4, 8, 9, 12, 17 and 18 run twice, compared byte for byte | Released |
+| REQ-G2D-018 | THE geometry2d module SHALL make the same decisions for the same input doubles on macOS, Windows and Linux: predicate signs, point locations, kept vertices and diagnostic codes and severities, and the loop tree's kept loops, parents and depths (D-055, tier 1; the loop tree added in slice 2, ours). | cross-platform CI: tests 1, 2, 5 and 6 (test 23), and test 12 (ours); tests 7 and 24 (test 23), and test 7's generator with arcs | Released |
+| REQ-G2D-231 | THE geometry2d module SHALL return bit-identical results (arrays, curves, diagnostics and their order) for the same input and `Context` on one platform under the pinned build profile (D-055, tier 2; Peter, 2026-10-02). | tests 3, 4, 8, 9, 12, 17 and 18 run twice, compared byte for byte; slice 2: tests 7, 16, 21 and 24 and the chain of REQ-G2D-117 | Released |
 | REQ-G2D-232 | THE geometry2d module SHALL return outputs with equal counts on macOS, Windows and Linux, their geometry within 0.001 mm of each other (D-055, tier 3; Peter, 2026-10-02). | cross-platform CI on the tests of REQ-G2D-231 | Released |
 | REQ-G2D-020 | WHEN `cleanup` takes sign decisions, THE function SHALL first merge vertices within eps_len and then apply the exact predicates to the merged vertices (D-097). | test 12; vertices merged before the exact tests | Released |
 | REQ-G2D-021 | THE exact predicates SHALL take no tolerance and compare only with zero. | note test 1 (offsets of 2^−53); test 2 | Released |
@@ -104,7 +135,7 @@ def cleanup(points, ctx) -> Result[NDArray[np.int64]]: ...                    # 
 | REQ-G2D-024 | THE predicates SHALL take arrays of points and return one sign per row, with no Python loop per point. | review; a batch gives the signs of single rows | Released |
 | REQ-G2D-233 | THE kernel's arctangent `basic_atan2` SHALL return atan2(y, x) within 4 rounding units, exactly 0, ±π/2 and π on the axes (π also for y = −0.0), computed from IEEE 754 basic operations only so its bits are the same on every platform (DEC-G2D-003, DEC-G2D-021; ours). | axis directions; 20 000 directions against libm; pinned bits on every platform | Released |
 
-Release 1 kernels are single-threaded (Peter, 2026-10-02). Decisions and counts that need an angle (the arc angle check, the flattening count, the sweep of an arc) use our own arctangent, built from IEEE 754 basic operations in the kernel (`angle.cpp`, REQ-G2D-233), so they are the same on every platform (D-055, tier 1; ours). So does the circular segment term φ − sin φ of the signed area, which decides `LOOP_DEGENERATE` (ours). Constructed points (flattened vertices, centres) use the platform's libm and may differ in the last bit across platforms (tier 3).
+Release 1 kernels are single-threaded (Peter, 2026-10-02). Decisions and counts that need an angle (the arc angle check, the flattening count, the sweep of an arc) use our own arctangent, built from IEEE 754 basic operations in the kernel (`angle.cpp`, REQ-G2D-233), so they are the same on every platform (D-055, tier 1; ours). So does the circular segment term φ − sin φ of the signed area, which decides `LOOP_DEGENERATE` (ours). Constructed points (flattened vertices, centres) use the platform's libm and may differ in the last bit across platforms (tier 3). So does the topology flattening of the loop tree (REQ-G2D-152), so its decisions are tier 1 for loops with arcs too (ours).
 
 ### Tolerances and curves ([research 01, Tolerances][tol] and [Curves][curves])
 
@@ -206,6 +237,91 @@ Release 1 kernels are single-threaded (Peter, 2026-10-02). Decisions and counts 
 | REQ-G2D-211 | WHEN `cleanup` drops a spike, THE function SHALL leave the loop's region and signed area unchanged. | test 12; property in exact rationals with random spikes | Released |
 | REQ-G2D-212 | THE `cleanup` function SHALL repeat its three passes, in a fixed order, until none changes the loop (ours). | test 12; cleaning twice equals once | Released |
 
+### Grid and topology tolerances ([research 01, Tolerances][tol])
+
+| ID | Requirement (EARS) | Verified by | Status |
+| --- | --- | --- | --- |
+| REQ-G2D-026 | WHERE a float stage decides whether features touch or duplicate each other, THE geometry2d module SHALL use t_topo from `ctx.tolerances.topology_tol_mm` (REQ-G2D-158, 163); crossings are decided exactly (REQ-G2D-160). | tests 7 and 24 | Released |
+| REQ-G2D-029 | THE geometry2d module SHALL take the grid unit u from `ctx.tolerances.grid_unit_mm` for the topology flattening and the Clipper2 scale of 10⁴ per mm, never from a literal or module-level state (REQ-FND-005). | review; a `ToleranceSet` test double that overrides `grid_unit_mm` changes the topology flattening's step count | Released |
+| REQ-G2D-030 | WHEN float loops go through a geometry2d Clipper2 call, THE geometry2d kernel SHALL return a result whose every vertex lies within 2.83 grid units of the input polylines (SRC-118; measured from the output, ours: input vertices inside a union or difference have no counterpart). | test 21 through `grid_union` (D-060) | Released |
+| REQ-G2D-031 | WHEN float loops have gone through a Clipper2 union, THE `point_in_region` function SHALL give the same result on the float input and on the integer result at every point farther than t_topo from every boundary, also where features lie between eps_len and t_topo apart. | test 21; this is research 01's measured claim that a union moves points by less than t_topo, not a consequence of REQ-G2D-030's 2.83 grid units | Released |
+| REQ-G2D-032 | WHEN `build_region` has built the PolyTree, THE geometry2d module SHALL take the region's topology from the integer result only and not re-decide it with a float-stage test. | review; features between eps_len and t_topo apart that merge on the grid stay merged in the returned region | Released |
+| REQ-G2D-033 | THE geometry2d kernel SHALL re-centre the input of each of its Clipper2 calls on the input's bounding box and round it to the grid u before the call (D-058, D-132; research 01, resolution chain, stage 3). | a region and a forced fallback pair, translated by several metres within REQ-G2D-034, give the same tree, the same region topology and vertex counts, region vertices within 6 grid units of the untranslated ones after translating back, and the same fallback answer | Released |
+| REQ-G2D-034 | IF the input of a geometry2d Clipper2 call spans 2^26 grid units (about 6711 mm) or more in x or y, THEN THE geometry2d kernel SHALL refuse the call with `REGION_TOO_LARGE` (error; the code ours) and not call Clipper2 (SRC-122; draft REQ-OFF-018). The limit is a declared parameter passed to the kernel (research 01, Parameters; REQ-G2D-230). | `build_region` on loops farther apart than the limit and `contained_by_difference` on such a pair are refused; just below the limit accepted | Released |
+
+### Flattening of regions and chains ([research 01, Flattening][flat])
+
+Slice 2 handles lines and arcs only (DEC-G2D-022); the t/2 rules for ellipse and spline edges are later parts.
+
+| ID | Requirement (EARS) | Verified by | Status |
+| --- | --- | --- | --- |
+| REQ-G2D-115 | WHERE the region kind is material, THE `flatten_loops` function SHALL flatten an arc with φ > 0 circumscribed and an arc with φ < 0 inscribed. | test 16 | Released |
+| REQ-G2D-116 | WHERE the region kind is air, THE `flatten_loops` function SHALL flatten an arc with φ > 0 inscribed and an arc with φ < 0 circumscribed, on outer boundaries and islands alike. | test 16 (the same arcs in a pocket flip; an island in a pocket) | Released |
+| REQ-G2D-117 | WHERE an open chain is flattened for a profile (D-025), THE `build_chain` function SHALL take the side the tool works on as the air side of every arc of the chain (REQ-G2D-113). | a chain of a line, a CCW and a CW arc, with the tool on the left and then on the right | Released |
+| REQ-G2D-118 | THE `build_region` function SHALL hand the loops to `flatten_loops` as the loop tree normalised them, not as they were given. | review; the side-correct flattenings of the regions of test 16, given with every loop reversed, are the same bit for bit | Released |
+| REQ-G2D-119 | WHEN `flatten_loops` flattens a region of lines and arcs, THE function SHALL return a boundary that lies in air or on the true boundary and within t of it, up to the allowance of REQ-G2D-110 and, on an arc the loop tree reversed, eps_len along the whole arc (its radius is then \|P_1 − C\|; ours). | test 16; property: random material and air regions of lines and arcs | Released |
+| REQ-G2D-124 | THE `build_region` function SHALL return the extra clearance 0 for a region of lines and arcs (ellipse and spline edges: later parts). | the regions of test 16 | Released |
+| REQ-G2D-125 | THE `build_chain` function SHALL return the extra clearance 0 for a chain of lines and arcs (ellipse and spline edges: later parts). | the chain of REQ-G2D-117 | Released |
+| REQ-G2D-127 | THE `flatten_loops` and `build_chain` functions SHALL flatten with t = t_flat from `ctx.tolerances.flatten_tol_mm` (research 01, Flattening). | at tol = 0.01 mm the arcs' step counts follow REQ-G2D-106 at t = 0.000397 mm | Released |
+| REQ-G2D-234 | IF the rows or IDs of `build_chain` break REQ-G2D-188 to 193 or have the wrong shape or dtype, the chain is empty, or a row does not start bit for bit where the previous one ends, THEN THE function SHALL reject them with the code of that rule, `CURVE_INVALID` for the shape, the empty chain and continuity; a chain whose last row ends where its first starts is accepted (ours). | one case per rule, adapted from test 20; an empty chain; a closed chain | Released |
+
+### Polygon regions and the flattening of curve rows ([research 01, Kernel arrays][arrays])
+
+| ID | Requirement (EARS) | Verified by | Status |
+| --- | --- | --- | --- |
+| REQ-G2D-183 | THE geometry2d module SHALL pass a polygon region across the kernel boundary as `points` (n, 2) float64 in mm, `loop_starts` (k,) int64, `source_ids` (n,) int64, the ID of the edge that starts at each vertex (D-059), and `fixed` (n,) uint8, the fixed-node flag, 0 or 1 (D-084; the values ours). | shapes and dtypes | Released |
+| REQ-G2D-184 | THE `loop_starts` array of a polygon region SHALL start at 0 and ascend. | [1, 4] and [0, 4, 4] are rejected; property: every region a function returns | Released |
+| REQ-G2D-185 | THE polygon region SHALL store each loop without repeating its first vertex at its end; the closing edge is implied. | as above | Released |
+| REQ-G2D-186 | THE polygon region SHALL hold at least 3 vertices in every loop. | as above | Released |
+| REQ-G2D-187 | IF polygon region arrays break REQ-G2D-183 to 186, or a point is not finite (ours), THEN `polygon_region` SHALL reject them with `REGION_INVALID` (error; the code ours) before any kernel computation. | one case per rule; an empty region (k = 0) is accepted | Released |
+| REQ-G2D-199 | WHEN a loop of curve rows is flattened, THE geometry2d module SHALL hold each joint between two rows once in the result, as the first point of the second row's flattening. | the loops of test 20 flatten into closed loops without repeated vertices | Released |
+| REQ-G2D-200 | WHEN curve rows are flattened, THE geometry2d module SHALL give each vertex the ID of the row whose flattened edge starts at it (D-059). | the line-and-arc loop of test 20: the line's ID on its first vertex, the arc's on the others | Released |
+
+### Loop tree ([research 01, Loop tree][tree])
+
+Rules 1 to 6 of research 01 on loops of lines and arcs. The rules run in this order, each on the loops that survived the one before: cleanup, the area tests, duplicates (each loop compared with the kept loops before it in input order), crossings, containment, depth and orientation (ours). Areas and lengths in REQ-G2D-157, 165 and 166 are those of the cleaned topology flattening; the orientation of REQ-G2D-175 is the sign of `signed_area` of the rows (ours). Open question 1 bears on REQ-G2D-160 to 163.
+
+| ID | Requirement (EARS) | Verified by | Status |
+| --- | --- | --- | --- |
+| REQ-G2D-151 | WHERE the loops are normalised by the loop tree, THE `point_in_region_exact` function SHALL compute a winding number of 1 at every point inside the region that is not ON, and 0 outside it. | property: normalised trees from the generator of test 7 | Released |
+| REQ-G2D-152 | THE loop tree SHALL replace every arc, for topology only, by its inscribed flattening within u (REQ-G2D-102 at t = u; the topology flattening; ours, research 01 says "two-sided"), its inner vertices computed with the kernel's own sine and cosine from IEEE 754 basic operations, like `basic_atan2` (REQ-G2D-018, DEC-G2D-003; ours). | the distance between each arc and its topology flattening is at most u; pinned vertex bits on every platform | Released |
+| REQ-G2D-153 | THE loop tree SHALL decide each containment probe with `point_in_region` on the exact lines and arcs. | tests 7 and 24 | Released |
+| REQ-G2D-154 | THE loop tree SHALL make every decision (cleanup, degeneracy, duplicates, crossings, parents, depths) independent of the operation tolerance tol (`ctx.tolerances.chord_tol_mm`). | the same tree for tol = 0.05 mm and 0.01 mm (D-029) | Released |
+| REQ-G2D-155 | THE loop tree SHALL clean the topology flattening of each loop with `cleanup` (REQ-G2D-204 to 212) before the tests of REQ-G2D-157 to 173, take every later test and probe from the cleaned flattening, and pass its `CLEANUP_SPIKE` diagnostics on (ours: the rows stay as given). | test 12's spike loop given to `loop_tree`; the same loop inside [0, 20]², starting at its spike tip outside the square, is the square's child | Released |
+| REQ-G2D-156 | IF a loop fails the area test of REQ-G2D-133, THEN THE loop tree SHALL drop it and report `LOOP_DEGENERATE` (warning) once. | test 19 (width 1e-7 mm) | Released |
+| REQ-G2D-157 | IF the cleaned topology flattening of a loop has \|A\| ≤ 1.5·t_topo·L, with its own area and length (ours), THEN THE loop tree SHALL drop the loop and report `LOOP_DEGENERATE` (warning). | test 19 (width 1e-5 mm dropped, 0.001 mm kept) | Released |
+| REQ-G2D-158 | THE loop tree SHALL treat two loops as duplicates exactly when every vertex of each topology flattening lies within t_topo of the other polyline (point-to-segment distance), both ways, whatever their orientations (ours). | test 7 (a duplicate loop); tests 7 and 24 (a square and its notched copy are not duplicates); a reversed copy | Released |
+| REQ-G2D-159 | WHEN loops are duplicates, THE loop tree SHALL keep the first in input order, with its source IDs, and report one `LOOP_DUPLICATE` (warning) per removed loop. | test 7; the pair in the other order keeps the other loop's IDs | Released |
+| REQ-G2D-160 | THE loop tree SHALL find crossings of a loop with itself and with other loops by exact tests (orient2d) on the topology flattenings: proper segment crossings, and boundaries that pass through each other where they meet at a vertex or along a shared stretch, decided by the cyclic order of the edges there (ours, research 01, rule 4: loops that cross). | test 7 (two crossing squares); a figure eight; a crossing by one rounding unit; [0, 10]² and [5, 15] × [0, 10], which meet only at vertices and shared stretches; a figure eight through a repeated vertex; loops that touch at a vertex or a shared edge without passing through do not cross | Released |
+| REQ-G2D-161 | IF loops cross, THEN THE loop tree SHALL report `LOOPS_CROSS` (error) and return their crossing points in `crossing_points`. | test 7 (two crossing squares) | Released |
+| REQ-G2D-162 | IF loops cross, THEN THE loop tree SHALL return no loops, only the crossings, and `build_region` no region (ours: a loop inside a dropped crossing loop would otherwise lose its parent and flip between material and air). | two crossing squares beside a valid loop: no loops, two crossing points; `build_region` returns no region | Released |
+| REQ-G2D-163 | WHEN the topology flattenings of two loops do not cross but come within t_topo of each other (segment-to-segment distance), shared vertices and edges included, THE loop tree SHALL treat them as touching and accept both. | test 7 (an island touching the outer wall); a shared edge, a shared vertex, a gap between eps_len and t_topo | Released |
+| REQ-G2D-164 | THE loop tree SHALL make the parent of a loop B the loop that contains B and lies inside every other loop containing B; a loop that no other loop contains has no parent. | test 7 (three nested squares; two side by side) | Released |
+| REQ-G2D-165 | THE loop tree SHALL test a loop B for containment only in loops with a larger \|A\|, except under REQ-G2D-166. | tests 7 and 24 | Released |
+| REQ-G2D-166 | WHEN the areas of two loops A and B differ by at most t_topo·(L_A + L_B), THE loop tree SHALL test containment both ways. | test 24 (the square and the rectangle [0, 10.001] × [0, 10]: the rectangle is the parent in either input order) | Released |
+| REQ-G2D-167 | THE loop tree SHALL decide whether A contains B by `point_in_region` of one probe of B against A alone: B ⊂ A when the winding number is not 0. | test 7 (a triangle inside the square) | Released |
+| REQ-G2D-168 | THE loop tree SHALL take as probe the first point farther than t_topo from A's topology flattening among, in this order, the vertices of B's cleaned topology flattening, the midpoints of its segments, and the projections of the vertices of A's cleaned topology flattening onto B's segments, each group in stored order (ours). | test 7 (the triangle (0, 0), (10, 0), (10, 10): the midpoint of its hypotenuse; the notch of 0.1 mm) and test 24 (the notch bottom); a probe from the projections | Released |
+| REQ-G2D-169 | IF no probe of B is farther than t_topo from A, THEN THE loop tree SHALL decide B ⊂ A exactly when the area of B minus A, from a Clipper2 difference of the topology flattenings with the NonZero fill rule, is less than half of B's area on the grid (ours: both areas from the grid). | test 24 through `contained_by_difference` against [0, 10]²: the triangle (0, 0), (10, 0), (5, −1) is not contained, the triangle (0, 0), (10, 0), (5, 1) is | Released |
+| REQ-G2D-170 | WHEN loops tested both ways each contain the other, one result from a probe and one from the fallback, THE loop tree SHALL keep the probe's result. | test 24 (the notched square is the child in either input order) | Released |
+| REQ-G2D-171 | WHEN loops tested both ways each contain the other by two fallback results, THE loop tree SHALL make B the inner loop when the area of B minus A is less than that of A minus B. | the tie rule through `fallback_inner`, in both input orders | Released |
+| REQ-G2D-172 | WHEN both fallback differences of REQ-G2D-171 are equal, THE loop tree SHALL make the loop earlier in input order the inner one. | as above, with equal differences | Released |
+| REQ-G2D-173 | WHEN loops tested both ways each contain the other by two probe results, THE loop tree SHALL report them with `LOOPS_CROSS` (error), with no crossing points of their own (ours). | two loops that overlap without a proper crossing, their areas within the band of REQ-G2D-166 | Released |
+| REQ-G2D-174 | THE loop tree SHALL give each kept loop a depth equal to its number of ancestors. | test 7 (depths 0, 1, 2; side by side 0 and 0) | Released |
+| REQ-G2D-175 | THE loop tree SHALL normalise orientation, every loop at even depth CCW and every loop at odd depth CW, so the inside of every region lies on the left of its loops, whether it is material or air. | the nested squares of test 7 in every combination of input orientations | Released |
+
+### Machining region ([research 01, Loop tree][tree], rule 7)
+
+| ID | Requirement (EARS) | Verified by | Status |
+| --- | --- | --- | --- |
+| REQ-G2D-176 | THE `build_region` function SHALL return as the machining region the Clipper2 PolyTree of the side-correct flattened, normalised loops (`flatten_loops`), built with the NonZero fill rule, also where it joins touching loops differently from the loop tree (resolution chain, stage 5). | differential: test 7 (1000 random nested inputs); the two Clipper2 2.0.1 cases of research 01, rule 7 (an island sharing an edge with its parent, an island touching its hole at a vertex) | Held: the fill rule waits for open question 2 |
+| REQ-G2D-177 | THE `build_region` function SHALL return the same point set with the NonZero fill rule as with EvenOdd on normalised loops. | differential: both agree at random points farther than t_topo from every boundary | Held: false where flattened loops overlap (open question 2) |
+| REQ-G2D-178 | THE `point_in_region` function SHALL give the same result on the loop tree's loops and on the PolyTree's at every point farther than t_topo from every boundary of the loop tree for loops of lines, and farther than t_flat + 3 grid units for loops with arcs (ours: research 01 says t_topo, but the side-correct flattening moves an arc's boundary by up to t_flat, 12·t_topo at tol = 0.05 mm; the 3 grid units hold 2.83 of rounding and the eps_len allowances of REQ-G2D-110 and 119 while eps_len ≤ 0.08 grid units). | differential: test 7, its generator with and without arcs | Released, waits for open question 4 |
+| REQ-G2D-179 | WHERE all loops are more than 2·t_flat + 6 grid units apart (ours: research 01 says t_topo; closer loops can overlap once flattened, and Clipper2 merges them), THE loop tree SHALL give each loop a depth whose parity equals the hole flag of its PolyTree loop. | differential: test 7, distances measured on the true curves | Released, waits for open question 4 |
+| REQ-G2D-180 | WHEN `build_region` takes its region from the PolyTree, THE geometry2d kernel SHALL give each output edge the source ID of the flattened input edge nearest to its midpoint, the lower row index on a tie (D-059 for the IDs; its tie by edge class does not arise, since a region has one kind; ours). | a square with one arc edge: every output edge of the arc's flattened part carries the arc's ID | Released |
+| REQ-G2D-235 | WHEN every loop given to `build_region` is dropped or the PolyTree is empty, THE function SHALL return an empty region (k = 0) with `REGION_EMPTY` (warning) (ours; AGENTS.md, typed diagnostics for expected outcomes). | test 19's two thin loops alone; a loop smaller than the grid | Released |
+| REQ-G2D-236 | THE `loop_tree` and `build_region` functions SHALL report their diagnostics in input-loop order, each `location` naming the input indices ("loop 3", "loops 2 and 5"), with `crossing_loops` lower index first and `crossing_points` sorted by loop pair, then x, then y (D-055; ours). | test 7's inputs in two orders; three crossing squares | Released |
+| REQ-G2D-181 | WHEN the PolyTree has a pinch point, THE geometry2d kernel SHALL split the loop there by exact integer tests into loops that each keep the traversal of their vertices, and mark the vertices at that point as fixed nodes (D-084; the traversal ours). | an island touching its hole at a vertex comes back split, a CW hole and a CCW island, its vertices there flagged | Released |
+
 ## Invariants
 
 - Predicates are pure functions of their input doubles, the same on every platform (REQ-G2D-007 to 011, 018, 021).
@@ -214,11 +330,16 @@ Release 1 kernels are single-threaded (Peter, 2026-10-02). Decisions and counts 
 - The sign of `signed_area` is right whenever \|A\| > eps_len·L, for loops within its precondition, and flips under reversal (REQ-G2D-001, 002, 128 to 133; DEC-G2D-016).
 - `point_in_region` returns one of IN, OUT and ON, and for one loop does not depend on its orientation (REQ-G2D-134 to 150).
 - Cleanup moves no vertex by more than eps_len, keeps the area and is idempotent (REQ-G2D-204 to 212).
-- No tolerance is a literal; fixed values are declared parameters (REQ-G2D-025, 230).
+- No tolerance is a literal; fixed values are declared parameters (REQ-G2D-025, 029, 230).
+- Every input loop of `loop_tree` ends in exactly one place: in the tree, dropped with `LOOP_DEGENERATE` or removed with `LOOP_DUPLICATE`; when any loops cross, the tree holds no loop and the crossings are reported with `LOOPS_CROSS` (REQ-G2D-155 to 173).
+- Depths and orientations agree; the tree does not depend on tol, and on input order only through the tie rules (REQ-G2D-154, 159, 164 to 175).
+- A side-correct flattened boundary lies in air or on the true boundary (REQ-G2D-115 to 119).
+- Farther than t_flat + 3 grid units from every boundary, the loop tree and the PolyTree classify points alike (REQ-G2D-178); after a union, farther than t_topo (REQ-G2D-031).
+- Arrays at the kernel boundary satisfy the layout (REQ-G2D-183 to 187, 199 to 201, 203).
 
 ## Tolerance budget
 
-The budget is foundation's (REQ-FND-009). Slice 1 spends none of it: `flatten` takes its t from the caller, who passes t_flat for an operation and 0.001 mm for stock sizing (research 01, Flattening). It reads eps_len and eps_ang from `ctx.tolerances`. One declared parameter, the largest flattening step π/2 rad (research 01, Parameters), becomes an entry of foundation's `tolerance_defaults.toml` (a foundation SPEC change of plan 0003, step 4), passed to the kernel as a plain value; numeric guards (10^6 vertices, 3355 mm) are named constants with their source (REQ-G2D-230).
+The budget is foundation's (REQ-FND-009). Slice 1 spends none of it: `flatten` takes its t from the caller, who passes t_flat for an operation and 0.001 mm for stock sizing (research 01, Flattening). It reads eps_len and eps_ang from `ctx.tolerances`. Slice 2 spends t_flat (`ctx.tolerances.flatten_tol_mm`) on the side-correct flattening of `flatten_loops` and `build_chain` (REQ-G2D-127), and takes t_topo (`topology_tol_mm`) for touching, duplicates, probes and the both-ways band, and u (`grid_unit_mm`) for the topology flattening and the Clipper2 grid (REQ-G2D-026, 029). The PolyTree's rounding, up to 2.83 grid units (REQ-G2D-030), is not yet booked in the budget (Open questions, 3). The span limit of 2^26 grid units becomes a declared parameter in foundation's `tolerance_defaults.toml`, like the largest flattening step (research 01, Parameters; DEC-G2D-006; a foundation change of plan 0004, step 6), passed to the kernel as a plain value. The factors 1.5 (REQ-G2D-157) and ½ (REQ-G2D-169) are research 01's rules, not tuning shares: named constants in Python with their source, passed to the kernel as plain values, like the area's limits (DEC-G2D-010; ours). One declared parameter, the largest flattening step π/2 rad (research 01, Parameters), becomes an entry of foundation's `tolerance_defaults.toml` (a foundation SPEC change of plan 0003, step 4), passed to the kernel as a plain value; numeric guards (10^6 vertices, 3355 mm) are named constants with their source (REQ-G2D-230).
 
 | ID | Requirement (EARS) | Verified by | Status |
 | --- | --- | --- | --- |
@@ -237,6 +358,15 @@ The budget is foundation's (REQ-FND-009). Slice 1 spends none of it: `flatten` t
 | Collinear points, P_2 within eps_len of P_1P_3, or P_1 = P_3, in `circle_through` | `None` | none |
 | A NaN or infinite point given to an exact predicate, `circle_through`, `closest_point`, `point_in_region` or `cleanup` | programming error | `ValueError` (ours) |
 | t not positive and finite, or so small that the step count exceeds an int; `signed_area` given more than one loop | programming error | `ValueError` (ours) |
+| A loop given to `loop_tree` or `build_region` that fails the area test, or whose topology flattening has \|A\| ≤ 1.5·t_topo·L | loop dropped | `LOOP_DEGENERATE` (warning), once per loop |
+| Duplicate loops | the first in input order kept, with its source IDs | `LOOP_DUPLICATE` (warning), one per removed loop |
+| Loops that cross, or contain each other by two probes | a tree with no loops, only the crossings; no region | `LOOPS_CROSS` (error), one per pair or self-crossing loop (ours) |
+| Input of a geometry2d Clipper2 call spanning 2^26 grid units or more | refused, Clipper2 not called; no tree when the fallback is refused, no region | `REGION_TOO_LARGE` (error; ours) |
+| Every loop of `build_region` dropped, or the PolyTree empty | an empty region | `REGION_EMPTY` (warning; REQ-G2D-235) |
+| Clipper2 reports failure in the fallback difference, the PolyTree or `grid_union` | no containment decision, no tree, no region | `REGION_FAILED` (error; ours, D-132 gives `OFFSET_FAILED` to the offset only); checked by review, Clipper2 gives no way to force it |
+| Polygon region arrays that break the layout | rejected before any kernel computation | `REGION_INVALID` (error; ours) |
+| `build_chain` rows that break a curve-row rule or are not continuous | no chain | `CURVE_INVALID` or `ARC_INCONSISTENT` (error), as for `curve_rows` |
+| An unknown region kind or air side | programming error | `ValueError` (ours) |
 
 ## Algorithms and design inputs
 
@@ -248,28 +378,40 @@ The budget is foundation's (REQ-FND-009). Slice 1 spends none of it: `flatten` t
 | Distances; circle through three points | research 01 (the arc rule own design, 2026-10-02); SRC-032, p. 359 |
 | Inscribed and circumscribed flattening | Altintas 2012 (SRC-119), eqs. 5.85–5.86, Table 5.2; the circumscribed form, count rule and side rule own design, research 01 (2026-10-02) |
 | Signed area, orientation bound; point in region; cleanup; arc bounding boxes | own design, research 01 (2026-10-02); the bound's arc term own design, DEC-G2D-016 (2026-10-03) |
+| Side rule for regions and chains | own design, research 01, Flattening (2026-10-02), from the error-side rule of ADR 0005; D-058 |
+| Loop tree, rules 1 to 6 | own design, research 01, Loop tree (2026-10-02), from the depth rule of the review of 2026-09-23 and the SRC-032 note |
+| Fallback difference and PolyTree (rule 7) | Clipper2 2.0.1 (SRC-122) |
+| Grid, re-centring, the 2^26 limit; 2.83 grid units | D-058, D-132; SRC-032 note; SRC-122; SRC-118 |
+| Source IDs and pinch splits after a Clipper2 call | D-059, D-084 |
 
 ## Test plan
 
-- Unit: research 01's tests 1 to 6, 8, 9, 12, 17 to 20 and 22, and the Shewchuk note's test ideas; new tests where the table says so.
-- Property: exact rationals (`fractions`) as the oracle for every predicate, the area sign and cleanup's area; random arcs and bulges; flattening bounds on random arcs.
-- Differential and cross-platform: the build guard (note test 7) and tests 1, 2, 5 and 6 (test 23) and test 12 on the three systems in CI.
+- Unit: research 01's tests 1 to 9, 12, 16 to 22 and 24, and the Shewchuk note's test ideas; new tests where the table says so.
+- Property: exact rationals (`fractions`) as the oracle for every predicate, the area sign and cleanup's area; random arcs and bulges; flattening bounds on random arcs; random nested loops of lines and arcs (the generator of test 7) for the loop tree, the winding of normalised loops and the side rule, and for the invariants: every input loop ends in exactly one place (kept + degenerate + duplicate = n, or no loops with `LOOPS_CROSS`), the same tree under a permutation of loops that leaves the tie rules out, depths and orientations that agree.
+- Differential: the loop tree against Clipper2's PolyTree (test 7) and point in region before and after a Clipper2 union (test 21), both through geometry2d's kernel (D-060); shapely or point sampling as independent oracles, test only (D-060).
+- Cross-platform: the build guard (note test 7) and tests 1, 2, 5, 6, 7 and 24 (test 23) and test 12 on the three systems in CI.
 
 ## Size estimate
 
-About 800 NLOC of Python and 900 of C++ (`predicates.c` not counted), and 2500 lines of tests, in eight steps of plan 0003. Budget in `architecture/modules.yaml`: 1700 NLOC (Peter, 2026-10-03); the slice 2 plan raises it with a reason.
+Slice 1: about 800 NLOC of Python and 900 of C++ (`predicates.c` not counted), 1561 NLOC measured on 2026-10-03, and 2500 lines of tests. Slice 2: about 1300 NLOC (Clipper2 not counted) and 2550 lines of tests in eight steps of plan 0004. Budget in `architecture/modules.yaml`: 3000 NLOC (Peter, 2026-10-07, DEC-G2D-022; 1700 for slice 1, DEC-G2D-017).
 
 ## Open questions
 
-None for slice 1. Choices marked "(ours)" stand until Peter changes them in review.
+Choices marked "(ours)" stand until Peter changes them in review. Slice 2 leaves four questions for Peter; none blocks steps 2 and 3 of plan 0004.
+
+1. **Curves that touch cross in their topology flattenings** (REQ-G2D-152, 160, 161, 163; step 4). An island circle of radius 5 mm tangent inside a wall circle of radius 10 mm is touching geometry, but the flattenings within u of both circles cross properly in 42 of 44 measured placements of the two loops' start points (2026-10-07, `flatten` at t = u, exact segment tests): the wall's chord cuts up to u inside its circle right where the island's polygon reaches it. The same happens wherever a loop touches a convex arc from inside its circle, an island's straight edge tangent to a round pocket wall included. Rule 4 would report `LOOPS_CROSS`, and by REQ-G2D-162 no region is built. Proposal: a crossing of two topology flattenings counts only when one loop also has a vertex of its flattening farther than t_topo from the other on each side, inside and outside it; otherwise the loops touch. For a loop that touches itself: it crosses itself only when points farther than t_topo from it have winding numbers of both signs, or of magnitude above 1. Or does topic 25 guarantee that touching curves never reach the tree?
+2. **The fill rule where flattened loops overlap** (REQ-G2D-176, 177, held; step 8). Loops less than 2·t_flat apart, touching loops with arcs included, can overlap once both are flattened into the air between them (2·t_flat is about 0.005 mm at tol = 0.05 mm). In a pocket, an island that overlaps the wall, or two islands that overlap each other, give winding −1 there: NonZero and EvenOdd count it as air, though it may be wall or island material. With an island in a hole of a material region, or two outer parts that overlap, the winding is 2: NonZero is right and EvenOdd wrong. So research 01, rule 7's claim that NonZero gives the same result as EvenOdd on normalised loops fails where loops overlap. Proposal: build the PolyTree with Clipper2's Positive fill rule, which gives the right side in every case and equals NonZero and EvenOdd wherever the winding is 0 or 1; REQ-G2D-177 then compares the rules only there.
+3. **The PolyTree's rounding in the budget** (REQ-G2D-030; plan 0005). D-132 biases the offset by 3 grid units, which pays for one Clipper2 call's move of up to 2.83 grid units; the 6 grid units of the band are its width, not a margin two calls can share. `build_region` is a Clipper2 call before the offset's own: it may move the region's boundary up to 2.83 grid units toward material, and the offset could then end at t − 2.66 grid units, a gouge. Nothing yet keeps `build_region`'s output in air (REQ-G2D-119 covers `flatten_loops` only). Proposal for plan 0005: build the PolyTree inside the offset's kernel call, so the rounding is paid once; or bias the region by 3 grid units toward air and widen the band to about 9 grid units. To settle with research 02.
+4. **Deviations from research 01 to approve** (REQ-G2D-030, 119, 178, 179). REQ-G2D-178 and 179 compare the loop tree with the PolyTree beyond the side-correct flattening (t_flat + 3 grid units for loops with arcs; loops 2·t_flat + 6 grid units apart), where research 01's rule 7 and test 7 say t_topo, which no arc region can meet. REQ-G2D-030 measures test 21's 2.83 grid units from the output only, since input vertices inside a union have no counterpart. REQ-G2D-119 allows eps_len along arcs the tree reversed. Proposal: approve them, and research 01 (rule 7, tests 7 and 21) is updated in the pull request that answers this.
 
 ## Later parts
 
 No requirements; each line names the work and where its drafted requirements and open questions are (the draft of 2026-10-02, commit d1a0949, REQ IDs as drafted).
 
-- Slice 2: the loop tree, `build_region` and the PolyTree, the side rule for regions and chains (`flatten_loops`, `build_chain`), polygon region arrays and the flattening of curve-row loops, u from the `Context`, the Clipper2 grid and resolution chain, with the topic 02 offsets and the D-132 kernel changes (REQ-G2D-019, 026, 029 to 034, 115 to 125, 127, 151 to 187, 198 to 200).
+- Offsets and Booleans of topic 02, with the D-132 kernel changes: plan 0005, once research 02 is in the repository (DEC-G2D-022). Also the two rules of research 01, Flattening, that bind the operation (the extra clearance added to its offset).
+- Same decisions for any thread count (REQ-G2D-019): release 1 kernels are single-threaded (DEC-G2D-001, 022).
 - Cleanup of curve loops: tiny arcs and zero-length lines removed with their neighbours joined, open chains (REQ-G2D-046; the cleanup questions of the draft).
-- Ellipse arcs and NURBS: types, import rules, eps_par, arc recognition, their flattening, closest points and bounding boxes, spline edges in area and point in region (REQ-G2D-028, 054 to 090, 114, 129, 146, 147, 215).
+- Ellipse arcs and NURBS: types, import rules, eps_par, arc recognition, their flattening, closest points and bounding boxes, spline edges in area and point in region; in regions and chains, every curved edge flattened within t/2 and the extra clearance t/2, and their topology flattening in the loop tree (REQ-G2D-028, 054 to 090, 114, 120 to 123, the t/2 halves of 124 and 125, 129, 146, 147, 198, 215).
 - Generic curve operations: evaluate, derivatives, split, reverse, subcurve, invert, `to_nurbs` (REQ-G2D-036, 074 to 079).
 - orient3d and 3D vectors (REQ-G2D-004, 012).
 - Curve transforms: applying a `Frame` to curves and the sweep rule, `Frame` in foundation (REQ-G2D-182; research 01 test 10).
@@ -289,6 +431,7 @@ No requirements; each line names the work and where its drafted requirements and
 - 2026-10-03: research 01, Point in region, updated to Peter's answers of step 8 (DEC-G2D-012: ON in the sweep, the radial connector, the nearer radius) on his answer 2 of 2026-10-03; the requirements are unchanged.
 - 2026-10-03: Peter's answer 1 of 2026-10-03: the arc term of the area's error bound derived (DEC-G2D-016); the segment terms are summed exactly on both paths (REQ-G2D-131, 132); the precondition r·min(1, φ²) ≤ 10^7 mm and E ≤ 10^9 mm stated in the Public interface. Research 01, Area and orientation, updated in the same pull request.
 - 2026-10-03: Peter's answer 5 of 2026-10-03 on the spec gaps of the reviews: `make_arc` checks P_1 against a tiny circle before turning it into a line (REQ-G2D-047, DEC-G2D-018); arcs up to r = 10^9 mm as a precondition (DEC-G2D-019; Peter named 10^10 mm, which measurement refuted); t ≥ eps_len for `flatten` as a precondition (DEC-G2D-020); the arctangent's own requirement REQ-G2D-233 (DEC-G2D-021). The translation limit E ≤ 10^9 mm of `signed_area` is DEC-G2D-016.
+- 2026-10-07: slice 2 cut on Peter's answers to plan 0004 (DEC-G2D-022; plan 0004, step 1): released REQ-G2D-026, 029 to 034, 115 to 119, 124 and 125 (lines and arcs, extra clearance 0), 127, 151 to 181, 183 to 187, 199 and 200; new REQ-G2D-234 (`build_chain`'s rows), 235 (`REGION_EMPTY`) and 236 (order of diagnostics and crossings) after the test audit. Lines and arcs only: 152 and 153 lose their ellipse and spline halves. REQ-G2D-018 and 231 extended to the loop tree. Interface: `loop_tree`, `flatten_loops`, `build_region`, `build_chain`, `polygon_region` and their types; loops as `CurveRows`; new codes `REGION_TOO_LARGE`, `REGION_FAILED`, `REGION_INVALID` (ours). Stay in Later parts: 019, 120 to 123, the t/2 halves of 124 and 125, 182 (with curve transforms), 198. Open questions 1 to 4 for Peter. Budget 3000 NLOC. Spec-reviewer round, all findings taken: REQ-G2D-178 and 179 compare beyond the side-correct flattening (t_flat + 3 grid units, 2·t_flat + 6 grid units; research 01 says t_topo); 176 and 177 held for open question 2; crossings found exactly also at shared vertices and stretches (160); no loops and no region when loops cross (162); probes and later tests from the cleaned topology flattening (155, 168); the topology flattening from basic-operation sine and cosine, so REQ-G2D-018 holds for arcs (152); REQ-G2D-030 measured from the output; pinch-split parts keep their traversal (181); Clipper2 built with REQ-G2D-014's flags; the 2^26 limit a declared parameter; `REGION_EMPTY`; rule order, areas and the reversal order stated.
 
 [r01]: ../../../docs/research/01-foundations.md
 [signs]: ../../../docs/research/01-foundations.md#vectors-and-exact-signs
@@ -300,6 +443,7 @@ No requirements; each line names the work and where its drafted requirements and
 [area]: ../../../docs/research/01-foundations.md#area-and-orientation
 [pir]: ../../../docs/research/01-foundations.md#point-in-region
 [arrays]: ../../../docs/research/01-foundations.md#kernel-arrays
+[tree]: ../../../docs/research/01-foundations.md#loop-tree
 [helpers]: ../../../docs/research/01-foundations.md#helpers
 [tests]: ../../../docs/research/01-foundations.md#tests
 [shewchuk]: ../../../docs/research/01-foundations.md#shewchuk-1997-adaptive-precision-floating-point-arithmetic-and-fast-robust-geometric-predicates
