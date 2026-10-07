@@ -47,11 +47,11 @@ class _Candidate:
     polyline: NDArray[np.float64]
     area: float
     length: float
+    box: NDArray[np.float64]  # x_min, y_min, x_max, y_max
 
 
 def _covered(a: NDArray[np.float64], b: NDArray[np.float64], t_topo: float) -> bool:
-    inside, outside = _kernels.geometry2d.crossing_depth(a, b, t_topo)
-    return not (inside or outside)  # no point of a farther than t_topo from b
+    return _kernels.geometry2d.covered_by(a, b, t_topo)  # no point of a farther than t_topo
 
 
 def _duplicate_of(
@@ -60,10 +60,8 @@ def _duplicate_of(
     t_topo = ctx.tolerances.topology_tol_mm
     # Loops within t_topo of each other both ways have boxes within t_topo of each other; eps_len
     # absorbs the rounding of the cover (DEC-G2D-030).
-    box = np.concatenate([candidate.polyline.min(axis=0), candidate.polyline.max(axis=0)])
-    near = np.flatnonzero(
-        (np.abs(boxes - box) <= t_topo + ctx.tolerances.length_eps_mm).all(axis=1)
-    )
+    slack = t_topo + ctx.tolerances.length_eps_mm
+    near = np.flatnonzero((np.abs(boxes - candidate.box) <= slack).all(axis=1))
     for k in near.tolist():
         other = kept[k]
         if _covered(candidate.polyline, other.polyline, t_topo) and _covered(
@@ -108,9 +106,10 @@ def screen_loops(loops: CurveRows, ctx: Context) -> Result[Screened]:
             message = f"|A| = {abs(area):.3g} mm² of its flattening is at most 1.5·t_topo·L"
             notes.append((i, Diagnostic("LOOP_DEGENERATE", Severity.WARNING, message, where)))
             continue
-        candidate = _Candidate(i, polyline, area, length)
-        boxes = np.array([[*c.polyline.min(axis=0), *c.polyline.max(axis=0)] for c in kept])
-        original = _duplicate_of(candidate, kept, boxes.reshape(-1, 4), ctx)
+        box = np.concatenate([polyline.min(axis=0), polyline.max(axis=0)])
+        candidate = _Candidate(i, polyline, area, length, box)
+        boxes = np.array([c.box for c in kept]).reshape(-1, 4)
+        original = _duplicate_of(candidate, kept, boxes, ctx)
         if original is not None:
             message = f"loop {i} duplicates loop {original.index} within t_topo; removed"
             location = f"loops {original.index} and {i}"
