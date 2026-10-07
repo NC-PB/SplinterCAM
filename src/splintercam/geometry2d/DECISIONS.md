@@ -267,3 +267,12 @@
 - Rejected: libm for the topology flattening (tier 3 only); `basic_sin_cos` for every flattening (it would drop the flag but move slice 1's `flatten` output, a change of DEC-G2D-004's libm constructions for another step to decide); a correctly rounded sine (more code, nothing needs it); brute force over all segment pairs (10^10 operations for loops of 10^5 segments); an uncapped nearest-segment search (needs a tree; no caller wants the far distance); the shared arc-sweep kernel of plan 0003's backlog (polylines need no sweep test; it stays in the backlog).
 - Where: REQ-G2D-029, 152, 158, 168; `kernel/angle.cpp`, `kernel/flatten.cpp`, `kernel/distance.cpp`, `_loops.py`, `_distances.py`.
 
+## DEC-G2D-030: the loop tree's first rules
+
+- Date: 2026-10-08; decided by: ours (plan 0004, step 4a)
+- Status: Active
+- Decision: `screen_loops` runs rules 1 to 3 per loop in input order, a Python loop over loops (the split rule): `cleanup` of the loop's topology flattening, the area test of REQ-G2D-133 on its rows with `signed_area`, the thinness test on the cleaned flattening's area and length, then the duplicate test against the kept loops before it, only where bounding boxes come within t_topo, both ways through `polyline_distances`. The flattening's area and length come from the area kernel's exact path (`polygon_area_length`), so the thinness decision is the same everywhere. Diagnostics carry `location` "loop i" (or "loops i and j" for a duplicate, j removed) and are ordered by the loop they concern, stable. The self-crossing resolution of REQ-G2D-238, which the SPEC places before the area tests, joins in step 4c.
+- Why: REQ-G2D-018 makes the kept loops a tier 1 decision; a NumPy sum may change its order with the CPU's SIMD support (DEC-G2D-004), the exact sum cannot. Comparing a loop only with kept loops makes "the first in input order" well defined when duplicates chain (A, B within t_topo, B, C within t_topo, A, C not).
+- Rejected: NumPy's shoelace sum for the thinness test (tier 2 at best); comparing with removed loops too (chains would depend on more than the input order); a kernel for the pair loop (loops are few; the per-pair work is already in `polyline_distances`).
+- Where: REQ-G2D-154 to 159, 236; `_screen.py`, `_area.py`.
+

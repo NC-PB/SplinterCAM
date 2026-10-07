@@ -1,6 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 """The signed area of a loop of lines and arcs (research 01, Area and orientation)."""
 
+import math
+
+import numpy as np
+from numpy.typing import NDArray
+
 from splintercam import _kernels
 from splintercam.foundation import Context, Diagnostic, Result, Severity
 
@@ -33,3 +38,16 @@ def signed_area(loop: CurveRows, ctx: Context) -> Result[float]:
         message = f"|A| = {abs(area):.3g} mm² is at most eps_len·L for L = {length:.6g} mm"
         return Result(None, (Diagnostic("LOOP_DEGENERATE", Severity.WARNING, message),))
     return Result(area)
+
+
+def polygon_area_length(points: NDArray[np.float64]) -> tuple[float, float]:
+    """The signed area and the length of a closed polyline ((n, 2), n >= 3), summed exactly about
+    the centre of its bounding box, so a decision on them is the same everywhere (internal; the
+    loop tree's thinness test, REQ-G2D-157).
+    """
+    following = np.roll(points, -1, axis=0)
+    nan = np.full((points.shape[0], 2), math.nan)
+    rows = np.ascontiguousarray(np.hstack([points, following, nan, np.zeros((points.shape[0], 1))]))
+    low, high = points.min(axis=0), points.max(axis=0)
+    centre = (low + high) / 2
+    return _kernels.geometry2d.loop_area(rows, float(centre[0]), float(centre[1]), True)
