@@ -39,8 +39,8 @@ def signed_area(loop: CurveRows, ctx: Context) -> Result[float]:
 
 
 def polygon_area_length(points: NDArray[np.float64]) -> tuple[float, float]:
-    """The signed area and the length of a closed polyline ((n, 2), n >= 3), summed exactly about
-    the centre of its bounding box, so a decision on them is the same everywhere (internal; the
+    """The signed area and the length of a closed polyline ((n, 2), n >= 1), the area summed
+    exactly about the centre of its bounding box, both the same on every platform (internal; the
     loop tree's thinness test, REQ-G2D-157).
     """
     n = points.shape[0]

@@ -143,7 +143,8 @@ std::vector<std::size_t> segments_near(const Grid& grid, const Segment& s) {
     for (const Entry& c : probe.entries) {
         for (std::int64_t ix = c.ix - reach; ix <= c.ix + reach; ++ix) {
             const auto first = std::ranges::lower_bound(grid.entries, Entry{ix, c.iy - reach, 0});
-            const auto last = std::ranges::lower_bound(grid.entries, Entry{ix, c.iy + reach + 1, 0});
+            const auto last =
+                std::ranges::lower_bound(grid.entries, Entry{ix, c.iy + reach + 1, 0});
             for (auto e = first; e != last; ++e) {
                 found.push_back(e->segment);
             }
@@ -164,18 +165,24 @@ constexpr Span empty_span{.low = 1.0, .high = 0.0};
 // t with g0 + t·g1 in [lo, hi].
 Span linear_span(double g0, double g1, Span range) {
     if (g1 == 0.0) {
-        return g0 >= range.low && g0 <= range.high
-                   ? Span{-std::numeric_limits<double>::infinity(),
-                          std::numeric_limits<double>::infinity()}
-                   : empty_span;
+        return g0 >= range.low && g0 <= range.high ? Span{-std::numeric_limits<double>::infinity(),
+                                                          std::numeric_limits<double>::infinity()}
+                                                   : empty_span;
     }
     const double t1 = (range.low - g0) / g1;
     const double t2 = (range.high - g0) / g1;
     return {std::min(t1, t2), std::max(t1, t2)};
 }
 
+struct Ray { // the points p + t·d
+    Point2 p;
+    Point2 d;
+};
+
 // t with |p + t·d − c| <= r (a quadratic).
-Span disc_span(Point2 p, Point2 d, Point2 c, double r) {
+Span disc_span(const Ray& ray, Point2 c, double r) {
+    const Point2 p = ray.p;
+    const Point2 d = ray.d;
     const double fx = x(p) - x(c);
     const double fy = y(p) - y(c);
     const double a = x(d) * x(d) + y(d) * y(d);
@@ -205,10 +212,12 @@ Span covered(const Segment& s, const Segment& e, double r) {
         strip = {std::max(along.low, across.low), std::min(along.high, across.high)};
     }
     Span all = empty_span;
-    for (const Span part : {strip, disc_span(s.a, d, e.a, r), disc_span(s.a, d, e.b, r)}) {
+    const Ray ray{.p = s.a, .d = d};
+    for (const Span part : {strip, disc_span(ray, e.a, r), disc_span(ray, e.b, r)}) {
         if (part.low <= part.high) {
-            all = all.low > all.high ? part
-                                     : Span{std::min(all.low, part.low), std::max(all.high, part.high)};
+            all = all.low > all.high
+                      ? part
+                      : Span{std::min(all.low, part.low), std::max(all.high, part.high)};
         }
     }
     return {std::max(all.low, 0.0), std::min(all.high, 1.0)};
@@ -249,13 +258,13 @@ void meet(const Segment& s, const Segment& e, std::vector<Point2>& out) {
     if (o1 * o2 < 0 && o3 * o4 < 0) {
         const Point2 d{x(s.b) - x(s.a), y(s.b) - y(s.a)};
         const Point2 w{x(e.b) - x(e.a), y(e.b) - y(e.a)};
-        const double t = ((x(e.a) - x(s.a)) * y(w) - (y(e.a) - y(s.a)) * x(w)) /
-                         (x(d) * y(w) - y(d) * x(w));
+        const double t =
+            ((x(e.a) - x(s.a)) * y(w) - (y(e.a) - y(s.a)) * x(w)) / (x(d) * y(w) - y(d) * x(w));
         out.push_back({x(s.a) + t * x(d), y(s.a) + t * y(d)});
         return;
     }
-    for (const auto& [q, other] : {std::pair{s.a, e}, std::pair{s.b, e}, std::pair{e.a, s},
-                                   std::pair{e.b, s}}) {
+    for (const auto& [q, other] :
+         {std::pair{s.a, e}, std::pair{s.b, e}, std::pair{e.a, s}, std::pair{e.b, s}}) {
         if (on_segment(q, other)) {
             out.push_back(q);
         }
@@ -343,4 +352,3 @@ std::vector<Point2> contact_points(const Polylines& a, const Polylines& b, doubl
 }
 
 } // namespace splintercam::geometry2d
-

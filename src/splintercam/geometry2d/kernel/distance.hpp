@@ -44,4 +44,3 @@ struct Depth {
                                                  double limit);
 
 } // namespace splintercam::geometry2d
-
