@@ -51,6 +51,7 @@ Total: about 1850 added lines of code (about 1300 NLOC) and 2550 of tests, in ni
 
 - `screen_loops` (REQ-G2D-154 to 159, 236): rules 1 to 3 on the topology flattenings, the thinness test on exact sums (`polygon_area_length`), duplicates against the kept loops only. Choices in DEC-G2D-030.
 - Step 3's pull request 38 merged with a failing sanitize job: libasan preloaded without libstdc++ aborted on the first kernel exception. Fixed in pull request 39 (`tools/lib/cmd_test.py` preloads libstdc++; sanitizer reports reach the log).
+- Test audit: boundary cases added (the thinness limit, t_topo exactly, a chain of near-duplicates, both orders, arcs, the cleaned flattening in rules 2 and 3, `polygon_area_length`). The property test of independence from tol and input order waits for step 5, where the whole tree exists.
 - `tools/check`: PASS (11 of 14). Next: 4b.
 
 ### 2026-10-08, step 3: topology flattening and batched distances

@@ -1,8 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """The signed area of a loop of lines and arcs (research 01, Area and orientation)."""
 
-import math
-
 import numpy as np
 from numpy.typing import NDArray
 
@@ -45,9 +43,10 @@ def polygon_area_length(points: NDArray[np.float64]) -> tuple[float, float]:
     the centre of its bounding box, so a decision on them is the same everywhere (internal; the
     loop tree's thinness test, REQ-G2D-157).
     """
-    following = np.roll(points, -1, axis=0)
-    nan = np.full((points.shape[0], 2), math.nan)
-    rows = np.ascontiguousarray(np.hstack([points, following, nan, np.zeros((points.shape[0], 1))]))
+    n = points.shape[0]
+    rows = np.hstack(
+        [points, np.roll(points, -1, axis=0), np.full((n, 2), np.nan), np.zeros((n, 1))]
+    )
     low, high = points.min(axis=0), points.max(axis=0)
     centre = (low + high) / 2
     return _kernels.geometry2d.loop_area(rows, float(centre[0]), float(centre[1]), True)
