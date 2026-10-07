@@ -68,17 +68,15 @@ std::vector<Segment> segments_of(const Polylines& lines) {
     return segments;
 }
 
-// The index of the cell holding `value`, clamped far beyond any grid so the cast and the search's
-// ±reach cannot overflow.
+// The index of the cell holding `value`, clamped so neither the cast nor ±reach can overflow.
 std::int64_t cell(double value, double origin, double h) {
     constexpr double bound = 0x1p62;
     return static_cast<std::int64_t>(std::clamp(std::floor((value - origin) / h), -bound, bound));
 }
 
-// Files segment s in the cells of each column its x-range crosses, by its y-range in the column.
-// The end columns start and stop at the segment's own ends with their own y, so no rounding of a
-// column boundary against cell() can leave a part of the segment unfiled (spec review,
-// 2026-10-08); interior boundaries come from one expression on both sides.
+// Files segment s in the cells of each column its x-range crosses, by its y-range in the column;
+// the end columns use the segment's own ends, so no rounded boundary leaves a part unfiled
+// (DEC-G2D-029).
 void file_segment(const Segment& s, std::size_t index, Grid& grid) {
     const bool a_first = x(s.a) <= x(s.b);
     const Point2 p = a_first ? s.a : s.b;
