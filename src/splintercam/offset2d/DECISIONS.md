@@ -26,9 +26,9 @@
 
 - Date: 2026-10-08; decided by: Peter (answer 3)
 - Status: Active
-- Decision: an ADR records D-060: shapely and GEOS in a test-only dependency group, never shipped, because GEOS is LGPL. It is drafted in plan 0005's last step, followed by test 20. The oracle tests 2 and 9 come first.
+- Decision: ADR 0010 (`docs/adr/0010-shapely-geos-test-only.md`, accepted by Peter on 2026-10-09) records D-060: shapely and GEOS in the dependency group `test-oracle`, installed by `tools/bootstrap`, never packaged, no `NOTICE` entry since GEOS is not distributed; `tools/licence-check` accepts LGPL only in that group. The group is added in plan 0005's last step, followed by test 20. The oracle tests 2 and 9 come first.
 - Why: an independent reference for the offsets as point sets (D-060), without a licence risk for what ships.
-- Rejected: shapely as a runtime or default development dependency.
+- Rejected: shapely as a runtime dependency; the group optional with test 20 skipping outside CI (Peter, 2026-10-09).
 - Where: SPEC, Open questions 3 and Test plan; plan 0005, step 9.
 
 ## DEC-OFF-004: the interface of release 1; the side follows from the kind; closed chains refused
