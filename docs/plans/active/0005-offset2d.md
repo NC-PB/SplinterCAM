@@ -15,10 +15,10 @@
 The entry in `architecture/modules.yaml` (approved by Peter, 2026-10-08, and applied):
 
 ```yaml
-  offset2d:               { layer: 2, kernel: true,  depends_on: [foundation, geometry2d], kernel_includes: [geometry2d], research: ["02"], budget: 1500 }
+  offset2d:               { layer: 1, kernel: true,  depends_on: [foundation, geometry2d], kernel_includes: [geometry2d], research: ["02"], budget: 1500 }
 ```
 
-- Layer 2 (Peter: layer 2 if a module may only depend on lower layers). The rule `lower-layers-only` names "same-layer modules listed here", but no such list exists, while `io` already depends on geometry2d within layer 1; layer 2 holds under either reading, and its users (stock at 2; toolpath and the strategies at 3) may still depend on it (DEC-G2D-040).
+- Layer 1, beside geometry2d (Peter, 2026-10-08): a module imports only lower layers, or same-layer modules named in its `depends_on`; all `depends_on` together form no cycle; no strategy imports another strategy. `tools/arch-check` checks exactly these three (DEC-G2D-040).
 - `kernel_includes: [geometry2d]`: its C++ includes the headers geometry2d's SPEC names as its kernel interface (`kernel/exact.hpp`, `kernel/distance.hpp`, `kernel/grid.hpp`) and links their sources; a change to them is an interface change, Peter's (DEC-G2D-040).
 - Kernel: the Clipper2 offset runs in C++ (`ClipperOffset`, Clipper2 2.0.1, as geometry2d's grid bridge).
 - Budget 1500 NLOC, an estimate to be revised at the SPEC cut. For scale: geometry2d's grid bridge and region code measure about 400 NLOC (`kernel/grid.cpp`, `_grid.py`, `_build.py` and their bindings). The offset adds the clearance and side of D-132 with its bias and rounding margin, round and miter joins, the PolyTree built inside the offset call so the rounding is paid once (DEC-G2D-026), the Booleans, and source IDs and fixed nodes through all of them.
@@ -41,4 +41,4 @@ None yet: they come from the SPEC cut of research 02.
 ### 2026-10-08, draft
 
 - Written on Peter's answer to plan 0004 (DEC-G2D-038): the module entry and budget proposed, two questions open.
-- Peter's answers: entry approved (layer 2, budget 1500 as an estimate) and applied; questions 1 and 2 as proposed; geometry2d's SPEC names its kernel interface (DEC-G2D-040). Next: research 02, then `/research-to-spec`; the first step moves `frame_of` and `to_grid` into `kernel/grid.hpp` as an interface change.
+- Peter's answers: entry approved (layer 1, budget 1500 as an estimate) and applied, with the layer rule settled (same-layer dependencies when named in `depends_on`); questions 1 and 2 as proposed; geometry2d's SPEC names its kernel interface (DEC-G2D-040). Next: research 02, then `/research-to-spec`; the first step moves `frame_of` and `to_grid` into `kernel/grid.hpp` as an interface change.
