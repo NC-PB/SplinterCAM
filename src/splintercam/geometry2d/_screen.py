@@ -14,7 +14,7 @@ from splintercam.foundation import Context, Diagnostic, Result, Severity
 
 from ._area import polygon_area_length, signed_area
 from ._cleanup import cleanup
-from ._crossings import find_crossings
+from ._crossings import find_crossings, pair_name
 from ._loops import topology_flattening
 from ._rows import CurveRows
 from ._selfcross import self_contact
@@ -48,6 +48,8 @@ class Screened:
     crossing_points: NDArray[np.float64]
     crossing_loops: NDArray[np.int64]
     diagnostic_loops: tuple[int, ...]  # per diagnostic of the result, the loop it is filed with
+    slit_ends: NDArray[np.float64]  # the ends of the slits removed, two per slit (REQ-G2D-241)
+    slit_loops: NDArray[np.int64]  # per end its input loop
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,8 +180,10 @@ def screen_loops(loops: CurveRows, ctx: Context) -> Result[Screened]:
         boxes = np.array([c.box for c in kept]).reshape(-1, 4)
         original = _duplicate_of(candidate, kept, boxes, ctx)
         if original is not None:
+            location = pair_name(original.index, i)
             message = f"loop {i} duplicates loop {original.index} within t_topo; removed"
-            location = f"loops {original.index} and {i}"
+            if original.index == i:
+                message = f"two pieces of loop {i} are the same within t_topo; one removed"
             notes.append((i, Diagnostic("LOOP_DUPLICATE", Severity.WARNING, message, location)))
             continue
         kept.append(candidate)
@@ -197,6 +201,8 @@ def screen_loops(loops: CurveRows, ctx: Context) -> Result[Screened]:
         crossing_points=crossing_points,
         crossing_loops=crossing_loops,
         diagnostic_loops=(),
+        slit_ends=slits.ends,
+        slit_loops=slits.end_loops,
     )
     ordered = sorted(notes, key=lambda pair: pair[0])  # stable
     screened = dataclasses.replace(screened, diagnostic_loops=tuple(k for k, _ in ordered))

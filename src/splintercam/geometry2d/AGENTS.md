@@ -35,3 +35,4 @@ Layer 1. Implements docs/research/01 (slices 1 and 2; the rest is under "Later p
 - `arc_from_bulge` with a large bulge on a chord within eps_len returns a full circle that ends at P0 (the nearly closed rule): loop generators in tests must check that the arc ends where the next row starts.
 - clang-tidy (warnings are errors) rejects `operator[]` on spans and arrays (use `std::get`, `.at`, `subspan` or the `x()`/`y()` helpers), adjacent parameters of one type (use a struct), int8 to int conversions (signs return `int`), magic numbers and functions above cognitive complexity 15.
 - Clipper2 2.0.1 pinches an island into the hole it touches at a vertex only for some input orders: a pinch test must fix the order that produces it (DEC-G2D-036).
+- A zero-width slit is found bit for bit (REQ-G2D-241): ends of +0.0 and -0.0, or an arc's centre one ulp off, make the way back no reverse, and the loop crosses instead (conservative).

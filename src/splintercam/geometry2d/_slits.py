@@ -14,12 +14,15 @@ from ._rows import CurveRows
 
 @dataclass(frozen=True, slots=True)
 class Slits:
-    """The loops with their slits removed: `pieces`, per piece its input loop in `origin`, and
-    per removed slit its input loop and note."""
+    """The loops with their slits removed: `pieces`, per piece its input loop in `origin`; per
+    removed slit its input loop and note; and its two ends in `ends` (2 per slit, (2·s, 2)), their
+    input loops in `end_loops`."""
 
     pieces: CurveRows
     origin: NDArray[np.int64]
     notes: tuple[tuple[int, Diagnostic], ...]
+    ends: NDArray[np.float64]
+    end_loops: NDArray[np.int64]
 
 
 def _partners(rows: NDArray[np.float64]) -> NDArray[np.int64]:
@@ -52,33 +55,44 @@ def _run(partner: NDArray[np.int64], pair: tuple[int, int], step: int, room: int
 
 def _slit(rows: NDArray[np.float64]) -> tuple[int, int, int] | None:
     """A loop's first slit: the first row of its way out, its length in rows, the first row of
-    its way back; None when every run leaves a side empty (a spike, or a loop run out and back)."""
+    its way back; None when every run leaves a side with no row of its own (nothing, a spike, a
+    loop run out and back, or only spikes as in a T-shaped cut)."""
     m = rows.shape[0]
     partner = _partners(rows)
-    first: list[int] = np.flatnonzero(
-        np.greater(partner, np.arange(m, dtype=np.int64))
-    ).tolist()  # each pair once
+    alone = partner < 0  # a row with no reverse: a side with one encloses something
+    measured = np.zeros(m, dtype=np.bool_)
+    first: list[int] = np.flatnonzero(np.greater(partner, np.arange(m, dtype=np.int64))).tolist()
     for k in first:  # rows with a reverse: few
+        if measured[k]:
+            continue  # inside a run measured already
         j = int(partner[k])
         between, beyond = (j - k) % m - 1, (k - j) % m - 1  # rows on either side of the pair
         after = _run(partner, (k, j), 1, between // 2)
         before = _run(partner, (k, j), -1, beyond // 2)
-        if between > 2 * after and beyond > 2 * before:
-            return (k - before) % m, before + after + 1, (j - after) % m
+        out, length, back = (k - before) % m, before + after + 1, (j - after) % m
+        measured[np.remainder(out + np.arange(length, dtype=np.int64), m)] = True
+        inner = np.remainder(out + length + np.arange(between - 2 * after, dtype=np.int64), m)
+        outer = np.remainder(back + length + np.arange(beyond - 2 * before, dtype=np.int64), m)
+        if alone[inner].any() and alone[outer].any():
+            return out, length, back
     return None
 
 
 def _split(
     rows: NDArray[np.float64], where: str
-) -> tuple[list[NDArray[np.int64]], list[Diagnostic]]:
-    """A loop's pieces, each as row indices in loop order, sorted by its first row, and a note
-    per slit removed."""
-    todo: list[NDArray[np.int64]] = [np.arange(rows.shape[0], dtype=np.int64)]
+) -> tuple[list[NDArray[np.int64]], list[tuple[NDArray[np.float64], Diagnostic]]]:
+    """A loop's pieces, each as row indices in loop order, by their lowest row index, and per
+    slit removed its ends (x, y order) and note, in the order of the ends. The rows of a loop
+    with a slit lose their zero-length lines, which add no vertex (REQ-G2D-185) and would break
+    a run; a loop without one keeps every row."""
+    point = np.ascontiguousarray(rows[:, 0:4]).view(np.int64)
+    dot = (rows[:, 6] == 0.0) & (point[:, 0:2] == point[:, 2:4]).all(axis=1)
+    todo: list[NDArray[np.int64]] = [np.flatnonzero(~dot).astype(np.int64)]
     pieces: list[NDArray[np.int64]] = []
-    notes: list[Diagnostic] = []
+    notes: list[tuple[NDArray[np.float64], Diagnostic]] = []
     while todo:
         index = todo.pop()
-        found = _slit(rows[index])
+        found = _slit(rows[index]) if index.size else None
         if found is None:
             pieces.append(index)
             continue
@@ -87,11 +101,15 @@ def _split(
         inner = (back - out - length) % m  # rows between the way out and the way back
         todo.append(index[(out + length + np.arange(inner)) % m])
         todo.append(index[(back + length + np.arange(m - 2 * length - inner)) % m])
-        (x0, y0), (x1, y1) = rows[index[out], 0:2], rows[index[(out + length - 1) % m], 2:4]
-        ends = f"({x0:.6g}, {y0:.6g}) to ({x1:.6g}, {y1:.6g})"
-        message = f"a zero-width slit from {ends} removed; the loop is split in two"
-        notes.append(Diagnostic("LOOP_SLIT", Severity.WARNING, message, where))
-    return sorted(pieces, key=lambda p: int(p.min())), notes
+        ends = np.array([rows[index[out], 0:2], rows[index[(out + length - 1) % m], 2:4]])
+        ends = ends[np.lexsort((ends[:, 1], ends[:, 0]))]
+        (x0, y0), (x1, y1) = ends.tolist()
+        message = f"a zero-width slit from ({x0:.6g}, {y0:.6g}) to ({x1:.6g}, {y1:.6g}) removed"
+        notes.append((ends, Diagnostic("LOOP_SLIT", Severity.WARNING, message, where)))
+    if not notes:
+        return [np.arange(rows.shape[0], dtype=np.int64)], []
+    notes.sort(key=lambda note: note[0].ravel().tolist())
+    return sorted(pieces, key=lambda p: int(p.min()) if p.size else -1), notes
 
 
 def split_slits(loops: CurveRows) -> Slits:
@@ -104,17 +122,27 @@ def split_slits(loops: CurveRows) -> Slits:
     ids: list[NDArray[np.int64]] = []
     origin: list[int] = []
     notes: list[tuple[int, Diagnostic]] = []
-    ends = np.append(loops.row_starts[1:], loops.rows.shape[0])
-    for i, (a, b) in enumerate(zip(loops.row_starts.tolist(), ends.tolist(), strict=True)):
+    ends: list[NDArray[np.float64]] = []
+    end_loops: list[int] = []
+    bounds = np.append(loops.row_starts[1:], loops.rows.shape[0])
+    for i, (a, b) in enumerate(zip(loops.row_starts.tolist(), bounds.tolist(), strict=True)):
         pieces, found = _split(loops.rows[a:b], f"loop {i}")
-        rows += [loops.rows[a:b][p] for p in pieces]
-        ids += [loops.ids[a:b][p] for p in pieces]
-        origin += [i] * len(pieces)
-        notes += [(i, note) for note in found]
+        rows += [loops.rows[a:b][p] for p in pieces if p.size]
+        ids += [loops.ids[a:b][p] for p in pieces if p.size]
+        origin += [i] * sum(1 for p in pieces if p.size)
+        notes += [(i, note) for _, note in found]
+        ends += [e for e, _ in found]
+        end_loops += [i, i] * len(found)
     sizes = [r.shape[0] for r in rows]
     pieces_rows = CurveRows(
         np.vstack(rows) if rows else np.empty((0, 7)),
         np.concatenate(ids) if ids else np.empty(0, np.int64),
         np.cumsum([0, *sizes[:-1]], dtype=np.int64) if rows else np.empty(0, np.int64),
     )
-    return Slits(pieces_rows, np.array(origin, dtype=np.int64), tuple(notes))
+    return Slits(
+        pieces_rows,
+        np.array(origin, dtype=np.int64),
+        tuple(notes),
+        np.vstack(ends) if ends else np.empty((0, 2)),
+        np.array(end_loops, dtype=np.int64),
+    )
