@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from geometry2d_checks import codes, polygons
-from splintercam.foundation import Context
+from splintercam.foundation import Context, Severity
 from splintercam.geometry2d import (
     CurveRows,
     LoopTree,
@@ -55,6 +55,7 @@ def test_a_keyhole_is_split_into_its_outer_loop_and_its_hole(ctx: Context) -> No
     assert tree.loops.row_starts.tolist() == [0, 5]  # the outer loop's 5 rows, the hole's 5
     assert codes(result) == ["LOOP_SLIT"]
     note = result.diagnostics[0]
+    assert note.severity is Severity.WARNING
     assert note.location == "loop 0"
     assert "(20, 10)" in note.message
     assert "(14, 10)" in note.message
@@ -67,10 +68,12 @@ def test_the_split_is_the_same_from_every_start_and_direction(
     ctx: Context, start: int, backward: bool
 ) -> None:
     turned = KEYHOLE[start:] + KEYHOLE[:start]
-    given = _tree(polygons([turned[::-1] if backward else turned], ctx), ctx)
+    result = loop_tree(polygons([turned[::-1] if backward else turned], ctx), ctx)
+    assert codes(result) == ["LOOP_SLIT"]
+    assert result.value is not None
     expected = _tree(polygons([KEYHOLE], ctx), ctx)
-    assert _pieces(given) == _pieces(expected)
-    assert sorted(given.depth.tolist()) == [0, 1]
+    assert _pieces(result.value) == _pieces(expected)
+    assert sorted(result.value.depth.tolist()) == [0, 1]
 
 
 @pytest.mark.req("REQ-G2D-241")
@@ -89,6 +92,9 @@ def test_a_keyhole_with_a_round_hole_keeps_its_circle(ctx: Context) -> None:
     )
     built = curve_rows(rows, np.arange(8, dtype=np.int64), np.zeros(1, np.int64), ctx)
     assert built.value is not None
+    result = loop_tree(built.value, ctx)
+    assert codes(result) == ["LOOP_SLIT"]
+    assert "(20, 10) to (14, 10)" in result.diagnostics[0].message
     tree = _tree(built.value, ctx)
     assert tree.depth.tolist() == [0, 1]
     assert tree.loops.ids.tolist() == [5, 6, 7, 0, 1, 3]  # the slit's rows 2 and 4 removed
@@ -109,8 +115,11 @@ def test_a_slit_to_a_shape_beside_the_loop_gives_two_loops_side_by_side(ctx: Con
         (0, 0), (10, 0), (10, 5), (20, 5), (20, 0), (30, 0), (30, 10), (20, 10), (20, 5), (10, 5),
         (10, 10), (0, 10),
     ]  # fmt: skip
+    result = loop_tree(polygons([bridge], ctx), ctx)
+    assert codes(result) == ["LOOP_SLIT"]
     tree = _tree(polygons([bridge], ctx), ctx)
     assert tree.depth.tolist() == [0, 0]
+    assert tree.input_index.tolist() == [0, 0]
 
 
 @pytest.mark.req("REQ-G2D-241")
@@ -127,8 +136,10 @@ def test_a_slit_inside_a_slit_gives_three_nested_loops(ctx: Context) -> None:
 
 
 @pytest.mark.req("REQ-G2D-241")
-def test_a_loop_that_only_runs_back_over_itself_is_no_slit(ctx: Context) -> None:
-    there_and_back: Points = [(0, 0), (5, 0), (10, 0), (5, 0)]
+@pytest.mark.parametrize("length", [2, 3, 4])
+def test_a_loop_that_only_runs_back_over_itself_is_no_slit(ctx: Context, length: int) -> None:
+    out: Points = [(5.0 * k, 0.0) for k in range(length + 1)]
+    there_and_back = out + out[-2:0:-1]  # out over `length` rows and back over the same
     result = loop_tree(polygons([there_and_back], ctx), ctx)
     assert "LOOP_SLIT" not in codes(result)
     assert result.value is not None
@@ -141,6 +152,8 @@ def test_a_slit_whose_way_back_takes_other_rows_still_crosses(ctx: Context) -> N
     other_way = [*KEYHOLE[:9], (17, 10), *KEYHOLE[9:]]
     result = loop_tree(polygons([other_way], ctx), ctx)
     assert codes(result) == ["LOOPS_CROSS"]
+    assert result.value is not None
+    assert result.value.crossing_points.shape[0] >= 1  # the stretch's ends (REQ-G2D-238)
 
 
 @pytest.mark.req("REQ-G2D-241", "REQ-G2D-176")
@@ -156,3 +169,41 @@ def test_build_region_machines_the_keyhole_with_its_hole(ctx: Context) -> None:
         q = np.roll(p, -1, axis=0)
         area += 0.5 * float((p[:, 0] * q[:, 1] - q[:, 0] * p[:, 1]).sum())
     assert area == pytest.approx(400.0 - 64.0)
+
+
+@pytest.mark.req("REQ-G2D-241", "REQ-G2D-209")
+@pytest.mark.parametrize("length", [1, 2, 3])
+def test_a_spike_of_several_rows_stays_a_spike(ctx: Context, length: int) -> None:
+    # Test audit: a run with nothing between its halves is a spike, cleanup's (REQ-G2D-209).
+    out: Points = [(10.0, 20.0 - 5.0 * k / length) for k in range(length + 1)]  # down to (10, 15)
+    spiked: Points = [(0, 0), (20, 0), (20, 20), *out, *out[-2::-1], (0, 20)]
+    result = loop_tree(polygons([spiked], ctx), ctx)
+    assert "LOOP_SLIT" not in codes(result)
+    assert "CLEANUP_SPIKE" in codes(result)
+    assert result.value is not None
+    assert result.value.depth.tolist() == [0]
+
+
+@pytest.mark.req("REQ-G2D-241", "REQ-G2D-236")
+def test_a_slit_in_a_later_loop_keeps_that_loops_index(ctx: Context) -> None:
+    beside: Points = [(40, 0), (50, 0), (50, 10), (40, 10)]
+    result = loop_tree(polygons([beside, KEYHOLE, [(60, 0), (70, 0), (70, 10)]], ctx), ctx)
+    assert codes(result) == ["LOOP_SLIT"]
+    assert result.diagnostics[0].location == "loop 1"
+    assert result.value is not None
+    assert result.value.input_index.tolist() == [0, 1, 1, 2]
+
+
+@pytest.mark.req("REQ-G2D-241", "REQ-G2D-236", "REQ-G2D-162")
+def test_a_hole_that_crosses_its_own_outer_loop_crosses_as_one_loop(ctx: Context) -> None:
+    # The slit leads to a hole that reaches out through the outer loop's right wall.
+    poking: Points = [
+        (0, 0), (20, 0), (20, 10), (14, 10), (14, 6), (24, 6), (24, 14), (14, 14), (14, 10),
+        (20, 10), (20, 20), (0, 20),
+    ]  # fmt: skip
+    result = loop_tree(polygons([poking], ctx), ctx)
+    assert codes(result) == ["LOOP_SLIT", "LOOPS_CROSS"]
+    assert result.diagnostics[1].location == "loop 0"
+    assert result.value is not None
+    assert result.value.loops.rows.shape[0] == 0
+    assert result.value.crossing_loops.tolist() == [[0, 0], [0, 0]]

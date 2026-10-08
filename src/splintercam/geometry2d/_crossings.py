@@ -44,7 +44,7 @@ def find_crossings(
     boxes = np.array([[*p.min(axis=0), *p.max(axis=0)] for p in polylines]).reshape(-1, 4)
     points: list[NDArray[np.float64]] = []
     pairs: list[tuple[int, int]] = []
-    notes: list[tuple[int, Diagnostic]] = []
+    noted: list[tuple[tuple[int, int], Diagnostic]] = []
     for a, b in overlapping_pairs(boxes):
         pa, pb = polylines[a], polylines[b]
         if not (_reaches_through(pa, pb, t_topo) or _reaches_through(pb, pa, t_topo)):
@@ -53,8 +53,12 @@ def find_crossings(
         i, j = indices[a], indices[b]
         points.append(found)
         pairs += [(i, j)] * found.shape[0]
-        message = f"loops {i} and {j} cross at {found.shape[0]} points, deeper than t_topo"
-        notes.append((i, Diagnostic("LOOPS_CROSS", Severity.ERROR, message, f"loops {i} and {j}")))
+        if (i, j) in [pair for pair, _ in noted]:
+            continue  # two pieces of a loop split at a slit (REQ-G2D-241): one note per pair
+        where = f"loop {i}" if i == j else f"loops {i} and {j}"
+        verb = "crosses itself" if i == j else "cross"
+        message = f"{where} {verb} at {found.shape[0]} points, deeper than t_topo"
+        noted.append(((i, j), Diagnostic("LOOPS_CROSS", Severity.ERROR, message, where)))
     crossing_points = np.vstack(points) if points else np.empty((0, 2), dtype=np.float64)
     crossing_loops = np.array(pairs, dtype=np.int64).reshape(-1, 2)
-    return crossing_points, crossing_loops, notes
+    return crossing_points, crossing_loops, [(pair[0], note) for pair, note in noted]

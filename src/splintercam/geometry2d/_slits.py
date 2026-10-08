@@ -24,7 +24,8 @@ class Slits:
 
 def _partners(rows: NDArray[np.float64]) -> NDArray[np.int64]:
     """Per row the one other row that is its exact reverse (end points swapped, the same centre,
-    the sweep negated; bit for bit), or -1; never a cyclic neighbour, which is a spike."""
+    the sweep negated; bit for bit), or -1. A neighbour counts too, so a run reaches through the
+    tip of a spike, and a run with nothing between its halves is no slit."""
     m = rows.shape[0]
     centre = np.where(rows[:, 6:7] == 0.0, 0.0, rows[:, 4:6])  # a line's NaN centre as 0
     sweep = rows[:, 6:7] + 0.0  # -0.0 becomes 0.0
@@ -36,8 +37,7 @@ def _partners(rows: NDArray[np.float64]) -> NDArray[np.int64]:
     row_of = np.full(count.size, -1, dtype=np.int64)
     row_of[group[:m]] = np.arange(m)
     partner: NDArray[np.int64] = np.where(count[group[m:]] == 1, row_of[group[m:]], -1)
-    gap = np.remainder(partner - np.arange(m, dtype=np.int64), m)
-    return np.where((gap == 0) | (gap == 1) | (gap == m - 1), -1, partner)
+    return np.where(partner == np.arange(m, dtype=np.int64), -1, partner)
 
 
 def _run(partner: NDArray[np.int64], pair: tuple[int, int], step: int, room: int) -> int:
