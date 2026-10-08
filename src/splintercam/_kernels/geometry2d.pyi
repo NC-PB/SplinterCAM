@@ -112,3 +112,8 @@ def self_cycles(loop: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), or
     """
     Resolve a closed polyline's self-contacts into cycles (per cycle its first point and loop position); return (status, points, cycles, nodes), the counts it needed.
     """
+
+def grid_union(points: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], loop_starts: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu', writable=False)], u: float, max_span_units: float, points_out: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu')], starts_out: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu')]) -> tuple[int, int, int]:
+    """
+    The NonZero union of closed polylines through Clipper2's grid; return (status, points, loops), the counts it needed.
+    """

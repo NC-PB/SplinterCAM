@@ -8,6 +8,7 @@
 #include "distance.hpp"
 #include "exact.hpp"
 #include "flatten.hpp"
+#include "grid.hpp"
 #include "region.hpp"
 #include "selfcross.hpp"
 
@@ -371,6 +372,36 @@ void bind_pairs(nb::module_& m) {
         "short).");
 }
 
+void bind_grid(nb::module_& m) {
+    m.def(
+        "grid_union",
+        [](const PointRows& vertices, const Counts& loop_starts, double u, double max_span_units,
+           const PointsOut& points_out, const CountsOut& starts_out) {
+            const std::span<const std::int64_t> starts{loop_starts.data(), loop_starts.size()};
+            check_polylines(starts, {vertices.data(), vertices.size()});
+            check_limit(u);
+            GridResult result;
+            {
+                const nb::gil_scoped_release unlocked;
+                result = grid_union({.points = points(vertices), .loop_starts = starts},
+                                    {.u = u, .max_span_units = max_span_units});
+            }
+            for (std::size_t i = 0; i < std::min(result.points.size(), points_out.shape(0)); ++i) {
+                points_out(i, 0) = std::get<0>(result.points.at(i));
+                points_out(i, 1) = std::get<1>(result.points.at(i));
+            }
+            for (std::size_t i = 0; i < std::min(result.starts.size(), starts_out.shape(0)); ++i) {
+                starts_out(i) = result.starts.at(i);
+            }
+            return std::tuple{static_cast<int>(result.status), result.points.size(),
+                              result.starts.size()};
+        },
+        nb::arg("points"), nb::arg("loop_starts"), nb::arg("u"), nb::arg("max_span_units"),
+        nb::arg("points_out"), nb::arg("starts_out"),
+        "The NonZero union of closed polylines through Clipper2's grid; return (status, points, "
+        "loops), the counts it needed.");
+}
+
 void bind_self_cycles(nb::module_& m) {
     m.def(
         "self_cycles",
@@ -452,6 +483,7 @@ void bind(nb::module_& m) {
     bind_distances(m);
     bind_pairs(m);
     bind_self_cycles(m);
+    bind_grid(m);
 }
 
 } // namespace splintercam::geometry2d

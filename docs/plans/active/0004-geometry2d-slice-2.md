@@ -8,7 +8,7 @@
 - Research: `docs/research/01-foundations.md`: Loop tree, Kernel arrays (polygon region), Tolerances (resolution chain), Flattening (side rule); tests 7, 16, 19, 21 and 24
 - Branch: one pull request per session (docs/dev/07); a step with a new algorithm or over about 100 lines of non-test code gets its own, from `main` after the previous merge, never stacked
 - Owner: Peter Burgener; agents: Claude Code sessions
-- Status (2026-10-07): approved by Peter with his answers below (DEC-G2D-022); step 1 done and reviewed (DEC-G2D-024 to 027); steps 2 and 3 done; steps 4a, 4b, 4c and 5 done (5 without the rule 5 fallback, step 7); step 6 next.
+- Status (2026-10-07): approved by Peter with his answers below (DEC-G2D-022); step 1 done and reviewed (DEC-G2D-024 to 027); steps 2 and 3 done; steps 1 to 6 done (5 without the rule 5 fallback, step 7); step 7 next.
 
 ## Questions for Peter before step 1
 
@@ -31,7 +31,7 @@ Answered 2026-10-07: yes to all six, as proposed (DEC-G2D-022).
 - [x] 3. **Topology flattening and batched distances.** The inscribed flattening within u with the kernel's own sine and cosine, for topology only (152). u and t_topo come from the `Context` (026, 029). A kernel for point-to-polyline distances in batches, which the loop tree and the probes need; it replaces Python loops (backlog of plan 0003, step 6). Size: about 250 + 300.
 - [x] 4. **Loop tree I: cleaning and the pair tests.** Split (2026-10-08) into 4a: cleanup, area tests, duplicates (155 to 159; done); 4b: crossings between loops and the depth rule (160 to 163, 237); 4c: self-crossings (238). Each its own pull request, opened after the one before merges. Per loop: cleanup, the area test and the 1.5·t_topo·L test (155 to 157). Duplicates within t_topo, the first in input order kept (158, 159). Crossings by exact segment tests with their points, counted only when deeper than t_topo, and touching loops accepted (160 to 163, 237, 238). Research 01 tests 7 and 19. Size: about 300 + 400.
 - [x] 5. **Loop tree II: parents, depths, normalisation.** Done before 4c (2026-10-08), since 4c nests cycles with these rules; the "no probe" case is provisional until step 7 (DEC-G2D-032). The containment probes in their order (164 to 168), depth and orientation (174, 175), a winding of 1 inside normalised regions (151), and independence of tol (154). Research 01 test 7. Size: about 250 + 350.
-- [ ] 6. **The Clipper2 bridge.** Re-centre on the bounding box and round to u (033); refuse a span of 2^26 grid units or more with an error diagnostic (034); the resolution chain property, every output vertex within 2.83 grid units of the input polylines and point in region unchanged beyond t_topo (030, 031). Research 01 test 21. Size: about 200 + 300.
+- [x] 6. **The Clipper2 bridge.** Re-centre on the bounding box and round to u (033); refuse a span of 2^26 grid units or more with an error diagnostic (034); the resolution chain property, every output vertex within 2.83 grid units of the input polylines and point in region unchanged beyond t_topo (030, 031). Research 01 test 21. Size: about 200 + 300.
 - [ ] 7. **The rule 5 fallback.** The Clipper2 difference with NonZero, and the tie rules for loops tested both ways (166, 169 to 173). Research 01 test 24. Size: about 150 + 300.
 - [ ] 8. **`build_region`.** The PolyTree of the side-correct flattened, normalised loops (118, 176, 177); compared with the loop tree as point sets and by depth parity (178, 179); topology from the integer result only (032); source IDs by the nearest input edge (180); pinch points split by exact integer tests and marked as fixed nodes (181); an extra clearance of 0 (124, lines and arcs). Size: about 350 + 400; split into 8 and 8b if the review fixes push it past 400.
 - [ ] 9. **`build_chain` for open chains.** The tool's side as the air side of every arc (117), and an extra clearance of 0 (125, lines and arcs). Size: about 100 + 150.
@@ -46,6 +46,13 @@ Total: about 1850 added lines of code (about 1300 NLOC) and 2550 of tests, in ni
 
 <!-- Newest first. What was done, what tools/check reported, what is next. At most about 30 lines per session;
      numbers go into tables. Above 300 lines, older entries move to an archive file next to the plan. -->
+
+### 2026-10-08, step 6: the grid bridge
+
+- `kernel/grid.cpp` and `grid_union` (REQ-G2D-029, 030, 031, 033, 034): re-centred, rounded to u, refused at 2^26 grid units, Clipper2's NonZero union, mapped back. Research 01 test 21 on 20 random inputs. The span limit is a named constant for now; the foundation parameter needs a two-module change (DEC-G2D-034).
+- Reviews of 4b, 5 and 4c applied (DEC-G2D-032, 033): the parent is the container whose containers are all the others, non-nesting containment is `LOOPS_CROSS`, diagnostics keyed by loop.
+- Pull requests: 4b, 5, 4c and 6 wait on local branches while 39 and 40 are open (two at most, never stacked). 4b, 5 and 4c share `_contain.py` and fix each other, so they go up as one pull request with the large-change label, which is Peter's to give.
+- `tools/check`: PASS (11 of 14). Next: step 7.
 
 ### 2026-10-08, step 4c: self-crossings
 
