@@ -55,7 +55,11 @@ The clearance form of Held (SRC-030, Def. 7.1; D-058). R is a region, B all of i
 
 - Union, difference and intersection of regions, one `Clipper64` call on the same grid bridge, with the Positive fill rule for both operands (ours: the operands are normalised regions, where Positive equals NonZero, and Positive keeps the right side where flattened loops overlap; research 01, rule 7).
 - Uses in release 1: stock layers minus the machined area (D-026, [08](08-stock-model.md)); keep-out zones as the union of fixture outlines grown by their clearance (D-078); air-cut detection, the machined area minus the stock; stock minus part.
-- Every call moves points by up to 2.83u again, in no fixed direction. A wall at the finishing tolerance never comes from a chained result, and offsets are never chained: a region is offset from its source loops by the total distance (D-132). Stock layers are updated after every operation (D-026), so their error would grow with each update; each update therefore errs toward more stock: the machined area is shrunk by 3u before it is subtracted (ours). More stock only makes links and air-pass skipping more cautious (D-062).
+- Every call moves points by up to 2.83u again, in no fixed direction. A wall at the finishing tolerance never comes from a chained result, and offsets are never chained: a region is offset from its source loops by the total distance (D-132). Stock layers are updated after every operation (D-026), and a chain of updates would let the error grow with each one. So a stock layer is never updated from the previous one (RR-001, ours):
+  - The machined area of each operation, per layer, comes from its own tool-centre paths, flattened within t_flat, in one `ClipperOffset` call with EndType Round and δ = R − m, without the bias of D-132, and is kept with the operation. A flattened arc lies up to t_flat from the true arc on one side, so m pays for it.
+  - The stock layer after operation k is the raw stock layer minus all machined areas 1 to k, in one `Clipper64` Difference call (the clip paths united by the Positive rule inside the same call). The raw stock layer is flattened toward more stock.
+  - Two calls round on the way, each moving points by up to 2.83u in any direction, so m = t_flat + 6u. The machined area is then never larger than what the tool really swept, and the stock never smaller than what is really there. It is too large by at most m + 6u plus the flattening of the raw layer, below 2·t_flat + 0.0012 mm, which links and air-pass skipping can only treat more cautiously (D-062).
+  - The cost is one difference over all earlier operations' areas per update instead of one area; 2.5D jobs have few operations per layer (ours).
 
 ### Source IDs
 
@@ -155,6 +159,7 @@ From the literature notes (Vatti tests 1 to 8, Held tests 1 to 5) and our own:
 19. Determinism: the same input twice gives bit-identical arrays; on the three platforms the same counts and geometry within 0.001 mm (D-055).
 20. Differential: test 10's regions and tolerances against shapely/GEOS buffers with round joins, compared as point sets outside the band (D-060).
 21. Orientation guess: a circular wall of radius 20 with a circular island of radius 5 tangent inside it at its top, both arcs flattened side-correct so that the island's flattening reaches above the wall's: SHRINK and GROW by 2 match the oracle of test 9, and the guard is gone from the result.
+22. Stock update (RR-001): a 100 × 60 mm stock layer, then a pocket and a profile: the layer after both, computed from the raw layer and the two machined areas, contains every point the exact geometry leaves as stock, and no point farther than 2·t_flat + 0.0012 mm outside it; doing the same operations in the other order gives the same arrays.
 
 ## Libraries
 

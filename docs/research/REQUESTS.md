@@ -20,4 +20,4 @@
 - Why it matters: REQ-OFF-032 in `src/splintercam/offset2d/SPEC.md` is blocked by it; stock layers decide safe links and skipped air passes (D-026, D-062).
 - What is known: `docs/research/02-offsets-and-booleans.md`, Booleans, shrinks the machined area by 3u before the difference. But the shrink is itself a Clipper2 call on an already rounded region, against "offsets are never chained" (same section, D-132), and each of the two calls moves points by up to 2.83u in no fixed direction (SRC-118), so 3u does not cover both. Options seen: a larger margin (at least about 3u + 2·2.83u); or the machined region built from its source paths, grown by t − margin in one call, so nothing is chained.
 - Provisional choice: none; REQ-OFF-032 stays out of plan 0005's steps until answered. The other Booleans do not depend on it.
-- Status: Open
+- Status: Answered on 2026-10-09, see `docs/research/02-offsets-and-booleans.md`, Booleans (the stock update) and test 22: no chaining; each operation's machined area from its own centre paths grown by R − (t_flat + 6u) in one call, the stock layer as the raw layer minus all machined areas in one Difference call.
