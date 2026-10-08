@@ -104,3 +104,28 @@ def test_mirrored_loops_tie_on_the_mirror_line(
     half = sum(len(one) for one in loops)
     pairs = {(int(p), int(s)) for p, s in found}
     assert pairs == {(p, (s + half) % (2 * half)) for p, s in pairs}
+
+
+@pytest.mark.req("REQ-G2D-242")
+@settings(deadline=None)
+@given(
+    sides=st.integers(200, 600),
+    radius=st.floats(5.0, 15.0).map(lambda v: round(v * 2**20) / 2**20),
+    queries=st.lists(
+        st.tuples(st.floats(-20.0, 20.0), st.floats(-20.0, 20.0)), min_size=1, max_size=30
+    ),
+    limit=st.floats(0.5, 3.0),
+    eps=st.one_of(st.sampled_from([0.0, 1e-6]), st.floats(0.0, 2.0)),
+)
+def test_ties_on_a_fine_mesh_reach_across_cells(
+    sides: int, radius: float, queries: list[tuple[float, float]], limit: float, eps: float
+) -> None:
+    # Segments of about 0.1 mm against a limit + eps of a few mm: the cell side comes from
+    # limit + eps, not the mean segment length, so candidates lie near cell edges and the
+    # two-cell reach of the search is what finds them (spec review, 2026-10-08).
+    angles = np.arange(sides) * (2.0 * np.pi / sides)
+    ring = np.round(np.column_stack((np.cos(angles), np.sin(angles))) * radius * 2**20) / 2**20
+    loop = [(float(x), float(y)) for x, y in ring]
+    assume(len(set(loop)) == len(loop))  # no vertex repeated by the rounding
+    q = np.array(queries, dtype=np.float64)
+    _check(q, [loop], limit, eps)

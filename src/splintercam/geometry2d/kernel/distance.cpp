@@ -422,8 +422,9 @@ void nearest_segments(std::span<const double> q, const Polylines& lines, double 
     }
 }
 
-// The grid is sized for limit + eps, so every segment within the nearest distance + eps lies as
-// far inside the search as `nearest`'s within the limit (the file's header).
+// The grid is sized for limit + eps, so every segment within limit + eps of a query lies in the
+// cells around it (the file's header). One scan: when the nearest distance is within the limit,
+// the minimum over those cells is it, the same `segment_distance` values as `nearest` takes.
 std::vector<Tie> nearest_ties(std::span<const double> q, const Polylines& lines, TieReach reach) {
     const std::vector<Segment> segments = segments_of(lines);
     std::vector<Tie> ties;
@@ -431,17 +432,23 @@ std::vector<Tie> nearest_ties(std::span<const double> q, const Polylines& lines,
         return ties;
     }
     const Grid grid = build_grid(segments, reach.limit + reach.eps);
+    std::vector<double> distances;
     for (std::size_t i = 0; i < q.size() / 2; ++i) {
         const Point2 p = point(q, i);
-        const double best = nearest(p, grid, segments).first;
-        if (best > reach.limit) {
+        // A segment of zero length files one cell: the cells around p, in index order.
+        const std::vector<std::size_t> near = segments_near(grid, {.a = p, .b = p});
+        distances.clear();
+        for (const std::size_t s : near) {
+            distances.push_back(segment_distance(p, segments.at(s).a, segments.at(s).b));
+        }
+        const auto best = std::ranges::min_element(distances);
+        if (best == distances.end() || !(*best <= reach.limit)) { // also NaN
             continue;
         }
-        // A segment of zero length files one cell: the cells `nearest` searched, in index order.
-        for (const std::size_t s : segments_near(grid, {.a = p, .b = p})) {
-            if (segment_distance(p, segments.at(s).a, segments.at(s).b) <= best + reach.eps) {
+        for (std::size_t k = 0; k < near.size(); ++k) {
+            if (distances.at(k) <= *best + reach.eps) {
                 ties.push_back({.point = static_cast<std::int64_t>(i),
-                                .segment = static_cast<std::int64_t>(s)});
+                                .segment = static_cast<std::int64_t>(near.at(k))});
             }
         }
     }

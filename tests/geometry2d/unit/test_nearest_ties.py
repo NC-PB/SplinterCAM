@@ -134,3 +134,18 @@ def test_a_zero_length_segment_keeps_its_index_and_ties() -> None:
     q = np.array([(10.0, 0.0), (12.0, 0.0)])
     found = nearest_ties(q, points, starts, 5.0, 0.0)
     assert found.tolist() == [[0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2]]
+
+
+@pytest.mark.req("REQ-G2D-242")
+def test_the_grid_reaches_eps_beyond_a_small_limit() -> None:
+    # Two parallel polylines of 0.05 mm segments, 1 mm apart, a query on the lower one: with
+    # limit 0.02 and eps 1.5 the upper line's segments are candidates too, which a cell grid
+    # sized for the limit alone (cells of about 0.05 mm) would not reach (spec review).
+    xs = np.arange(0.0, 4.0001, 0.05)
+    lower = [(float(x), 0.0) for x in xs]
+    upper = [(float(x), 1.0) for x in xs[::-1]]
+    points = np.array(lower + upper)
+    starts = np.array([0], dtype=np.int64)
+    found = nearest_ties(np.array([(2.0, 0.0)]), points, starts, 0.02, 1.5)
+    segments = set(found[:, 1].tolist())
+    assert any(s >= len(lower) for s in segments)  # the upper line's segments, at 1 mm

@@ -37,8 +37,10 @@ void nearest_segments(std::span<const double> q, const Polylines& lines, double 
 // The candidates of a tie the caller decides, such as offset2d's class tie (REQ-OFF-034): per
 // query point whose nearest segment of `lines` lies within `limit`, every segment whose distance
 // is at most the nearest distance + `eps` (in double), as (point, segment) pairs sorted by point,
-// then segment; segments counted as in `nearest_segments`. limit > 0, eps >= 0 and their sum
-// finite (REQ-G2D-242; DEC-OFF-001, DEC-G2D-041).
+// then segment; segments counted as in `nearest_segments`. Preconditions, not checked here (the
+// binding checks them; a C++ caller such as offset2d must): limit > 0, eps >= 0, their sum finite,
+// and every query and vertex finite; otherwise the cell grid is undefined (REQ-G2D-242;
+// DEC-OFF-001, DEC-G2D-041).
 struct TieReach {
     double limit;
     double eps;

@@ -63,11 +63,13 @@ struct Frame {
 };
 
 // The centre of the points' bounding box (x, y pairs) into `frame`; false, with `frame`
-// unchanged, when they span the limit or more in x or y (REQ-G2D-034).
+// unchanged, when they span the limit or more in x or y (REQ-G2D-034). Expects finite points:
+// NaN coordinates drop out of the box unnoticed, and empty input gives true with a NaN centre.
 [[nodiscard]] bool frame_of(std::span<const double> points, GridLimits limits, Frame& frame);
 
 // The closed polylines as Clipper2 paths: each point less the frame's centre, divided by u and
-// rounded to the nearest integer, halves away from zero (std::llround).
+// rounded to the nearest integer, halves away from zero (std::llround). `frame` must come from
+// `frame_of` on the same input and limits; otherwise llround can overflow.
 [[nodiscard]] Clipper2Lib::Paths64 to_grid(const Polylines& input, Frame frame, double u);
 
 // Splits `path` at every point it passes twice into loops that each keep the traversal of their
