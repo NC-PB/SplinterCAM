@@ -311,10 +311,11 @@
 
 ## DEC-G2D-034: the grid bridge
 
-- Date: 2026-10-08; decided by: ours (plan 0004, step 6)
-- Status: Active; the span limit as a named constant is provisional
+- Date: 2026-10-08; decided by: ours (plan 0004, step 6); the parameter Peter's
+- Status: Active
 - Decision: each Clipper2 call of geometry2d (`kernel/grid.cpp`) takes the centre of its input's bounding box as the frame, refuses the call when the input spans 2^26 grid units or more in x or y (`REGION_TOO_LARGE`), rounds (x − c)/u to 64-bit integers, runs Clipper2 2.0.1 (`Clipper64`, here a NonZero union) and maps the result back to c + k·u. A failed `Execute` is `REGION_FAILED`. `grid_union`, the union for research 01's test 21, gives source IDs of −1: it is a test entry, not a region builder. The limit 2^26 is a named constant in `_grid.py`, passed to the kernel as a plain value, like the area's limits (DEC-G2D-010).
 - Provisional: the SPEC (REQ-G2D-034) asks for a declared parameter in foundation's `tolerance_defaults.toml`, as research 01, Parameters, lists it. That is a second module's change, which needs plan mode and Peter; until then the constant carries its source.
+- Resolved (Peter, 2026-10-08): the limit is the declared parameter `grid_max_span_units` in foundation's `tolerance_defaults.toml`, 2^26 grid units, enough for release 1; larger machines come later through a coarser grid unit per job, not now.
 - Why: test 21 measured on 20 random inputs (some features between eps_len and t_topo apart): every output vertex lies within 2.83 grid units of the input, and point in region agrees on input and output farther than t_topo from every boundary; translating the input by metres changes the result by at most a few grid units.
 - Rejected: rounding the frame to a multiple of u (no gain: Clipper2 sees integers either way); checking the span after rounding (the refusal must come before any integer is formed).
 - Where: REQ-G2D-029, 030, 031, 033, 034; `kernel/grid.cpp`, `_grid.py`.
