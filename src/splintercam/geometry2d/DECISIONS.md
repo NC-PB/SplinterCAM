@@ -347,3 +347,12 @@
 - Why: one set of checks for rows, closed or open, keeps REQ-G2D-234's codes those of REQ-G2D-188 to 193; reusing the loop flattening keeps one kernel path (the module budget).
 - Rejected: flattening row by row with `flatten` in a Python loop (the split rule: loops over segments go to the kernel); a separate validator for chains.
 - Where: REQ-G2D-117, 125, 127, 231, 234; `_chain.py`, `_rows.py`, `_loops.py`.
+
+## DEC-G2D-038: the budget is 3600 NLOC, the offsets leave geometry2d
+
+- Date: 2026-10-08; decided by: Peter (answer to plan 0004, step 8, question 1)
+- Status: Active; supersedes DEC-G2D-022's budget of 3000
+- Decision: `architecture/modules.yaml` gives geometry2d a budget of 3600 NLOC. The offsets and Booleans of topic 02 go into a module of their own, `offset2d`, which depends on geometry2d; plan 0005 proposes its entry and budget. The medial axis gets its own module later.
+- Why: slice 2 measured about 1970 NLOC (3529 for the module) against its estimate of 1300: the self-crossings of a loop, the rule 5 fallback and the region kernel grew under review, after the cuts of DEC-G2D-036. With the offsets in a module of their own, geometry2d keeps the planar basics.
+- Rejected: keeping 3000 and cutting further (the remaining cuts were small, and each would cost readability); the offsets in geometry2d (one module far over any budget).
+- Where: `architecture/modules.yaml`; SPEC, Size estimate and Later parts; `docs/plans/active/0005-offset2d.md`.

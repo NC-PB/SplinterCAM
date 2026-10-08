@@ -398,7 +398,7 @@ The budget is foundation's (REQ-FND-009). Slice 1 spends none of it: `flatten` t
 
 ## Size estimate
 
-Slice 1: about 800 NLOC of Python and 900 of C++ (`predicates.c` not counted), 1561 NLOC measured on 2026-10-03, and 2500 lines of tests. Slice 2: about 1300 NLOC (Clipper2 not counted) and 2550 lines of tests in eight steps of plan 0004. Budget in `architecture/modules.yaml`: 3000 NLOC (Peter, 2026-10-07, DEC-G2D-022; 1700 for slice 1, DEC-G2D-017).
+Slice 1: about 800 NLOC of Python and 900 of C++ (`predicates.c` not counted), 1561 NLOC measured on 2026-10-03, and 2500 lines of tests. Slice 2: about 1300 NLOC (Clipper2 not counted) and 2550 lines of tests in eight steps of plan 0004. Slice 2 measured 3529 NLOC for the module on 2026-10-08 (about 1970 for slice 2, against its estimate of 1300). Budget in `architecture/modules.yaml`: 3600 NLOC (Peter, 2026-10-08, DEC-G2D-038; 3000 by DEC-G2D-022, 1700 for slice 1, DEC-G2D-017).
 
 ## Open questions
 
@@ -408,7 +408,7 @@ Choices marked "(ours)" stand until Peter changes them in review. None open for 
 
 No requirements; each line names the work and where its drafted requirements and open questions are (the draft of 2026-10-02, commit d1a0949, REQ IDs as drafted).
 
-- Offsets and Booleans of topic 02, with the D-132 kernel changes: plan 0005, once research 02 is in the repository (DEC-G2D-022). It also books the PolyTree's rounding of up to 2.83 grid units against D-132's bias, preferably by building the PolyTree inside the offset's kernel call (DEC-G2D-026). Also the two rules of research 01, Flattening, that bind the operation (the extra clearance added to its offset).
+- Offsets and Booleans of topic 02, with the D-132 kernel changes: not in geometry2d but in a module of their own, `offset2d`, which depends on geometry2d (Peter, 2026-10-08, DEC-G2D-038); plan 0005, once research 02 is in the repository (DEC-G2D-022). The medial axis gets a module of its own too, later. It also books the PolyTree's rounding of up to 2.83 grid units against D-132's bias, preferably by building the PolyTree inside the offset's kernel call (DEC-G2D-026). Also the two rules of research 01, Flattening, that bind the operation (the extra clearance added to its offset).
 - Same decisions for any thread count (REQ-G2D-019): release 1 kernels are single-threaded (DEC-G2D-001, 022).
 - Cleanup of curve loops: tiny arcs and zero-length lines removed with their neighbours joined, open chains (REQ-G2D-046; the cleanup questions of the draft).
 - Ellipse arcs and NURBS: types, import rules, eps_par, arc recognition, their flattening, closest points and bounding boxes, spline edges in area and point in region; in regions and chains, every curved edge flattened within t/2 and the extra clearance t/2, and their topology flattening in the loop tree (REQ-G2D-028, 054 to 090, 114, 120 to 123, the t/2 halves of 124 and 125, 129, 146, 147, 198, 215).

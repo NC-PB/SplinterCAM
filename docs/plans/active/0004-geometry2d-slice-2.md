@@ -47,6 +47,11 @@ Total: about 1850 added lines of code (about 1300 NLOC) and 2550 of tests, in ni
 <!-- Newest first. What was done, what tools/check reported, what is next. At most about 30 lines per session;
      numbers go into tables. Above 300 lines, older entries move to an archive file next to the plan. -->
 
+### 2026-10-08, Peter's answers to step 8
+
+- The budget is 3600 NLOC, set in `architecture/modules.yaml`; the offsets go into a module of their own, `offset2d`, proposed in `docs/plans/active/0005-offset2d.md` (DEC-G2D-038). The medial axis gets its own module later.
+- A zero-width slit is accepted: removed, its loop split into the outer loop and the island, with a warning at its position (DEC-G2D-039, REQ-G2D-241).
+
 ### 2026-10-08, step 9: `build_chain`
 
 - `build_chain` (REQ-G2D-117, 125, 127, 231, 234; DEC-G2D-037): rows checked as a loop without closure, arcs flattened into the tool's side, each row's vertices `flatten`'s bit for bit; one case per rule of 234, the empty and the closed chain.
@@ -149,7 +154,6 @@ Total: about 1850 added lines of code (about 1300 NLOC) and 2550 of tests, in ni
 
 - From the 4c spec review: `self_cycles` tests all segment pairs; reuse the cell grid of `distance.cpp` (or a sweep by x) and add a cancellation flag. Direction at a node from the strand's own segment rather than the next (rounded) point, and snapping a constructed point that equals a vertex.
 - From the step 8 spec review: `grid_region`, `nearest_segments` and `self_cycles` take no cancellation flag; a vertex of one region loop lying on another loop's edge is not marked fixed (D-084 names pinch points; decide with the arc fit).
-- Module budget: geometry2d measures 3607 NLOC after step 8 (hard limit 3600); slice 2 so far about 2050 against its estimate of 1300. See the questions in the progress log.
 
 ## Blockers
 
