@@ -4,7 +4,7 @@
 
 | | |
 | --- | --- |
-| Status | Reviewed (2026-10-08, Peter: the four open questions answered, the deviations accepted; DEC-OFF-001 to 006). Nothing is implemented. REQ-OFF-032 waits for research 02's stock update (pull request 47). Choices marked "(ours)" stand as the contract (DEC-OFF-005) |
+| Status | Reviewed (2026-10-08, Peter: the four open questions answered, the deviations accepted; DEC-OFF-001 to 006). Nothing is implemented. REQ-OFF-032 and 044, the stock update, released on 2026-10-09 from research 02's answer to RR-001 (pull request 47, DEC-OFF-006). Choices marked "(ours)" stand as the contract (DEC-OFF-005) |
 | Layer | 1 (see architecture/modules.yaml) |
 | Depends on | foundation, geometry2d (Python API, and the kernel headers `kernel/exact.hpp`, `kernel/distance.hpp`, `kernel/grid.hpp`; DEC-G2D-040) |
 | Research | [02][r02]: the main text is normative, the literature notes are evidence. This SPEC links to it instead of restating it |
@@ -52,8 +52,10 @@ def offset_chain_side(rows, ids, tool_side: AirSide, clearance_mm: float, classe
                       ctx: Context) -> Result[OpenPaths]: ...
 def boolean(a: PolygonRegion, b: PolygonRegion, op: BooleanOp, classes: SourceClasses,
             ctx: Context) -> Result[PolygonRegion]: ...
-def remove_machined(stock: PolygonRegion, machined: PolygonRegion, classes: SourceClasses,
-                    ctx: Context) -> Result[PolygonRegion]: ...           # REQ-OFF-032
+def machined_area(paths: Sequence[tuple[NDArray[np.float64], NDArray[np.int64]]], tool_radius_mm: float,
+                  classes: SourceClasses, ctx: Context) -> Result[PolygonRegion]: ...   # REQ-OFF-032; rows and ids per centre path
+def stock_layer(raw: CurveRows, machined: Sequence[PolygonRegion], classes: SourceClasses,
+                ctx: Context) -> Result[PolygonRegion]: ...           # REQ-OFF-044
 # kernel: offset.cpp (ClipperOffset, guard, band), boolean.cpp (Clipper64), chain_side.cpp, ids.cpp;
 # geometry2d's grid.hpp for re-centring, rounding, pinch splits and the canonical order
 ```
@@ -97,7 +99,8 @@ def remove_machined(stock: PolygonRegion, machined: PolygonRegion, classes: Sour
 | --- | --- | --- | --- |
 | REQ-OFF-030 | WHEN `boolean` is called, THE offset2d kernel SHALL compute the union, difference a − b or intersection in one `Clipper64` call on geometry2d's grid bridge, with the Positive fill rule for both operands (ours; research 01, rule 7). | tests 1, 3, 4 and 5; test 2: at 10⁴ random points farther than 3u from every edge of either operand (research 02's "band" read as the 2.83 grid units of REQ-G2D-030; ours), inside(result) = op(inside(a), inside(b)) | Reviewed |
 | REQ-OFF-031 | IF the operands of `boolean` together span the declared span limit or more in x or y, THEN THE offset2d kernel SHALL refuse the call with `REGION_TOO_LARGE` (error) without calling Clipper2 (REQ-G2D-034). | unit: two squares 6712 mm apart | Reviewed |
-| REQ-OFF-032 | WHEN `remove_machined` updates a stock layer, THE offset2d module SHALL return a stock that errs toward more stock: no point of the true stock outside the machined region lies outside the result (D-026, D-062; research 02, Booleans). | unit: a stock square minus a machined square sharing its right half, at random points | Blocked: waits for research 02's answer to RR-001 (pull request 47; DEC-OFF-006): no chaining, the machined area of each operation from its own centre paths grown by R − (t_flat + 6u) in one call, a stock layer as the raw layer minus all machined areas in one Difference call. Rewritten and released from that text once it is on `main` |
+| REQ-OFF-032 | WHEN `machined_area` is called with an operation's tool-centre paths and its tool radius R, THE offset2d kernel SHALL offset the paths, flattened within t_flat by geometry2d, in one `ClipperOffset` call with EndType Round and δ = R − m, m = t_flat + 6u, without the bias of D-132, IF R ≤ m THEN raise `ValueError` (research 02, Booleans, RR-001; the refusal ours). | test 22; unit: a straight path grown by R: the result lies inside the true stadium of radius R and contains the stadium of radius R − m − a − 3u (round-end chords lie up to a inside, toward more stock) | Reviewed |
+| REQ-OFF-044 | WHEN `stock_layer` is called with a raw stock layer and the machined areas of operations 1 to k, THE offset2d kernel SHALL return the raw layer, flattened toward more stock (geometry2d's side-correct flattening of a material region), minus all k machined areas in one `Clipper64` Difference call, the clip paths united by the Positive rule inside that call, and never from an earlier stock layer (research 02, Booleans, RR-001; D-026). | test 22: a 100 × 60 mm layer, a pocket and a profile: the result contains every point the exact geometry leaves as stock and no point farther than 2·t_flat + 0.0012 mm outside it; the operations in the other order give the same arrays | Reviewed |
 | REQ-OFF-033 | THE offset2d module SHALL take the input of every offset from source loops (`CurveRows`), so an offset is never chained on an earlier result (D-132; trap 2). | review: no public offset takes a `PolygonRegion` | Reviewed |
 
 ### Source IDs, pinch points and order (research 02, Source IDs; Pinch points and nesting; Order and determinism)
@@ -187,7 +190,7 @@ Clean-up of the input is geometry2d's and reported there (`CLEANUP_SPIKE`, `LOOP
 
 ## Size estimate
 
-About 1050 NLOC (Clipper2 not counted): the offset call with its bias, the t = 0 path, the span check and the band about 300 (Python and C++); the orientation guard 100; source IDs with classes 120; the chain functions 250; the Booleans and `remove_machined` 180; argument checks and diagnostics 100. Tests about 2400 lines. Budget in `architecture/modules.yaml`: 1500 NLOC (Peter, 2026-10-08), which leaves room.
+About 1050 NLOC (Clipper2 not counted): the offset call with its bias, the t = 0 path, the span check and the band about 300 (Python and C++); the orientation guard 100; source IDs with classes 120; the chain functions 250; the Booleans, `machined_area` and `stock_layer` 200; argument checks and diagnostics 100. Tests about 2400 lines. Budget in `architecture/modules.yaml`: 1500 NLOC (Peter, 2026-10-08), which leaves room.
 
 ## Open questions
 
@@ -206,6 +209,7 @@ Box 2, decided in the module when the step comes (DECISIONS.md): when an area is
 
 - 2026-10-08: drafted from research 02 with `/research-to-spec` (plan 0005).
 - 2026-10-08: spec-reviewer round: the band measured from the flattened input (and + t_flat against the true curves); the side from the region's kind; `OpenPaths` for one side of a chain; t_flat added to `grow_chain`'s δ; `cleanup` before the kernel (new REQ-OFF-043, trap 9); geometry2d's diagnostics passed on, `build_region`'s at t = 0; the guard's failure as `OFFSET_FAILED`; chains refuse t = 0; REQ-OFF-032 blocked by RR-001; test audit: `grow_chain`'s wider band written out, 3u for test 2 marked ours, a property test for invariant 3; `nearest_segments` added to Open question 1, `CANCELLED` to 2, the types and two scope choices to 4.
+- 2026-10-09: the stock update released from research 02's answer to RR-001 (Booleans, test 22; pull request 47; DEC-OFF-006): `remove_machined` becomes `machined_area` (REQ-OFF-032, each operation's centre paths grown by R − (t_flat + 6u) in one call) and `stock_layer` (new REQ-OFF-044, the raw layer minus all machined areas in one Difference call), as Peter asked; the names ours.
 - 2026-10-08: reviewed by Peter: the four questions answered as recommended, the deviations accepted, every requirement but REQ-OFF-032 `Reviewed` (DEC-OFF-001 to 006); a tool outside a drawn boundary (topic 25) added to Later parts.
 
 [r02]: ../../../docs/research/02-offsets-and-booleans.md
