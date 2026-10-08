@@ -28,7 +28,7 @@ def test_a_circle_tangent_inside_another_touches(
 ) -> None:
     inner = outer * ratio
     cx, cy = (outer - inner) * math.cos(touch), (outer - inner) * math.sin(touch)
-    rows = []
+    rows: list[list[float]] = []
     for (x, y, r), start in zip(((0.0, 0.0, outer), (cx, cy, inner)), starts, strict=True):
         p = (x + r * math.cos(start), y + r * math.sin(start))
         rows.append([*p, *p, x, y, math.tau])
