@@ -296,3 +296,20 @@ def test_a_slit_of_arcs_is_removed(ctx: Context) -> None:
     assert result.value is not None
     assert result.value.depth.tolist() == [0, 1]
     assert 2 not in result.value.loops.ids.tolist()
+
+
+@pytest.mark.req("REQ-G2D-241", "REQ-G2D-236")
+def test_the_slit_ends_of_a_wrongly_wound_loop_sort_by_x_then_y(ctx: Context) -> None:
+    # Simplifier: two slits, the first hole drawn the same way round as the outer loop; the
+    # second slit's far end lies beyond the first slit's near end in x.
+    two: Points = [
+        (0, 0), (30, 0), (30, 10), (24, 10), (24, 14), (18, 14), (18, 6), (24, 6), (24, 10),
+        (30, 10), (30, 30), (0, 30), (0, 20), (26, 20), (26, 23), (29, 23), (29, 17), (26, 17),
+        (26, 20), (0, 20),
+    ]  # fmt: skip
+    result = loop_tree(polygons([two], ctx), ctx)
+    assert codes(result) == ["LOOP_SLIT", "LOOP_SLIT", "LOOPS_CROSS"]
+    assert result.value is not None
+    points = result.value.crossing_points.tolist()
+    assert points == sorted(points)
+    assert points == [[0.0, 20.0], [24.0, 10.0], [26.0, 20.0], [30.0, 10.0]]

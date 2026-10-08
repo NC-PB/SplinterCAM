@@ -9,20 +9,18 @@ from numpy.typing import NDArray
 
 from splintercam.foundation import Context, Diagnostic, Result, Severity
 
-from ._contain import nest
+from ._contain import Nesting, nest
 from ._crossings import pair_name
 from ._loops import LoopTree
 from ._rows import CurveRows
 from ._screen import screen_loops
-
-_ONE_LOOP = np.zeros(1, np.int64)
 
 
 def _reversed(rows: CurveRows) -> CurveRows:
     """The loop the other way round: rows in reverse order, ends swapped, sweeps negated."""
     r = rows.rows[::-1]
     flipped = np.column_stack([r[:, 2:4], r[:, 0:2], r[:, 4:6], -r[:, 6]])
-    return CurveRows(flipped, rows.ids[::-1].copy(), _ONE_LOOP)
+    return CurveRows(flipped, rows.ids[::-1].copy(), rows.row_starts)
 
 
 def _empty_tree(points: NDArray[np.float64], pairs: NDArray[np.int64]) -> LoopTree:
@@ -45,6 +43,22 @@ def _overwound(kept: list[int], parents: list[int], areas: NDArray[np.float64]) 
     return sorted(loop for loop, found in signs.items() if len(found) > 1)
 
 
+def _nesting_notes(kept: list[int], nesting: Nesting) -> list[tuple[int, Diagnostic]]:
+    """Per pair that crosses, does not nest or whose fallback was refused, its note, filed with
+    its lower input loop."""
+    notes: list[tuple[int, Diagnostic]] = []
+    for a, b in nesting.crossing:
+        where = pair_name(kept[a], kept[b])
+        pieces = "two pieces of " if kept[a] == kept[b] else ""
+        message = f"{pieces}{where} contain each other, or do not nest"
+        notes.append((kept[a], Diagnostic("LOOPS_CROSS", Severity.ERROR, message, where)))
+    for a, b, code in nesting.refused:
+        where = pair_name(kept[a], kept[b])
+        message = f"the containment fallback of {where} failed"
+        notes.append((kept[a], Diagnostic(code, Severity.ERROR, message, where)))
+    return notes
+
+
 def loop_tree(loops: CurveRows, ctx: Context) -> Result[LoopTree]:
     """Closed loops of lines and arcs checked and nested: degenerate, duplicate and crossing loops
     reported (rules 1 to 4), each kept loop's parent and depth by containment probes (rule 5), and
@@ -59,56 +73,34 @@ def loop_tree(loops: CurveRows, ctx: Context) -> Result[LoopTree]:
     if screened is None:  # screen_loops always returns its loops
         raise RuntimeError("screen_loops returned no value")
     diagnostics = list(screened_result.diagnostics)
-    crossings = (screened.crossing_points, screened.crossing_loops)
     if any(d.severity is Severity.ERROR for d in diagnostics):  # crossings or refusals, REQ-G2D-162
-        return Result(_empty_tree(*crossings), tuple(diagnostics))
+        empty = _empty_tree(screened.crossing_points, screened.crossing_loops)
+        return Result(empty, tuple(diagnostics))
     kept = screened.kept.tolist()
     rows = list(screened.rows)
     nesting = nest(list(screened.polylines), screened.areas, screened.lengths, rows, ctx)
-    parent, depth, crossing = nesting.parents, nesting.depths, nesting.crossing
-    notes = [
-        (
-            kept[a],
-            Diagnostic(
-                "LOOPS_CROSS",
-                Severity.ERROR,
-                f"{'two pieces of ' if kept[a] == kept[b] else ''}{pair_name(kept[a], kept[b])} "
-                "contain each other, or do not nest",
-                pair_name(kept[a], kept[b]),
-            ),
-        )
-        for a, b in crossing
-    ]
-    notes += [
-        (
-            kept[a],
-            Diagnostic(code, Severity.ERROR, f"the containment fallback of {where} failed", where),
-        )
-        for a, b, code in nesting.refused
-        for where in [pair_name(kept[a], kept[b])]
-    ]
-    for loop in [] if notes else _overwound(kept, parent, screened.areas):
+    parent, depth = nesting.parents, nesting.depths
+    notes = _nesting_notes(kept, nesting)
+    wound = [] if notes else _overwound(kept, parent, screened.areas)
+    for loop in wound:
         message = f"loop {loop} winds twice or backwards once its slits are removed"
         notes.append((loop, Diagnostic("LOOPS_CROSS", Severity.ERROR, message, f"loop {loop}")))
-        at = screened.slit_loops == loop
-        crossings = (
-            np.vstack([crossings[0], screened.slit_ends[at]]),
-            np.vstack([crossings[1], np.full((int(at.sum()), 2), loop, np.int64)]),
-        )
-    if notes:
+    if notes:  # no crossings got this far, so these are the only crossing points
+        at = np.flatnonzero(np.isin(screened.slit_loops, wound))
+        ends, loops_at = screened.slit_ends[at], screened.slit_loops[at]
+        order = np.lexsort((ends[:, 1], ends[:, 0], loops_at))  # REQ-G2D-236
+        pairs = np.repeat(loops_at[order, None], 2, axis=1)
         keyed = [*zip(screened.diagnostic_loops, diagnostics, strict=True), *notes]
         ordered = tuple(d for _, d in sorted(keyed, key=lambda pair: pair[0]))  # stable
-        return Result(_empty_tree(*crossings), ordered)
-    pieces: list[CurveRows] = []
-    for position, piece in enumerate(screened.rows):
-        rows = CurveRows(piece.rows, piece.ids, _ONE_LOOP)
-        ccw = screened.areas[position] > 0
-        pieces.append(rows if ccw == (depth[position] % 2 == 0) else _reversed(rows))
-    sizes = [p.rows.shape[0] for p in pieces]
+        return Result(_empty_tree(ends[order], pairs), ordered)
+    pieces = [
+        piece if (screened.areas[k] > 0) == (depth[k] % 2 == 0) else _reversed(piece)
+        for k, piece in enumerate(screened.rows)
+    ]
     normalised = CurveRows(
-        np.vstack([p.rows for p in pieces]) if pieces else np.empty((0, 7)),
-        np.concatenate([p.ids for p in pieces]) if pieces else np.empty(0, np.int64),
-        np.cumsum([0, *sizes[:-1]], dtype=np.int64) if pieces else np.empty(0, np.int64),
+        np.vstack([np.empty((0, 7)), *(p.rows for p in pieces)]),
+        np.concatenate([np.empty(0, np.int64), *(p.ids for p in pieces)]),
+        np.cumsum([0, *(p.rows.shape[0] for p in pieces)], dtype=np.int64)[:-1],
     )
     for array in (normalised.rows, normalised.ids, normalised.row_starts):
         array.flags.writeable = False

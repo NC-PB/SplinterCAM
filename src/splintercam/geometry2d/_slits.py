@@ -39,8 +39,7 @@ def _partners(rows: NDArray[np.float64]) -> NDArray[np.int64]:
     count = np.bincount(group[:m], minlength=int(group.max()) + 1)
     row_of = np.full(count.size, -1, dtype=np.int64)
     row_of[group[:m]] = np.arange(m)
-    partner: NDArray[np.int64] = np.where(count[group[m:]] == 1, row_of[group[m:]], -1)
-    return np.where(partner == np.arange(m, dtype=np.int64), -1, partner)
+    return np.where(count[group[m:]] == 1, row_of[group[m:]], -1)  # no row is its own reverse
 
 
 def _run(partner: NDArray[np.int64], pair: tuple[int, int], step: int, room: int) -> int:
@@ -109,7 +108,7 @@ def _split(
     if not notes:
         return [np.arange(rows.shape[0], dtype=np.int64)], []
     notes.sort(key=lambda note: note[0].ravel().tolist())
-    return sorted(pieces, key=lambda p: int(p.min()) if p.size else -1), notes
+    return sorted(pieces, key=lambda p: int(p.min())), notes
 
 
 def split_slits(loops: CurveRows) -> Slits:
@@ -118,31 +117,21 @@ def split_slits(loops: CurveRows) -> Slits:
 
     Implements: REQ-G2D-241.
     """
-    rows: list[NDArray[np.float64]] = []
-    ids: list[NDArray[np.int64]] = []
+    order: list[NDArray[np.int64]] = []  # the pieces' rows, as indices into `loops`
     origin: list[int] = []
     notes: list[tuple[int, Diagnostic]] = []
-    ends: list[NDArray[np.float64]] = []
-    end_loops: list[int] = []
+    ends: list[NDArray[np.float64]] = [np.empty((0, 2))]
     bounds = np.append(loops.row_starts[1:], loops.rows.shape[0])
     for i, (a, b) in enumerate(zip(loops.row_starts.tolist(), bounds.tolist(), strict=True)):
         pieces, found = _split(loops.rows[a:b], f"loop {i}")
-        rows += [loops.rows[a:b][p] for p in pieces if p.size]
-        ids += [loops.ids[a:b][p] for p in pieces if p.size]
-        origin += [i] * sum(1 for p in pieces if p.size)
+        order += [a + p for p in pieces]
+        origin += [i] * len(pieces)
         notes += [(i, note) for _, note in found]
         ends += [e for e, _ in found]
-        end_loops += [i, i] * len(found)
-    sizes = [r.shape[0] for r in rows]
-    pieces_rows = CurveRows(
-        np.vstack(rows) if rows else np.empty((0, 7)),
-        np.concatenate(ids) if ids else np.empty(0, np.int64),
-        np.cumsum([0, *sizes[:-1]], dtype=np.int64) if rows else np.empty(0, np.int64),
-    )
+    index = np.concatenate([np.empty(0, np.int64), *order])
+    starts = np.cumsum([0, *(p.size for p in order)], dtype=np.int64)[:-1]
+    end_loops = np.repeat(np.array([i for i, _ in notes], dtype=np.int64), 2)
+    pieces_rows = CurveRows(loops.rows[index], loops.ids[index], starts)
     return Slits(
-        pieces_rows,
-        np.array(origin, dtype=np.int64),
-        tuple(notes),
-        np.vstack(ends) if ends else np.empty((0, 2)),
-        np.array(end_loops, dtype=np.int64),
+        pieces_rows, np.array(origin, dtype=np.int64), tuple(notes), np.vstack(ends), end_loops
     )

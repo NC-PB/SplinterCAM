@@ -38,11 +38,8 @@ def _cycles(
     kernel = _kernels.geometry2d
     room = 4 * loop.shape[0] + 8
     while True:
-        points, cycles, nodes = (
-            np.empty((room, 2)),
-            np.empty((room, 2), np.int64),
-            np.empty((room, 2)),
-        )
+        points, nodes = np.empty((room, 2)), np.empty((room, 2))
+        cycles = np.empty((room, 2), np.int64)
         status, n_points, n_cycles, n_nodes = kernel.self_cycles(loop, points, cycles, nodes)
         if max(n_points, n_cycles, n_nodes) <= room:
             break
@@ -53,7 +50,8 @@ def _cycles(
     return status, found, first, nodes[:n_nodes].copy()
 
 
-def _covered(a: NDArray[np.float64], others: list[NDArray[np.float64]], t_topo: float) -> bool:
+def covered(a: NDArray[np.float64], others: list[NDArray[np.float64]], t_topo: float) -> bool:
+    """Whether no point of closed polyline a lies farther than t_topo from the others."""
     if not others:
         return False
     starts = np.cumsum([0] + [o.shape[0] for o in others[:-1]], dtype=np.int64)
@@ -73,9 +71,9 @@ def _kept(cycles: list[NDArray[np.float64]], signs: list[float], t_topo: float) 
     their signs differ and both stay when they agree (REQ-G2D-238). A cycle the uncovered cycles
     alone cover goes first, and is no one's partner after that."""
     n = len(cycles)
-    flagged = [_covered(c, cycles[:k] + cycles[k + 1 :], t_topo) for k, c in enumerate(cycles)]
+    flagged = [covered(c, cycles[:k] + cycles[k + 1 :], t_topo) for k, c in enumerate(cycles)]
     unflagged = [cycles[j] for j in range(n) if not flagged[j]]
-    sliver = [flagged[k] and _covered(c, unflagged, t_topo) for k, c in enumerate(cycles)]
+    sliver = [flagged[k] and covered(c, unflagged, t_topo) for k, c in enumerate(cycles)]
     return [
         k
         for k, c in enumerate(cycles)
@@ -87,8 +85,8 @@ def _kept(cycles: list[NDArray[np.float64]], signs: list[float], t_topo: float) 
                 and flagged[j]
                 and not sliver[j]
                 and signs[j] == signs[k]
-                and _covered(c, [cycles[j]], t_topo)
-                and _covered(cycles[j], [c], t_topo)
+                and covered(c, [cycles[j]], t_topo)
+                and covered(cycles[j], [c], t_topo)
                 for j in range(n)
             )
         )
@@ -121,12 +119,9 @@ def self_contact(loop: NDArray[np.float64], ctx: Context) -> SelfContact:
     parents = nesting.parents
     if nesting.refused:
         return SelfContact("refused", 0.0, nodes, nesting.refused[0][2])
-    roots = {math.copysign(1.0, areas[k]) for k, p in enumerate(parents) if p < 0}
-    alternates = all(
-        math.copysign(1.0, areas[k]) != math.copysign(1.0, areas[p])
-        for k, p in enumerate(parents)
-        if p >= 0
-    )
+    sign = [signs[k] for k in order]
+    roots = {sign[k] for k, p in enumerate(parents) if p < 0}
+    alternates = all(sign[k] != sign[p] for k, p in enumerate(parents) if p >= 0)
     if nesting.crossing or len(roots) > 1 or not alternates:
         return SelfContact("cross", 0.0, nodes)
     return SelfContact("touch", roots.pop(), nodes)

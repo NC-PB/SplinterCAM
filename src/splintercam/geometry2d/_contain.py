@@ -48,8 +48,8 @@ def contains(
 ) -> Containment:
     """B ⊂ A by the first probe of B farther than t_topo from A's flattening, among B's vertices,
     the midpoints of its segments and the projections of A's vertices onto B (REQ-G2D-168),
-    located against A's exact rows alone (REQ-G2D-153, 167). Without such a probe the answer is
-    "not contained", provisional until the rule 5 fallback (DEC-G2D-032).
+    located against A's exact rows alone (REQ-G2D-153, 167). Without such a probe the grid decides
+    (the rule 5 fallback, REQ-G2D-169; DEC-G2D-035).
     """
     t_topo = ctx.tolerances.topology_tol_mm
     groups = (b, (b + np.roll(b, -1, axis=0)) / 2, None)
@@ -109,16 +109,9 @@ class Nesting:
     refused: list[tuple[int, int, str]]
 
 
-def _decide(a_in_b: Containment | None, b_in_a: Containment | None) -> Decision:
-    """One way (the other None) or both ways."""
-    if a_in_b is not None and b_in_a is not None:
-        return both_ways(a_in_b, b_in_a)
-    result = a_in_b if a_in_b is not None else b_in_a
-    if result is None or result.refused:
-        return "refused"
-    if not result.contained:
-        return "apart"
-    return "a in b" if a_in_b is not None else "b in a"
+# A direction `nest` does not test: as a probe finding "not contained", so `both_ways` decides
+# from the other direction alone.
+_UNTESTED = Containment(False, True)
 
 
 def nest(
@@ -140,17 +133,13 @@ def nest(
     for a, b in overlapping_pairs(boxes):
         close = abs(size[a] - size[b]) <= t_topo * (lengths[a] + lengths[b])
         # Both ways when the areas are close, else only the smaller in the larger (REQ-G2D-165).
-        a_in_b = (
-            contains(polylines[a], polylines[b], rows[b], ctx)
-            if close or size[a] < size[b]
-            else None
-        )
-        b_in_a = (
-            contains(polylines[b], polylines[a], rows[a], ctx)
-            if close or size[a] > size[b]
-            else None
-        )
-        decision = _decide(a_in_b, b_in_a)
+        a_in_b = _UNTESTED
+        if close or size[a] < size[b]:
+            a_in_b = contains(polylines[a], polylines[b], rows[b], ctx)
+        b_in_a = _UNTESTED
+        if close or size[a] > size[b]:
+            b_in_a = contains(polylines[b], polylines[a], rows[a], ctx)
+        decision = both_ways(a_in_b, b_in_a)
         if decision == "a in b":
             containers[a].append(b)
         elif decision == "b in a":
@@ -158,8 +147,7 @@ def nest(
         elif decision == "cross":
             crossing.append((a, b))
         elif decision == "refused":
-            found = next(r.refused for r in (a_in_b, b_in_a) if r is not None and r.refused)
-            refused.append((a, b, found or "REGION_FAILED"))
+            refused.append((a, b, a_in_b.refused or b_in_a.refused or "REGION_FAILED"))
     parents, unnested = _parents(containers)
     return Nesting(parents, [len(c) for c in containers], sorted({*crossing, *unnested}), refused)
 
@@ -181,10 +169,8 @@ def _parents(containers: list[list[int]]) -> tuple[list[int], list[tuple[int, in
 def overlapping_pairs(boxes: NDArray[np.float64]) -> list[tuple[int, int]]:
     """The pairs (a < b) of (k, 4) boxes [x_min, y_min, x_max, y_max] that overlap or touch, in
     order, from one broadcast comparison (the pair loops of rules 4 and 5)."""
-    low, high = boxes[:, None, :2], boxes[:, None, 2:]
-    apart = (low > np.swapaxes(high, 0, 1)).any(axis=2) | (np.swapaxes(low, 0, 1) > high).any(
-        axis=2
-    )
+    low, high = boxes[:, :2], boxes[:, 2:]
+    apart = (low[:, None] > high[None]).any(axis=2) | (low[None] > high[:, None]).any(axis=2)
     a, b = np.nonzero(np.triu(~apart, k=1))
     return list(zip(a.tolist(), b.tolist(), strict=True))
 

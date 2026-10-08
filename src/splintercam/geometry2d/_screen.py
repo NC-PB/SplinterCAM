@@ -9,7 +9,6 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from splintercam import _kernels
 from splintercam.foundation import Context, Diagnostic, Result, Severity
 
 from ._area import polygon_area_length, signed_area
@@ -17,7 +16,7 @@ from ._cleanup import cleanup
 from ._crossings import find_crossings, pair_name
 from ._loops import topology_flattening
 from ._rows import CurveRows
-from ._selfcross import self_contact
+from ._selfcross import covered, self_contact
 from ._slits import split_slits
 
 # Rule 2: a loop whose topology flattening has |A| <= 1.5·t_topo·L, thinner than about 3·t_topo on
@@ -62,12 +61,6 @@ class _Candidate:
     box: NDArray[np.float64]  # x_min, y_min, x_max, y_max
 
 
-def _covered(a: NDArray[np.float64], b: NDArray[np.float64], t_topo: float) -> bool:
-    return _kernels.geometry2d.covered_by(
-        a, b, np.zeros(1, np.int64), t_topo
-    )  # no point of a farther than t_topo
-
-
 def _duplicate_of(
     candidate: _Candidate, kept: list[_Candidate], boxes: NDArray[np.float64], ctx: Context
 ) -> _Candidate | None:
@@ -77,8 +70,8 @@ def _duplicate_of(
     near = np.flatnonzero((np.abs(boxes - candidate.box) <= slack).all(axis=1))
     for k in near.tolist():
         other = kept[k]
-        if _covered(candidate.polyline, other.polyline, t_topo) and _covered(
-            other.polyline, candidate.polyline, t_topo
+        if covered(candidate.polyline, [other.polyline], t_topo) and covered(
+            other.polyline, [candidate.polyline], t_topo
         ):
             return other
     return None
@@ -102,12 +95,10 @@ def _screen_one(
     polyline = points[cleaned.value]
     contact = self_contact(polyline, ctx)
     if contact.kind == "cross":
-        message = f"{where} crosses itself, deeper than t_topo"
-        return (
-            None,
-            [*notes, Diagnostic("LOOPS_CROSS", Severity.ERROR, message, where)],
-            contact.nodes,
+        cross = Diagnostic(
+            "LOOPS_CROSS", Severity.ERROR, f"{where} crosses itself, deeper than t_topo", where
         )
+        return None, [*notes, cross], contact.nodes
     if contact.kind == "refused":
         message = f"the containment fallback for the cycles of {where} failed"
         return None, [*notes, Diagnostic(contact.code, Severity.ERROR, message, where)], None
@@ -116,11 +107,8 @@ def _screen_one(
         return None, [*notes, Diagnostic("LOOP_DEGENERATE", Severity.WARNING, message, where)], None
     area_test = signed_area(rows, ctx)
     if area_test.value is None:
-        return (
-            None,
-            [*notes, *(dataclasses.replace(d, location=where) for d in area_test.diagnostics)],
-            None,
-        )
+        located = [dataclasses.replace(d, location=where) for d in area_test.diagnostics]
+        return None, [*notes, *located], None
     area, length = polygon_area_length(polyline)
     if abs(area) <= _THINNESS_FACTOR * t_topo * length:
         message = f"|A| = {abs(area):.3g} mm² of its flattening is at most 1.5·t_topo·L"
@@ -158,13 +146,12 @@ def screen_loops(loops: CurveRows, ctx: Context) -> Result[Screened]:
     """
     t_topo = ctx.tolerances.topology_tol_mm
     slits = split_slits(loops)
-    split = slits.pieces
-    topology = topology_flattening(split, ctx)
+    topology = topology_flattening(slits.pieces, ctx)
     pieces = zip(
         slits.origin.tolist(),
         np.split(topology.points, topology.loop_starts[1:]),
-        np.split(split.rows, split.row_starts[1:]),
-        np.split(split.ids, split.row_starts[1:]),
+        np.split(slits.pieces.rows, slits.pieces.row_starts[1:]),
+        np.split(slits.pieces.ids, slits.pieces.row_starts[1:]),
         strict=True,
     )
     notes: list[tuple[int, Diagnostic]] = list(slits.notes)
