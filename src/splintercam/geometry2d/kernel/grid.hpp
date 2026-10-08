@@ -5,7 +5,9 @@
 
 #include "distance.hpp"
 
+#include <clipper2/clipper.h>
 #include <cstdint>
+#include <span>
 #include <vector>
 
 namespace splintercam::geometry2d {
@@ -50,5 +52,37 @@ struct GridRegion {
     std::vector<std::uint8_t> fixed;
 };
 [[nodiscard]] GridRegion grid_region(const RegionInput& input, GridLimits limits);
+
+// The steps of `grid_region`, shared with offset2d so both modules re-centre, round, split and
+// order alike, bit for bit (DEC-OFF-001, DEC-G2D-041; REQ-G2D-033, 034, 181).
+
+// The centre of a grid call's input, subtracted before rounding (REQ-G2D-033).
+struct Frame {
+    double cx;
+    double cy;
+};
+
+// The centre of the points' bounding box (x, y pairs) into `frame`; false, with `frame`
+// unchanged, when they span the limit or more in x or y (REQ-G2D-034).
+[[nodiscard]] bool frame_of(std::span<const double> points, GridLimits limits, Frame& frame);
+
+// The closed polylines as Clipper2 paths: each point less the frame's centre, divided by u and
+// rounded to the nearest integer, halves away from zero (std::llround).
+[[nodiscard]] Clipper2Lib::Paths64 to_grid(const Polylines& input, Frame frame, double u);
+
+// Splits `path` at every point it passes twice into loops that each keep the traversal of their
+// vertices, appended to `out`; pieces of fewer than 3 vertices are dropped (REQ-G2D-181).
+void split_pinches(const Clipper2Lib::Path64& path, std::vector<Clipper2Lib::Path64>& out);
+
+// The loops in an order of their own, not Clipper2's (its intersection sort breaks ties by the
+// standard library): each starts at its smallest point, then by that point and signed area
+// (DEC-G2D-036).
+void canonical(std::vector<Clipper2Lib::Path64>& loops);
+
+// Per vertex of `loops`, in order, 1 where two or more loop vertices share its point, a pinch
+// split or a touch of two loops, else 0: the fixed nodes (D-084), the same whichever way
+// Clipper2 returned a touch (DEC-G2D-036).
+[[nodiscard]] std::vector<std::uint8_t>
+shared_points(const std::vector<Clipper2Lib::Path64>& loops);
 
 } // namespace splintercam::geometry2d

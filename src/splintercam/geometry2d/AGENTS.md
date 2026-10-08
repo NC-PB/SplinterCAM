@@ -24,7 +24,7 @@ Layer 1. Implements docs/research/01 (slices 1 and 2; the rest is under "Later p
 - Decisions that need an angle or φ − sin φ use `angle.cpp` (`basic_atan2`, `phi_minus_sin`); tolerance tests on lengths use sqrt of a sum of squares, never `hypot` (libm).
 - Buffers handed to `predicates.c` have two spare elements: it reads past an expansion's end, `e[0]` and `e[1]` when it is empty. ASan is off for that code (Peter, 2026-10-03), so nothing else catches a short buffer.
 - The sweep test exists four times: `_box.py` (octants), `_distances.py` (halves), `region.cpp` (octant splits and `in_sweep`). Change them together; the plan's backlog proposes one shared kernel.
-- Tests reach internals only where the SPEC names them: `point_in_region_exact`, the kernel bindings `two_sums`, `two_products`, `basic_atan2`, `phi_minus_sin`, `ray_height_sign`, `basic_sin_cos`; `topology_flattening`, `polyline_distances` and `screen_loops` (slice 2). Test oracles (exact rationals) live in `tests/support/geometry2d_oracles.py`, loop builders in `geometry2d_checks.py`; import them as top-level modules.
+- Tests reach internals only where the SPEC names them: `point_in_region_exact`, the kernel bindings `two_sums`, `two_products`, `basic_atan2`, `phi_minus_sin`, `ray_height_sign`, `basic_sin_cos`, `nearest_ties` (plan 0005); `topology_flattening`, `polyline_distances` and `screen_loops` (slice 2). Test oracles (exact rationals) live in `tests/support/geometry2d_oracles.py`, loop builders in `geometry2d_checks.py`; import them as top-level modules.
 
 ## Known pitfalls
 
@@ -37,3 +37,4 @@ Layer 1. Implements docs/research/01 (slices 1 and 2; the rest is under "Later p
 - clang-tidy (warnings are errors) rejects `operator[]` on spans and arrays (use `std::get`, `.at`, `subspan` or the `x()`/`y()` helpers), adjacent parameters of one type (use a struct), int8 to int conversions (signs return `int`), magic numbers and functions above cognitive complexity 15.
 - Clipper2 2.0.1 pinches an island into the hole it touches at a vertex only for some input orders: a pinch test must fix the order that produces it (DEC-G2D-036).
 - A zero-width slit is found bit for bit (REQ-G2D-241): ends of +0.0 and -0.0, or an arc's centre one ulp off, make the way back no reverse, and the loop crosses instead (conservative).
+- `kernel/grid.hpp` includes `clipper2/clipper.h` (DEC-G2D-041): a target that includes it gets Clipper2's headers only through `splintercam_kernel_code`'s PUBLIC link in `CMakeLists.txt`; with PRIVATE the bindings fail with "'clipper2/clipper.h' file not found".

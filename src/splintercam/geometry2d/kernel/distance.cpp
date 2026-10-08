@@ -422,4 +422,30 @@ void nearest_segments(std::span<const double> q, const Polylines& lines, double 
     }
 }
 
+// The grid is sized for limit + eps, so every segment within the nearest distance + eps lies as
+// far inside the search as `nearest`'s within the limit (the file's header).
+std::vector<Tie> nearest_ties(std::span<const double> q, const Polylines& lines, TieReach reach) {
+    const std::vector<Segment> segments = segments_of(lines);
+    std::vector<Tie> ties;
+    if (segments.empty()) {
+        return ties;
+    }
+    const Grid grid = build_grid(segments, reach.limit + reach.eps);
+    for (std::size_t i = 0; i < q.size() / 2; ++i) {
+        const Point2 p = point(q, i);
+        const double best = nearest(p, grid, segments).first;
+        if (best > reach.limit) {
+            continue;
+        }
+        // A segment of zero length files one cell: the cells `nearest` searched, in index order.
+        for (const std::size_t s : segments_near(grid, {.a = p, .b = p})) {
+            if (segment_distance(p, segments.at(s).a, segments.at(s).b) <= best + reach.eps) {
+                ties.push_back({.point = static_cast<std::int64_t>(i),
+                                .segment = static_cast<std::int64_t>(s)});
+            }
+        }
+    }
+    return ties;
+}
+
 } // namespace splintercam::geometry2d

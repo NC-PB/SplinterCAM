@@ -9,16 +9,21 @@
 #include <cmath>
 #include <limits>
 #include <map>
+#include <utility>
 
 namespace splintercam::geometry2d {
 namespace {
 
-struct Frame {
-    double cx;
-    double cy;
-};
+using GridPoint = std::pair<std::int64_t, std::int64_t>;
 
-// The centre of the points' bounding box, or nothing when they span the limit or more.
+GridPoint key(const Clipper2Lib::Point64& p) {
+    return {p.x, p.y};
+}
+
+} // namespace
+
+// The steps of grid_region, declared in grid.hpp for offset2d (DEC-G2D-041).
+
 bool frame_of(std::span<const double> points, GridLimits limits, Frame& frame) {
     double x0 = std::numeric_limits<double>::infinity();
     double y0 = x0;
@@ -59,14 +64,6 @@ Clipper2Lib::Paths64 to_grid(const Polylines& input, Frame frame, double u) {
     return paths;
 }
 
-using GridPoint = std::pair<std::int64_t, std::int64_t>;
-
-GridPoint key(const Clipper2Lib::Point64& p) {
-    return {p.x, p.y};
-}
-
-// Splits `path` at every point it passes twice into loops that each keep the traversal of their
-// vertices (REQ-G2D-181).
 void split_pinches(const Clipper2Lib::Path64& path, std::vector<Clipper2Lib::Path64>& out) {
     std::vector<Clipper2Lib::Path64> todo{path};
     while (!todo.empty()) {
@@ -93,8 +90,6 @@ void split_pinches(const Clipper2Lib::Path64& path, std::vector<Clipper2Lib::Pat
     }
 }
 
-// The loops in an order of their own, not Clipper2's (its intersection sort breaks ties by the
-// standard library): each starts at its smallest point, then by that point and signed area.
 void canonical(std::vector<Clipper2Lib::Path64>& loops) {
     for (Clipper2Lib::Path64& loop : loops) {
         std::ranges::rotate(loop, std::ranges::min_element(loop, {}, key));
@@ -104,8 +99,6 @@ void canonical(std::vector<Clipper2Lib::Path64>& loops) {
     });
 }
 
-// Every vertex at a point that two or more loop vertices share, a pinch split or a touch of
-// two loops, is a fixed node (D-084), the same whichever way Clipper2 returned the touch.
 std::vector<std::uint8_t> shared_points(const std::vector<Clipper2Lib::Path64>& loops) {
     std::map<GridPoint, int> uses;
     for (const Clipper2Lib::Path64& loop : loops) {
@@ -121,8 +114,6 @@ std::vector<std::uint8_t> shared_points(const std::vector<Clipper2Lib::Path64>& 
     }
     return fixed;
 }
-
-} // namespace
 
 GridAreas grid_difference(const Polylines& b, const Polylines& a, GridLimits limits) {
     GridAreas result;
