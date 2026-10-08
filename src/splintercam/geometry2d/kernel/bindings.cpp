@@ -400,6 +400,7 @@ void bind_grid(nb::module_& m) {
                                                 std::span{source_ids.data(), source_ids.size()}};
             check_rows(vertices.shape(0), {ids.size()});
             check_limit(std::get<0>(grid));
+            check_limit(std::get<1>(grid)); // a NaN span would refuse nothing
             check_limit(std::get<2>(grid));
             if (fill_rule < 0 || fill_rule > 2) {
                 throw nb::value_error("fill_rule must be 0 (EvenOdd), 1 (NonZero) or 2 (Positive)");

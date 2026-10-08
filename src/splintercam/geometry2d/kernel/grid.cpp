@@ -9,7 +9,6 @@
 #include <cmath>
 #include <limits>
 #include <map>
-#include <set>
 
 namespace splintercam::geometry2d {
 namespace {
@@ -60,24 +59,27 @@ Clipper2Lib::Paths64 to_grid(const Polylines& input, Frame frame, double u) {
     return paths;
 }
 
+using GridPoint = std::pair<std::int64_t, std::int64_t>;
+
+GridPoint key(const Clipper2Lib::Point64& p) {
+    return {p.x, p.y};
+}
+
 // Splits `path` at every point it passes twice into loops that each keep the traversal of their
-// vertices; adds the points split at to `pinches` (REQ-G2D-181).
-using GridPoints = std::set<std::pair<std::int64_t, std::int64_t>>;
-void split_pinches(const Clipper2Lib::Path64& path, std::vector<Clipper2Lib::Path64>& out,
-                   GridPoints& pinches) {
+// vertices (REQ-G2D-181).
+void split_pinches(const Clipper2Lib::Path64& path, std::vector<Clipper2Lib::Path64>& out) {
     std::vector<Clipper2Lib::Path64> todo{path};
     while (!todo.empty()) {
         Clipper2Lib::Path64 p = std::move(todo.back());
         todo.pop_back();
-        std::map<std::pair<std::int64_t, std::int64_t>, std::size_t> seen;
+        std::map<GridPoint, std::size_t> seen;
         bool split = false;
         for (std::size_t j = 0; j < p.size() && !split; ++j) {
-            const auto [entry, added] = seen.try_emplace({p.at(j).x, p.at(j).y}, j);
+            const auto [entry, added] = seen.try_emplace(key(p.at(j)), j);
             if (added) {
                 continue;
             }
             const std::size_t i = entry->second;
-            pinches.insert({p.at(i).x, p.at(i).y});
             todo.emplace_back(p.begin() + static_cast<std::ptrdiff_t>(i),
                               p.begin() + static_cast<std::ptrdiff_t>(j));
             Clipper2Lib::Path64 rest(p.begin() + static_cast<std::ptrdiff_t>(j), p.end());
@@ -89,6 +91,35 @@ void split_pinches(const Clipper2Lib::Path64& path, std::vector<Clipper2Lib::Pat
             out.push_back(std::move(p));
         }
     }
+}
+
+// The loops in an order of their own, not Clipper2's (its intersection sort breaks ties by the
+// standard library): each starts at its smallest point, then by that point and signed area.
+void canonical(std::vector<Clipper2Lib::Path64>& loops) {
+    for (Clipper2Lib::Path64& loop : loops) {
+        std::ranges::rotate(loop, std::ranges::min_element(loop, {}, key));
+    }
+    std::ranges::sort(loops, {}, [](const Clipper2Lib::Path64& loop) {
+        return std::pair{key(loop.front()), Clipper2Lib::Area(loop)};
+    });
+}
+
+// Every vertex at a point that two or more loop vertices share, a pinch split or a touch of
+// two loops, is a fixed node (D-084), the same whichever way Clipper2 returned the touch.
+std::vector<std::uint8_t> shared_points(const std::vector<Clipper2Lib::Path64>& loops) {
+    std::map<GridPoint, int> uses;
+    for (const Clipper2Lib::Path64& loop : loops) {
+        for (const Clipper2Lib::Point64& p : loop) {
+            ++uses[key(p)];
+        }
+    }
+    std::vector<std::uint8_t> fixed;
+    for (const Clipper2Lib::Path64& loop : loops) {
+        for (const Clipper2Lib::Point64& p : loop) {
+            fixed.push_back(uses.at(key(p)) > 1 ? 1 : 0);
+        }
+    }
+    return fixed;
 }
 
 } // namespace
@@ -134,10 +165,11 @@ GridRegion grid_region(const RegionInput& input, GridLimits limits) {
         return result;
     }
     std::vector<Clipper2Lib::Path64> loops;
-    GridPoints pinches;
     for (const Clipper2Lib::Path64& path : solution) {
-        split_pinches(path, loops, pinches);
+        split_pinches(path, loops);
     }
+    canonical(loops);
+    result.fixed = shared_points(loops);
     std::vector<double> middles;
     for (const Clipper2Lib::Path64& loop : loops) {
         result.starts.push_back(static_cast<std::int64_t>(result.points.size()));
@@ -149,7 +181,6 @@ GridRegion grid_region(const RegionInput& input, GridLimits limits) {
             middles.insert(middles.end(),
                            {frame.cx + static_cast<double>(p.x + q.x) / 2 * limits.u,
                             frame.cy + static_cast<double>(p.y + q.y) / 2 * limits.u});
-            result.fixed.push_back(pinches.contains({p.x, p.y}) ? 1 : 0);
         }
     }
     std::vector<std::int64_t> nearest(result.points.size());

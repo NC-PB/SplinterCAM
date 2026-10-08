@@ -16,8 +16,8 @@ from ._polygon import PolygonRegion
 # Parameters): a named constant for now, provisionally (DEC-G2D-034).
 MAX_SPAN_GRID_UNITS = float(2**26)
 _OK, _TOO_LARGE = 0, 1  # GridStatus in kernel/grid.hpp; 2 is a Clipper2 failure
-# Output edges lie within 2.83 grid units of the flattened input (REQ-G2D-030); twice t_topo
-# (4 grid units) reaches the nearest input edge from every output edge's middle.
+# Every output edge is a rounded piece of a flattened input edge, its ends within 2.83 grid units
+# of it (REQ-G2D-030), so its middle is too; twice t_topo (4 grid units) reaches that edge.
 _ID_REACH_T_TOPO = 2.0
 
 

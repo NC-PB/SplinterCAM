@@ -252,9 +252,16 @@ def _two_circles(first: list[float], second: list[float], ctx: Context) -> Curve
     return built.value
 
 
-def _rule_areas(loops: CurveRows, kind: RegionKind, ctx: Context) -> dict[str, float]:
-    """The area of `build_region`'s region and of the region by each fill rule."""
+def _rule_areas(
+    loops: CurveRows, kind: RegionKind, ctx: Context, inside: Points, outside: Points
+) -> dict[str, float]:
+    """The area of `build_region`'s region and of the region by each fill rule; the region holds
+    the points `inside` and not those `outside` (each far from every boundary)."""
     region = _region(loops, ctx, kind).region
+    located = point_in_region(
+        np.array([*inside, *outside]), _rows_of(region.points, region.loop_starts), ctx
+    )
+    assert located.tolist() == [1] * len(inside) + [0] * len(outside)
     areas = {"build_region": _area(region.points, region.loop_starts)}
     tree = loop_tree(loops, ctx).value
     assert tree is not None
@@ -274,7 +281,7 @@ def test_build_region_keeps_an_island_over_the_pocket_wall_out_of_the_pocket(ctx
     region = _region(loops, ctx, RegionKind.AIR).region
     reach = 10.0 + 3.0 * ctx.tolerances.grid_unit_mm  # REQ-G2D-030: rounding to the grid
     assert np.hypot(region.points[:, 0], region.points[:, 1]).max() <= reach
-    areas = _rule_areas(loops, RegionKind.AIR, ctx)
+    areas = _rule_areas(loops, RegionKind.AIR, ctx, [(-5.0, 0.0)], [(5.0, 0.0), (12.0, 0.0)])
     assert areas["build_region"] == areas["POSITIVE"]
     assert areas["POSITIVE"] < areas["NON_ZERO"]
 
@@ -294,7 +301,7 @@ def test_two_islands_touching_in_a_pocket_keep_their_overlap_out_of_it(ctx: Cont
     )
     built = curve_rows(rows, np.arange(6, dtype=np.int64), np.array([0, 4, 5], np.int64), ctx)
     assert built.value is not None
-    areas = _rule_areas(built.value, RegionKind.AIR, ctx)
+    areas = _rule_areas(built.value, RegionKind.AIR, ctx, [(0.0, 10.0)], [(-5.0, 0.0), (5.0, 0.0)])
     assert areas["build_region"] == areas["POSITIVE"]
     assert areas["POSITIVE"] < areas["NON_ZERO"]
 
@@ -315,6 +322,23 @@ def test_an_island_in_a_hole_overlapping_it_stays_material(ctx: Context) -> None
     )
     built = curve_rows(rows, np.arange(6, dtype=np.int64), np.array([0, 4, 5], np.int64), ctx)
     assert built.value is not None
-    areas = _rule_areas(built.value, RegionKind.MATERIAL, ctx)
+    areas = _rule_areas(
+        built.value, RegionKind.MATERIAL, ctx, [(5.0, 0.0), (15.0, 15.0)], [(-5.0, 0.0)]
+    )
     assert areas["build_region"] == areas["POSITIVE"]
     assert areas["POSITIVE"] > areas["EVEN_ODD"]
+
+
+@pytest.mark.req("REQ-G2D-181", "REQ-G2D-231")
+def test_a_touching_island_gives_the_same_region_in_either_input_order(ctx: Context) -> None:
+    # Spec review: Clipper2 returns the touch as one pinched path for one order and as two paths
+    # for the other; the region, its order and its fixed vertices must not tell them apart.
+    island = [(25.0, 25.0), (15.0, 20.0), (20.0, 15.0)]
+    walls = [_box(0, 0, 30, 30), _box(5, 5, 25, 25)]
+    first = _region(polygons([island, *walls], ctx), ctx).region
+    last = _region(polygons([*walls, island], ctx), ctx).region
+    assert first.points.tobytes() == last.points.tobytes()
+    assert first.loop_starts.tolist() == last.loop_starts.tolist()
+    assert first.fixed.tolist() == last.fixed.tolist()
+    at = (first.points == np.array([25.0, 25.0])).all(axis=1)
+    assert first.fixed[at].tolist() == [1, 1]

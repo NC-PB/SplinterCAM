@@ -70,25 +70,29 @@ def _rows(polyline: NDArray[np.float64]) -> CurveRows:
 
 def _kept(cycles: list[NDArray[np.float64]], signs: list[float], t_topo: float) -> list[int]:
     """The cycles not within t_topo of the others; of two that cover each other, both go when
-    their signs differ and both stay when they agree (REQ-G2D-238). A covered cycle stays only as
-    such a pair, and not when the uncovered cycles alone cover it."""
+    their signs differ and both stay when they agree (REQ-G2D-238). A cycle the uncovered cycles
+    alone cover goes first, and is no one's partner after that."""
+    n = len(cycles)
     flagged = [_covered(c, cycles[:k] + cycles[k + 1 :], t_topo) for k, c in enumerate(cycles)]
-    keep: list[int] = []
-    for k, c in enumerate(cycles):
-        unflagged = [cycles[j] for j in range(len(cycles)) if j != k and not flagged[j]]
-        if not flagged[k] or (
-            not _covered(c, unflagged, t_topo)
+    unflagged = [cycles[j] for j in range(n) if not flagged[j]]
+    sliver = [flagged[k] and _covered(c, unflagged, t_topo) for k, c in enumerate(cycles)]
+    return [
+        k
+        for k, c in enumerate(cycles)
+        if not flagged[k]
+        or (
+            not sliver[k]
             and any(
                 j != k
                 and flagged[j]
+                and not sliver[j]
                 and signs[j] == signs[k]
                 and _covered(c, [cycles[j]], t_topo)
                 and _covered(cycles[j], [c], t_topo)
-                for j in range(len(cycles))
+                for j in range(n)
             )
-        ):
-            keep.append(k)
-    return keep
+        )
+    ]
 
 
 def self_contact(loop: NDArray[np.float64], ctx: Context) -> SelfContact:
