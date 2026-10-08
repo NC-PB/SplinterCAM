@@ -238,6 +238,13 @@ void bind_flatten_rows(nb::module_& m) {
         "Write the loops' rows flattened one after another, each joint once (REQ-G2D-199).");
 }
 
+// One closed loop of `rows` (none when it is empty), for the pair kernels.
+std::span<const std::int64_t> loop_of(const PointRows& rows,
+                                      const std::array<std::int64_t, 1>& start) {
+    return rows.shape(0) == 0 ? std::span<const std::int64_t>{}
+                              : std::span<const std::int64_t>{start};
+}
+
 void check_polylines(std::span<const std::int64_t> starts, std::span<const double> vertices) {
     const auto count = static_cast<std::int64_t>(vertices.size() / 2);
     std::int64_t previous = -1;
@@ -258,6 +265,20 @@ void check_polylines(std::span<const std::int64_t> starts, std::span<const doubl
     }
 }
 
+void check_limit(double limit) {
+    if (!(limit > 0.0) || !std::isfinite(limit)) {
+        throw nb::value_error("limit must be finite and > 0");
+    }
+}
+
+// The pair kernels' input: a positive finite limit, finite vertices.
+void check_pair(const PointRows& a, const PointRows& b, double limit,
+                const std::array<std::int64_t, 1>& start) {
+    check_limit(limit);
+    check_polylines(loop_of(a, start), {a.data(), a.size()});
+    check_polylines(loop_of(b, start), {b.data(), b.size()});
+}
+
 void bind_distances(nb::module_& m) {
     m.def(
         "polyline_distances",
@@ -276,6 +297,31 @@ void bind_distances(nb::module_& m) {
         },
         nb::arg("q"), nb::arg("points"), nb::arg("loop_starts"), nb::arg("limit"), nb::arg("out"),
         "Write per point its distance to the closed polylines where at most limit, else inf.");
+    m.def(
+        "crossing_depth",
+        [](const PointRows& a, const PointRows& b, double limit) {
+            const std::array<std::int64_t, 1> start{0};
+            check_pair(a, b, limit, start);
+            const nb::gil_scoped_release unlocked;
+            const Depth depth =
+                crossing_depth({.points = points(a), .loop_starts = loop_of(a, start)},
+                               {.points = points(b), .loop_starts = loop_of(b, start)}, limit);
+            return std::pair{depth.inside, depth.outside};
+        },
+        nb::arg("a"), nb::arg("b"), nb::arg("limit"),
+        "Whether closed polyline a reaches farther than limit inside and outside closed polyline "
+        "b.");
+    m.def(
+        "covered_by",
+        [](const PointRows& a, const PointRows& b, double limit) {
+            const std::array<std::int64_t, 1> start{0};
+            check_pair(a, b, limit, start);
+            const nb::gil_scoped_release unlocked;
+            return covered_by({.points = points(a), .loop_starts = loop_of(a, start)},
+                              {.points = points(b), .loop_starts = loop_of(b, start)}, limit);
+        },
+        nb::arg("a"), nb::arg("b"), nb::arg("limit"),
+        "Whether every point of closed polyline a lies within limit of closed polyline b.");
     m.def(
         "basic_sin_cos",
         [](const Values& angles, const DoubleOut& sines, const DoubleOut& cosines) {

@@ -8,7 +8,7 @@
 - Research: `docs/research/01-foundations.md`: Loop tree, Kernel arrays (polygon region), Tolerances (resolution chain), Flattening (side rule); tests 7, 16, 19, 21 and 24
 - Branch: one pull request per session (docs/dev/07); a step with a new algorithm or over about 100 lines of non-test code gets its own, from `main` after the previous merge, never stacked
 - Owner: Peter Burgener; agents: Claude Code sessions
-- Status (2026-10-07): approved by Peter with his answers below (DEC-G2D-022); step 1 done and reviewed (DEC-G2D-024 to 027); steps 2 and 3 done; step 4 next.
+- Status (2026-10-07): approved by Peter with his answers below (DEC-G2D-022); step 1 done and reviewed (DEC-G2D-024 to 027); steps 2 and 3 done; step 4a done; 4b next.
 
 ## Questions for Peter before step 1
 
@@ -29,7 +29,7 @@ Answered 2026-10-07: yes to all six, as proposed (DEC-G2D-022).
 - [x] 1. **SPEC cut for slice 2.** Release the drafted requirements chosen by the answers above, with their tests from research 01. Mark the rest Later parts. Record the interface, failure modes and diagnostics (`LOOP_DUPLICATE`, `LOOPS_CROSS`, a span refusal); raise the budget in `modules.yaml`; spec-reviewer round. Size: docs only.
 - [x] 2. **Polygon region arrays and the flattening of curve-row loops.** `points`, `loop_starts`, `source_ids` and fixed-node flags, checked before any kernel work (REQ-G2D-183 to 187). The flattening of a loop of curve rows holds each joint once and gives each vertex its row's ID (199, 200). The side rule for regions of each kind, material or air (115, 116, 119, 127). Research 01 test 16. Size: about 250 lines of code + 350 of tests.
 - [x] 3. **Topology flattening and batched distances.** The inscribed flattening within u with the kernel's own sine and cosine, for topology only (152). u and t_topo come from the `Context` (026, 029). A kernel for point-to-polyline distances in batches, which the loop tree and the probes need; it replaces Python loops (backlog of plan 0003, step 6). Size: about 250 + 300.
-- [ ] 4. **Loop tree I: cleaning and the pair tests.** Per loop: cleanup, the area test and the 1.5·t_topo·L test (155 to 157). Duplicates within t_topo, the first in input order kept (158, 159). Crossings by exact segment tests with their points, counted only when deeper than t_topo, and touching loops accepted (160 to 163, 237, 238). Research 01 tests 7 and 19. Size: about 300 + 400.
+- [ ] 4. **Loop tree I: cleaning and the pair tests.** Split (2026-10-08) into 4a: cleanup, area tests, duplicates (155 to 159; done); 4b: crossings between loops and the depth rule (160 to 163, 237); 4c: self-crossings (238). Each its own pull request, opened after the one before merges. Per loop: cleanup, the area test and the 1.5·t_topo·L test (155 to 157). Duplicates within t_topo, the first in input order kept (158, 159). Crossings by exact segment tests with their points, counted only when deeper than t_topo, and touching loops accepted (160 to 163, 237, 238). Research 01 tests 7 and 19. Size: about 300 + 400.
 - [ ] 5. **Loop tree II: parents, depths, normalisation.** The containment probes in their order (164 to 168), depth and orientation (174, 175), a winding of 1 inside normalised regions (151), and independence of tol (154). Research 01 test 7. Size: about 250 + 350.
 - [ ] 6. **The Clipper2 bridge.** Re-centre on the bounding box and round to u (033); refuse a span of 2^26 grid units or more with an error diagnostic (034); the resolution chain property, every output vertex within 2.83 grid units of the input polylines and point in region unchanged beyond t_topo (030, 031). Research 01 test 21. Size: about 200 + 300.
 - [ ] 7. **The rule 5 fallback.** The Clipper2 difference with NonZero, and the tie rules for loops tested both ways (166, 169 to 173). Research 01 test 24. Size: about 150 + 300.
@@ -46,6 +46,13 @@ Total: about 1850 added lines of code (about 1300 NLOC) and 2550 of tests, in ni
 
 <!-- Newest first. What was done, what tools/check reported, what is next. At most about 30 lines per session;
      numbers go into tables. Above 300 lines, older entries move to an archive file next to the plan. -->
+
+### 2026-10-08, step 4a: cleanup, area tests, duplicates
+
+- `screen_loops` (REQ-G2D-154 to 159, 236): rules 1 to 3 on the topology flattenings, the thinness test on exact sums (`polygon_area_length`), duplicates against the kept loops only. Choices in DEC-G2D-030.
+- Step 3's pull request 38 merged with a failing sanitize job: libasan preloaded without libstdc++ aborted on the first kernel exception. Fixed in pull request 39 (`tools/lib/cmd_test.py` preloads libstdc++; sanitizer reports reach the log).
+- Test audit: boundary cases added (the thinness limit, t_topo exactly, a chain of near-duplicates, both orders, arcs, the cleaned flattening in rules 2 and 3, `polygon_area_length`). The property test of independence from tol and input order waits for step 5, where the whole tree exists.
+- `tools/check`: PASS (11 of 14). Next: 4b.
 
 ### 2026-10-08, step 3: topology flattening and batched distances
 
