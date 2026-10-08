@@ -70,3 +70,5 @@ Total: about 1230 added lines of code (about 1050 NLOC) and 2080 of tests, in ni
 
 - Written on Peter's answer to plan 0004 (DEC-G2D-038): the module entry and budget proposed, two questions open.
 - Peter's answers: entry approved (layer 1, budget 1500 as an estimate) and applied, with the layer rule settled (same-layer dependencies when named in `depends_on`); questions 1 and 2 as proposed; geometry2d's SPEC names its kernel interface (DEC-G2D-040). Next: research 02, then `/research-to-spec`; the first step moves `frame_of` and `to_grid` into `kernel/grid.hpp` as an interface change.
+
+- ADR drafted for DEC-OFF-003: `docs/adr/0010-shapely-geos-test-only.md` (Proposed; shapely/GEOS in a test-only group for test 20, D-060). A person decides before step 9.
