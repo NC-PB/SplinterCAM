@@ -8,9 +8,11 @@ from typing import Literal
 import numpy as np
 from numpy.typing import NDArray
 
+from splintercam import _kernels
 from splintercam.foundation import Context
 
 from ._distances import polyline_distances
+from ._grid import MAX_SPAN_GRID_UNITS
 from ._region import PointLocation, point_in_region
 from ._rows import CurveRows
 
@@ -20,10 +22,13 @@ _CHUNK_PAIRS = 1 << 20  # vertex-segment pairs per NumPy chunk: memory, not a to
 
 @dataclass(frozen=True, slots=True)
 class Containment:
-    """Whether B lies in A, and whether a probe decided it (else the rule 5 fallback would)."""
+    """Whether B lies in A; whether a probe decided it, else the rule 5 fallback with the area of
+    B minus A in mm²; and the code of a grid call that was refused or failed."""
 
     contained: bool
     by_probe: bool
+    difference_mm2: float = 0.0
+    refused: str | None = None
 
 
 def _projections(a: NDArray[np.float64], b: NDArray[np.float64]) -> NDArray[np.float64]:
@@ -56,23 +61,64 @@ def contains(
         decided = np.flatnonzero(locations != PointLocation.ON)
         if decided.size > 0:
             return Containment(bool(locations[decided[0]] == PointLocation.IN), True)
-    return Containment(False, False)
+    return _fallback(b, a, ctx)
 
 
-Decision = Literal["a in b", "b in a", "apart", "cross"]
+def _fallback(b: NDArray[np.float64], a: NDArray[np.float64], ctx: Context) -> Containment:
+    """B ⊂ A when the area of B minus A, from Clipper2's NonZero difference on the grid, is less
+    than half of B's grid area (REQ-G2D-169)."""
+    u = ctx.tolerances.grid_unit_mm
+    status, difference, area_b = _kernels.geometry2d.grid_difference(b, a, u, MAX_SPAN_GRID_UNITS)
+    if status != 0:
+        refused = "REGION_TOO_LARGE" if status == 1 else "REGION_FAILED"
+        return Containment(False, False, refused=refused)
+    return Containment(difference < area_b / 2, False, difference)
+
+
+Decision = Literal["a in b", "b in a", "apart", "cross", "refused"]
 
 
 def both_ways(a_in_b: Containment, b_in_a: Containment) -> Decision:
-    """The containment of two loops tested both ways (REQ-G2D-166): a probe's result stands over
-    the fallback's (REQ-G2D-170); two probes finding each in the other mean the loops cross
-    (REQ-G2D-173)."""
+    """The containment of two loops tested both ways (REQ-G2D-166), a preceding b in input order:
+    a probe's result stands over the fallback's (REQ-G2D-170); two fallback results go to the
+    smaller difference, then to the earlier loop (REQ-G2D-171, 172); two probes finding each in the
+    other mean the loops cross (REQ-G2D-173)."""
+    if a_in_b.refused or b_in_a.refused:
+        return "refused"
     if a_in_b.contained and b_in_a.contained:
         if a_in_b.by_probe and b_in_a.by_probe:
             return "cross"
-        return "a in b" if a_in_b.by_probe else "b in a"
+        if a_in_b.by_probe != b_in_a.by_probe:
+            return "a in b" if a_in_b.by_probe else "b in a"
+        # Two fallback results: the smaller difference is the inner loop, a on equality, since a
+        # precedes b in input order (REQ-G2D-171, 172).
+        return "a in b" if a_in_b.difference_mm2 <= b_in_a.difference_mm2 else "b in a"
     if a_in_b.contained:
         return "a in b"
     return "b in a" if b_in_a.contained else "apart"
+
+
+@dataclass(frozen=True, slots=True)
+class Nesting:
+    """Per loop its parent (-1 for none) and depth; the pairs that cross or do not nest; the
+    pairs whose fallback the grid refused or failed, with the code."""
+
+    parents: list[int]
+    depths: list[int]
+    crossing: list[tuple[int, int]]
+    refused: list[tuple[int, int, str]]
+
+
+def _decide(a_in_b: Containment | None, b_in_a: Containment | None) -> Decision:
+    """One way (the other None) or both ways."""
+    if a_in_b is not None and b_in_a is not None:
+        return both_ways(a_in_b, b_in_a)
+    result = a_in_b if a_in_b is not None else b_in_a
+    if result is None or result.refused:
+        return "refused"
+    if not result.contained:
+        return "apart"
+    return "a in b" if a_in_b is not None else "b in a"
 
 
 def nest(
@@ -81,35 +127,41 @@ def nest(
     lengths: NDArray[np.float64],
     rows: list[CurveRows],
     ctx: Context,
-) -> tuple[list[int], list[int], list[tuple[int, int]]]:
-    """Per loop its parent (-1 for none) and depth, its number of containers, and the pairs that
-    contain each other by two probes or do not nest (REQ-G2D-164 to 166, 173, 174). Only
-    loops whose boxes overlap are tested; one way when their areas differ by more than
+) -> Nesting:
+    """Per loop its parent and depth, its number of containers (REQ-G2D-164 to 166, 169 to 174).
+    Only loops whose boxes overlap are tested; one way when their areas differ by more than
     t_topo·(L_A + L_B), both ways otherwise."""
     t_topo = ctx.tolerances.topology_tol_mm
     size = np.abs(areas)
     boxes = np.array([[*p.min(axis=0), *p.max(axis=0)] for p in polylines]).reshape(-1, 4)
     containers: list[list[int]] = [[] for _ in polylines]
     crossing: list[tuple[int, int]] = []
+    refused: list[tuple[int, int, str]] = []
     for a, b in overlapping_pairs(boxes):
-
-        def inside(inner: int, outer: int) -> Containment:
-            return contains(polylines[inner], polylines[outer], rows[outer], ctx)
-
-        if abs(size[a] - size[b]) <= t_topo * (lengths[a] + lengths[b]):
-            decision = both_ways(inside(a, b), inside(b, a))
-        elif size[a] > size[b]:
-            decision = "b in a" if inside(b, a).contained else "apart"
-        else:
-            decision = "a in b" if inside(a, b).contained else "apart"
+        close = abs(size[a] - size[b]) <= t_topo * (lengths[a] + lengths[b])
+        # Both ways when the areas are close, else only the smaller in the larger (REQ-G2D-165).
+        a_in_b = (
+            contains(polylines[a], polylines[b], rows[b], ctx)
+            if close or size[a] < size[b]
+            else None
+        )
+        b_in_a = (
+            contains(polylines[b], polylines[a], rows[a], ctx)
+            if close or size[a] > size[b]
+            else None
+        )
+        decision = _decide(a_in_b, b_in_a)
         if decision == "a in b":
             containers[a].append(b)
         elif decision == "b in a":
             containers[b].append(a)
         elif decision == "cross":
             crossing.append((a, b))
+        elif decision == "refused":
+            found = next(r.refused for r in (a_in_b, b_in_a) if r is not None and r.refused)
+            refused.append((a, b, found or "REGION_FAILED"))
     parents, unnested = _parents(containers)
-    return parents, [len(c) for c in containers], sorted({*crossing, *unnested})
+    return Nesting(parents, [len(c) for c in containers], sorted({*crossing, *unnested}), refused)
 
 
 def _parents(containers: list[list[int]]) -> tuple[list[int], list[tuple[int, int]]]:
@@ -135,3 +187,23 @@ def overlapping_pairs(boxes: NDArray[np.float64]) -> list[tuple[int, int]]:
     )
     a, b = np.nonzero(np.triu(~apart, k=1))
     return list(zip(a.tolist(), b.tolist(), strict=True))
+
+
+def contained_by_difference(b: CurveRows, a: CurveRows, ctx: Context) -> tuple[bool, float]:
+    """The rule 5 fallback alone on two single loops' topology flattenings: B ⊂ A, and the area
+    of B minus A in mm² (internal, for tests; REQ-G2D-169). A refused or failed grid call is a
+    `ValueError` here; the loop tree reports it as a diagnostic."""
+    from ._loops import topology_flattening
+
+    result = _fallback(topology_flattening(b, ctx).points, topology_flattening(a, ctx).points, ctx)
+    if result.refused:
+        raise ValueError(f"the grid refused the fallback: {result.refused}")
+    return result.contained, result.difference_mm2
+
+
+def fallback_inner(a: CurveRows, b: CurveRows, ctx: Context) -> int:
+    """The tie of two fallback results, a preceding b in input order: 0 when a is the inner loop,
+    1 when b (internal, for tests; REQ-G2D-171, 172)."""
+    return (
+        0 if contained_by_difference(a, b, ctx)[1] <= contained_by_difference(b, a, ctx)[1] else 1
+    )

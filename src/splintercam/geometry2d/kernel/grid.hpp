@@ -32,4 +32,13 @@ struct GridLimits {
 // input's bounding box, rounded to u, Clipper2's Union, mapped back (REQ-G2D-030, 033, 034).
 [[nodiscard]] GridResult grid_union(const Polylines& input, GridLimits limits);
 
+// The area of b minus a, and of b, on the grid, with the NonZero fill rule (REQ-G2D-169): both
+// polylines re-centred together on their bounding box and rounded to u.
+struct GridAreas {
+    GridStatus status = GridStatus::ok;
+    double difference_mm2 = 0.0;
+    double b_mm2 = 0.0;
+};
+[[nodiscard]] GridAreas grid_difference(const Polylines& b, const Polylines& a, GridLimits limits);
+
 } // namespace splintercam::geometry2d

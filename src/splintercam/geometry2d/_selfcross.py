@@ -113,8 +113,9 @@ def self_contact(loop: NDArray[np.float64], ctx: Context) -> SelfContact:
     polylines = [cycles[k] for k in order]
     areas = np.array([measures[k][0] for k in order])
     lengths = np.array([measures[k][1] for k in order])
-    parents, _, crossing = nest(polylines, areas, lengths, [_rows(p) for p in polylines], ctx)
-    if crossing:
+    nesting = nest(polylines, areas, lengths, [_rows(p) for p in polylines], ctx)
+    parents = nesting.parents
+    if nesting.crossing or nesting.refused:  # refused: conservatively a crossing
         return SelfContact("cross", 0.0, nodes)
     roots = {math.copysign(1.0, areas[k]) for k, p in enumerate(parents) if p < 0}
     alternates = all(

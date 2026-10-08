@@ -51,9 +51,8 @@ def loop_tree(loops: CurveRows, ctx: Context) -> Result[LoopTree]:
         return Result(_empty_tree(screened), tuple(diagnostics))
     kept = screened.kept.tolist()
     rows = [_loop_rows(loops, i) for i in kept]
-    parent, depth, crossing = nest(
-        list(screened.polylines), screened.areas, screened.lengths, rows, ctx
-    )
+    nesting = nest(list(screened.polylines), screened.areas, screened.lengths, rows, ctx)
+    parent, depth, crossing = nesting.parents, nesting.depths, nesting.crossing
     notes = [
         (
             kept[a],
@@ -65,6 +64,14 @@ def loop_tree(loops: CurveRows, ctx: Context) -> Result[LoopTree]:
             ),
         )
         for a, b in crossing
+    ]
+    notes += [
+        (
+            kept[a],
+            Diagnostic(code, Severity.ERROR, f"the containment fallback of {where} failed", where),
+        )
+        for a, b, code in nesting.refused
+        for where in [f"loops {kept[a]} and {kept[b]}"]
     ]
     if notes:
         keyed = [*zip(screened.diagnostic_loops, diagnostics, strict=True), *notes]

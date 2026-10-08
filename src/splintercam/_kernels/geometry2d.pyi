@@ -113,6 +113,11 @@ def self_cycles(loop: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), or
     Resolve a closed polyline's self-contacts into cycles (per cycle its first point and loop position); return (status, points, cycles, nodes), the counts it needed.
     """
 
+def grid_difference(b: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], a: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], u: float, max_span_units: float) -> tuple[int, float, float]:
+    """
+    Return (status, area of b minus a, area of b) in mm² from Clipper2's NonZero difference on the grid (REQ-G2D-169).
+    """
+
 def grid_union(points: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], loop_starts: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu', writable=False)], u: float, max_span_units: float, points_out: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu')], starts_out: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu')]) -> tuple[int, int, int]:
     """
     The NonZero union of closed polylines through Clipper2's grid; return (status, points, loops), the counts it needed.

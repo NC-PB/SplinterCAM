@@ -84,4 +84,29 @@ GridResult grid_union(const Polylines& input, GridLimits limits) {
     return result;
 }
 
+GridAreas grid_difference(const Polylines& b, const Polylines& a, GridLimits limits) {
+    GridAreas result;
+    std::vector<double> both(b.points.begin(), b.points.end());
+    both.insert(both.end(), a.points.begin(), a.points.end());
+    Frame frame{};
+    if (!frame_of(both, limits, frame)) {
+        result.status = GridStatus::too_large;
+        return result;
+    }
+    const Clipper2Lib::Paths64 subject = to_grid(b, frame, limits.u);
+    Clipper2Lib::Clipper64 clipper;
+    clipper.AddSubject(subject);
+    clipper.AddClip(to_grid(a, frame, limits.u));
+    Clipper2Lib::Paths64 solution;
+    if (!clipper.Execute(Clipper2Lib::ClipType::Difference, Clipper2Lib::FillRule::NonZero,
+                         solution)) {
+        result.status = GridStatus::failed;
+        return result;
+    }
+    const double unit_area = limits.u * limits.u; // grid units² to mm²
+    result.difference_mm2 = std::abs(Clipper2Lib::Area(solution)) * unit_area;
+    result.b_mm2 = std::abs(Clipper2Lib::Area(subject)) * unit_area;
+    return result;
+}
+
 } // namespace splintercam::geometry2d

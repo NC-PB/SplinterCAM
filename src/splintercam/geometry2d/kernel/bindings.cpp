@@ -374,6 +374,24 @@ void bind_pairs(nb::module_& m) {
 
 void bind_grid(nb::module_& m) {
     m.def(
+        "grid_difference",
+        [](const PointRows& b, const PointRows& a, double u, double max_span_units) {
+            const std::array<std::int64_t, 1> start{0};
+            check_limit(u);
+            check_polylines(loop_of(b, start), {b.data(), b.size()});
+            check_polylines(loop_of(a, start), {a.data(), a.size()});
+            const nb::gil_scoped_release unlocked;
+            const GridAreas areas =
+                grid_difference({.points = points(b), .loop_starts = loop_of(b, start)},
+                                {.points = points(a), .loop_starts = loop_of(a, start)},
+                                {.u = u, .max_span_units = max_span_units});
+            return std::tuple{static_cast<int>(areas.status), areas.difference_mm2, areas.b_mm2};
+        },
+        nb::arg("b"), nb::arg("a"), nb::arg("u"), nb::arg("max_span_units"),
+        "Return (status, area of b minus a, area of b) in mm² from Clipper2's NonZero difference "
+        "on "
+        "the grid (REQ-G2D-169).");
+    m.def(
         "grid_union",
         [](const PointRows& vertices, const Counts& loop_starts, double u, double max_span_units,
            const PointsOut& points_out, const CountsOut& starts_out) {
