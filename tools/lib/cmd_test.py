@@ -71,6 +71,19 @@ def _asan_runtime_path(compiler: str) -> str | None:
     return found if clang_style.returncode == 0 and found != "libclang_rt.asan-x86_64.so" else None
 
 
+def _cxx_runtime_path(compiler: str) -> str | None:
+    """Path to the C++ runtime `compiler` links (Linux), found like the ASan runtime."""
+    completed = subprocess.run(
+        [compiler, "-print-file-name=libstdc++.so"],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    found = completed.stdout.strip()
+    return found if completed.returncode == 0 and found not in ("", "libstdc++.so") else None
+
+
 def _sanitizer_env() -> dict[str, str] | None:
     """Environment for the sanitizer pytest run, or None if this platform has no runtime to preload.
 
@@ -79,6 +92,10 @@ def _sanitizer_env() -> dict[str, str] | None:
     UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1: stop and print a stack trace on the first
     undefined-behaviour report, so a report fails the step instead of being merely logged
     (IREE's sanitizer documentation, "Using SanitizerRuntimes").
+    On Linux the C++ runtime is preloaded after the ASan runtime: Python does not link it, so ASan's
+    __cxa_throw interceptor finds no real __cxa_throw when the kernel module loads it later, and
+    the first exception a kernel throws aborts ("CHECK failed: ... real___cxa_throw", seen in CI on
+    plan 0004, step 3).
     """
     env = dict(os.environ)
     if sys.platform == "darwin":
@@ -95,10 +112,12 @@ def _sanitizer_env() -> dict[str, str] | None:
             return None
         env["DYLD_INSERT_LIBRARIES"] = runtime
     elif sys.platform.startswith("linux"):
-        runtime = _asan_runtime_path(os.environ.get("CXX", "c++"))
+        compiler = os.environ.get("CXX", "c++")
+        runtime = _asan_runtime_path(compiler)
         if runtime is None:
             return None
-        env["LD_PRELOAD"] = runtime
+        cxx_runtime = _cxx_runtime_path(compiler)
+        env["LD_PRELOAD"] = runtime if cxx_runtime is None else f"{runtime}:{cxx_runtime}"
     else:
         return None
     env["ASAN_OPTIONS"] = "detect_leaks=0"
@@ -165,8 +184,10 @@ def _sanitize_step() -> StepResult:
         return StepResult("sanitizer", Status.FAIL, build_seconds, detail)
 
     python = SANITIZE_VENV / "bin/python"  # reached only on Linux and macOS (checked above)
+    # --capture=sys: a sanitizer report is written to file descriptor 2 and then aborts the
+    # process; pytest's default fd capture would swallow it with the process (plan 0004, step 3).
     code, pytest_seconds = _run(
-        [str(python), "-m", "pytest", "-q"], env=env, label="sanitizer test"
+        [str(python), "-m", "pytest", "-q", "--capture=sys"], env=env, label="sanitizer test"
     )
     total = build_seconds + pytest_seconds
     if code != 0:

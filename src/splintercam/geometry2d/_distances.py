@@ -112,11 +112,23 @@ def polyline_distances(
     limit_mm: float,
 ) -> NDArray[np.float64]:
     """Capped distances to closed polylines (SPEC, Public interface, internal entries; DEC-G2D-013;
-    research 01, Loop tree, rules 3 and 5)."""
+    research 01, Loop tree, rules 3 and 5). Broken input is a `ValueError`, raised here so the
+    kernel's own checks stay a backstop (REQ-G2D-239)."""
     (query,) = point_rows(q)
     out = np.empty(query.shape[0], dtype=np.float64)
     vertices = np.ascontiguousarray(points, dtype=np.float64)
     starts = np.ascontiguousarray(loop_starts, dtype=np.int64)
+    if not (math.isfinite(limit_mm) and limit_mm > 0.0):
+        raise ValueError(f"limit must be finite and > 0, got {limit_mm!r}")
+    if not np.isfinite(vertices).all():
+        raise ValueError("every polyline vertex must be finite")
+    ends = np.append(starts[1:], vertices.shape[0])
+    if starts.size == 0 and vertices.size > 0:
+        raise ValueError("loop_starts must name the loops of the points")
+    if starts.size > 0 and (starts[0] != 0 or np.any(ends <= starts)):
+        raise ValueError(
+            f"loop_starts must start at 0 and ascend strictly below the point count: {starts}"
+        )
     _kernels.geometry2d.polyline_distances(query, vertices, starts, limit_mm, out)
     out.flags.writeable = False
     return out
