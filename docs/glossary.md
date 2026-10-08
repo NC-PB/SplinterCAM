@@ -39,6 +39,7 @@
 | signed area | `signed_area` | vorzeichenbehaftete Fläche | Area of a loop, positive for a counter-clockwise loop (research 01, Area and orientation) | 01 |
 | point location | `PointLocation` (`IN`, `OUT`, `ON`) | Punktlage | Where a point lies against a region: ON within eps_len of the boundary, else IN where the winding number is not 0 (research 01, Point in region) | 01 |
 | zero-width spike | `CLEANUP_SPIKE` | Nullbreiten-Spitze | A vertex where a loop turns back exactly onto itself; cleanup drops it without changing the region (research 01, Helpers) | 01 |
+| zero-width slit | `LOOP_SLIT`, `split_slits` | Nullbreiten-Schlitz | A run of rows a loop runs out and back exactly, with rows on both sides, as a keyhole drawn as one loop; the loop tree removes it and splits the loop in two (REQ-G2D-241) | 01 |
 | curve rows | `CurveRows` | Kurvenzeilen | Lines and arcs of closed loops as arrays at the kernel boundary: [x0, y0, x1, y1, cx, cy, sweep] per row, IDs, loop starts | 01 |
 | loop tree | `loop_tree`, `LoopTree` | Konturbaum | Closed loops checked and nested: degenerate, duplicate and crossing loops reported, parents and depths found, even depth CCW and odd depth CW (research 01, Loop tree) | 01 |
 | topology flattening | (inside `loop_tree`) | Topologie-Diskretisierung | Arcs replaced by polylines within u, for the loop tree's decisions only (research 01, Loop tree, rule 1) | 01 |

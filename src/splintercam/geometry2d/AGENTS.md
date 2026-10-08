@@ -1,6 +1,6 @@
 # AGENTS.md: geometry2d
 
-Layer 1. Implements docs/research/01 (slices 1 and 2; the rest is under "Later parts" in the SPEC). Contract: `./SPEC.md`. Why it is built this way: `./DECISIONS.md` (read it before changing behaviour). Public API: `./__init__.py`. C++ part: `./kernel/`. Depends on: foundation. Slice 1 is complete and reviewed: `docs/plans/completed/0003-geometry2d-slice-1.md` (Handover). Slice 2: `docs/plans/active/0004-geometry2d-slice-2.md` (approved; its SPEC cut is step 1).
+Layer 1. Implements docs/research/01 (slices 1 and 2; the rest is under "Later parts" in the SPEC). Contract: `./SPEC.md`. Why it is built this way: `./DECISIONS.md` (read it before changing behaviour). Public API: `./__init__.py`. C++ part: `./kernel/`. Depends on: foundation. Slice 1 is complete and reviewed: `docs/plans/completed/0003-geometry2d-slice-1.md` (Handover). Slice 2 is complete and reviewed: `docs/plans/completed/0004-geometry2d-slice-2.md` (Handover). The offsets go to the module `offset2d` (plan 0005, DEC-G2D-038).
 
 ## Commands
 
@@ -34,3 +34,5 @@ Layer 1. Implements docs/research/01 (slices 1 and 2; the rest is under "Later p
 - The predicates are exact only for coordinates that are 0 or have a magnitude in [2^−142, 2^201] (SPEC, precondition, not checked). Hypothesis draws far smaller floats often: property tests use a 2^-20 mm grid or filter to the range, or they fail on input outside the contract.
 - `arc_from_bulge` with a large bulge on a chord within eps_len returns a full circle that ends at P0 (the nearly closed rule): loop generators in tests must check that the arc ends where the next row starts.
 - clang-tidy (warnings are errors) rejects `operator[]` on spans and arrays (use `std::get`, `.at`, `subspan` or the `x()`/`y()` helpers), adjacent parameters of one type (use a struct), int8 to int conversions (signs return `int`), magic numbers and functions above cognitive complexity 15.
+- Clipper2 2.0.1 pinches an island into the hole it touches at a vertex only for some input orders: a pinch test must fix the order that produces it (DEC-G2D-036).
+- A zero-width slit is found bit for bit (REQ-G2D-241): ends of +0.0 and -0.0, or an arc's centre one ulp off, make the way back no reverse, and the loop crosses instead (conservative).

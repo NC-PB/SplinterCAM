@@ -1,4 +1,4 @@
-# Plan 0004: geometry2d, slice 2 (proposal)
+# Plan 0004: geometry2d, slice 2
 
 <!-- Lives in docs/plans/active/ while work is ongoing, then moves to docs/plans/completed/.
      The agent updates the progress log at the end of every session, before stopping. -->
@@ -8,7 +8,39 @@
 - Research: `docs/research/01-foundations.md`: Loop tree, Kernel arrays (polygon region), Tolerances (resolution chain), Flattening (side rule); tests 7, 16, 19, 21 and 24
 - Branch: one pull request per session (docs/dev/07); a step with a new algorithm or over about 100 lines of non-test code gets its own, from `main` after the previous merge, never stacked
 - Owner: Peter Burgener; agents: Claude Code sessions
-- Status (2026-10-07): approved by Peter with his answers below (DEC-G2D-022); step 1 done and reviewed (DEC-G2D-024 to 027); steps 2 and 3 done; step 4a done; 4b next.
+- Status (2026-10-08): complete. Approved by Peter on 2026-10-07 (DEC-G2D-022); steps 1 to 9 done and reviewed, merged in pull requests 34 to 40 and the closing pull request of 2026-10-08 (steps 4b to 9, the zero-width slits, the budget); see Handover.
+
+## Handover
+
+For the next agent. Slice 2 is complete on `main`; nothing is in flight.
+
+What exists, beside slice 1 (public API in `src/splintercam/geometry2d/__init__.py`; contract in its `SPEC.md`):
+
+| Area | Python | Kernel |
+| --- | --- | --- |
+| Polygon regions | `PolygonRegion`, `polygon_region`, `FlatRegion`, `RegionKind` | — |
+| Side-correct flattening | `flatten_loops`; internal `topology_flattening` | `flatten.cpp` (`row_vertex_counts`, `flatten_rows`), `angle.cpp` (`basic_sin_cos`) |
+| Loop tree | `loop_tree`, `LoopTree`; internal `screen_loops` (`_screen.py`), `_slits.py`, `_selfcross.py`, `_crossings.py`, `_contain.py` | `distance.cpp` (distances, depth rule, covers, contacts, nearest segments), `selfcross.cpp` (Seifert cycles) |
+| Grid bridge, region | `build_region`; internal `region_with_fill_rule`, `grid_union`, `FillRule` (`_grid.py`, `_build.py`) | `grid.cpp` (Clipper2 2.0.1: union with a fill rule, difference, pinch split, canonical order) |
+| Open chains | `build_chain`, `FlatChain` (`_chain.py`) | `flatten.cpp` |
+
+Peter's answers during the work (each a DEC-G2D entry): crossings by the depth rule (024); the Positive fill rule (025); the PolyTree's rounding left to plan 0005 (026); the deviations of REQ-G2D-030, 119, 178, 179 (027); the budget 3600 NLOC and the offsets in their own module `offset2d` (038); zero-width slits removed with a warning, and pieces that wind wrongly stop the operation (039).
+
+Open, for later plans:
+
+- Plan 0005 (`docs/plans/active/0005-offset2d.md`, draft): waits for research 02; its two questions (how `offset2d`'s kernel reaches geometry2d's grid bridge, where the region's Clipper2 call lives) are Peter's.
+- No kernel takes a cancellation flag yet (`polyline_distances`, `self_cycles`, `grid_region`, `nearest_segments`; `.claude/rules/kernels.md`).
+- `self_cycles` tests all segment pairs (about a second for 10^4 segments, estimated): reuse the cell grid of `distance.cpp`. Its directions at a node come from the next, rounded, point.
+- A vertex of one region loop on another loop's edge is not marked fixed (D-084 names pinch points; decide with the arc fit).
+- Provisional: a stretch run twice that is not a row-exact slit crosses (DEC-G2D-033); the 2^26 grid-span limit is a named constant, not yet a foundation parameter (DEC-G2D-034).
+- The sweep test still exists four times (`_box.py`, `_distances.py`, `region.cpp` twice).
+- geometry2d measures 3599 NLOC against its budget of 3600: the next slice needs a budget of its own, or cuts.
+
+How the work ran (keep doing it this way):
+
+- The local steps were chained while at most two pull requests could be open; that chain landed as one pull request with the label `large-change`. Next time open each step's pull request as soon as a slot frees, so no chain builds up.
+- Every reviewer counterexample was reproduced before acting; the reviews found real bugs in every step (4c's pairing and stretches, 8's fixed flags and order, the slit's spikes, T-cuts and windings).
+- `tools/check` does not run the change-size check: run `tools/size-check --change origin/main` before pushing to a pull request.
 
 ## Questions for Peter before step 1
 
@@ -29,12 +61,12 @@ Answered 2026-10-07: yes to all six, as proposed (DEC-G2D-022).
 - [x] 1. **SPEC cut for slice 2.** Release the drafted requirements chosen by the answers above, with their tests from research 01. Mark the rest Later parts. Record the interface, failure modes and diagnostics (`LOOP_DUPLICATE`, `LOOPS_CROSS`, a span refusal); raise the budget in `modules.yaml`; spec-reviewer round. Size: docs only.
 - [x] 2. **Polygon region arrays and the flattening of curve-row loops.** `points`, `loop_starts`, `source_ids` and fixed-node flags, checked before any kernel work (REQ-G2D-183 to 187). The flattening of a loop of curve rows holds each joint once and gives each vertex its row's ID (199, 200). The side rule for regions of each kind, material or air (115, 116, 119, 127). Research 01 test 16. Size: about 250 lines of code + 350 of tests.
 - [x] 3. **Topology flattening and batched distances.** The inscribed flattening within u with the kernel's own sine and cosine, for topology only (152). u and t_topo come from the `Context` (026, 029). A kernel for point-to-polyline distances in batches, which the loop tree and the probes need; it replaces Python loops (backlog of plan 0003, step 6). Size: about 250 + 300.
-- [ ] 4. **Loop tree I: cleaning and the pair tests.** Split (2026-10-08) into 4a: cleanup, area tests, duplicates (155 to 159; done); 4b: crossings between loops and the depth rule (160 to 163, 237); 4c: self-crossings (238). Each its own pull request, opened after the one before merges. Per loop: cleanup, the area test and the 1.5·t_topo·L test (155 to 157). Duplicates within t_topo, the first in input order kept (158, 159). Crossings by exact segment tests with their points, counted only when deeper than t_topo, and touching loops accepted (160 to 163, 237, 238). Research 01 tests 7 and 19. Size: about 300 + 400.
-- [ ] 5. **Loop tree II: parents, depths, normalisation.** The containment probes in their order (164 to 168), depth and orientation (174, 175), a winding of 1 inside normalised regions (151), and independence of tol (154). Research 01 test 7. Size: about 250 + 350.
-- [ ] 6. **The Clipper2 bridge.** Re-centre on the bounding box and round to u (033); refuse a span of 2^26 grid units or more with an error diagnostic (034); the resolution chain property, every output vertex within 2.83 grid units of the input polylines and point in region unchanged beyond t_topo (030, 031). Research 01 test 21. Size: about 200 + 300.
-- [ ] 7. **The rule 5 fallback.** The Clipper2 difference with NonZero, and the tie rules for loops tested both ways (166, 169 to 173). Research 01 test 24. Size: about 150 + 300.
-- [ ] 8. **`build_region`.** The PolyTree of the side-correct flattened, normalised loops (118, 176, 177); compared with the loop tree as point sets and by depth parity (178, 179); topology from the integer result only (032); source IDs by the nearest input edge (180); pinch points split by exact integer tests and marked as fixed nodes (181); an extra clearance of 0 (124, lines and arcs). Size: about 350 + 400; split into 8 and 8b if the review fixes push it past 400.
-- [ ] 9. **`build_chain` for open chains.** The tool's side as the air side of every arc (117), and an extra clearance of 0 (125, lines and arcs). Size: about 100 + 150.
+- [x] 4. **Loop tree I: cleaning and the pair tests.** Split (2026-10-08) into 4a: cleanup, area tests, duplicates (155 to 159; done); 4b: crossings between loops and the depth rule (160 to 163, 237); 4c: self-crossings (238). Each its own pull request, opened after the one before merges. Per loop: cleanup, the area test and the 1.5·t_topo·L test (155 to 157). Duplicates within t_topo, the first in input order kept (158, 159). Crossings by exact segment tests with their points, counted only when deeper than t_topo, and touching loops accepted (160 to 163, 237, 238). Research 01 tests 7 and 19. Size: about 300 + 400.
+- [x] 5. **Loop tree II: parents, depths, normalisation.** Done before 4c (2026-10-08), since 4c nests cycles with these rules; the "no probe" case is provisional until step 7 (DEC-G2D-032). The containment probes in their order (164 to 168), depth and orientation (174, 175), a winding of 1 inside normalised regions (151), and independence of tol (154). Research 01 test 7. Size: about 250 + 350.
+- [x] 6. **The Clipper2 bridge.** Re-centre on the bounding box and round to u (033); refuse a span of 2^26 grid units or more with an error diagnostic (034); the resolution chain property, every output vertex within 2.83 grid units of the input polylines and point in region unchanged beyond t_topo (030, 031). Research 01 test 21. Size: about 200 + 300.
+- [x] 7. **The rule 5 fallback.** The Clipper2 difference with NonZero, and the tie rules for loops tested both ways (166, 169 to 173). Research 01 test 24. Size: about 150 + 300.
+- [x] 8. **`build_region`.** The PolyTree of the side-correct flattened, normalised loops (118, 176, 177); compared with the loop tree as point sets and by depth parity (178, 179); topology from the integer result only (032); source IDs by the nearest input edge (180); pinch points split by exact integer tests and marked as fixed nodes (181); an extra clearance of 0 (124, lines and arcs). Size: about 350 + 400; split into 8 and 8b if the review fixes push it past 400.
+- [x] 9. **`build_chain` for open chains.** The tool's side as the air side of every arc (117), and an extra clearance of 0 (125, lines and arcs). Size: about 100 + 150.
 
 Total: about 1850 added lines of code (about 1300 NLOC) and 2550 of tests, in nine steps; the steps with a new algorithm get a pull request each, the rest share session pull requests (docs/dev/07).
 
@@ -46,6 +78,54 @@ Total: about 1850 added lines of code (about 1300 NLOC) and 2550 of tests, in ni
 
 <!-- Newest first. What was done, what tools/check reported, what is next. At most about 30 lines per session;
      numbers go into tables. Above 300 lines, older entries move to an archive file next to the plan. -->
+
+### 2026-10-08, Peter's answers to step 8
+
+- The budget is 3600 NLOC, set in `architecture/modules.yaml`; the offsets go into a module of their own, `offset2d`, proposed in `docs/plans/active/0005-offset2d.md` (DEC-G2D-038). The medial axis gets its own module later.
+- A zero-width slit is accepted: removed, its loop split into the outer loop and the island, with a warning at its position (DEC-G2D-039, REQ-G2D-241).
+- After the spec review: a slit whose pieces wind wrongly (an island drawn the same way round as its outer loop, a shape beside it the other way) stops the operation with `LOOPS_CROSS`; it is not flipped (Peter, DEC-G2D-039).
+
+### 2026-10-08, step 9: `build_chain`
+
+- `build_chain` (REQ-G2D-117, 125, 127, 231, 234; DEC-G2D-037): rows checked as a loop without closure, arcs flattened into the tool's side, each row's vertices `flatten`'s bit for bit; one case per rule of 234, the empty and the closed chain.
+- Step 8 reviews: the test audit's thin tests strengthened (overlap cases through `build_region` with points located, reversed loops bit for bit, every edge's ID); the spec review's fixed flags and loop order made independent of Clipper2's path structure (DEC-G2D-036), and a dropped sliver no longer keeps its partner (DEC-G2D-033).
+- `tools/check`: PASS (11 of 14). Next: the pull requests once PRs 39 and 40 have merged.
+
+### 2026-10-08, step 8: `build_region`
+
+- `build_region` and `grid_region` (REQ-G2D-032, 118, 124, 162, 176 to 181, 235; DEC-G2D-036): the Positive PolyTree of the side-correct flattenings, pinches split and fixed, source IDs by the nearest flattened input edge. Research 01, rule 7's two Clipper2 cases reproduce; the vertex pinch only for some input orders.
+- Differential property tests on test 7's generator with rounded boxes, 10,000 cases each with `HYPOTHESIS_PROFILE=thorough`.
+- The 4c spec review (DEC-G2D-033): two blockers reproduced and fixed (a figure eight paired into one touching cycle; a stretch run twice gave no crossing points, and the island beside it kept a tree), and the cover rule, the refusal code, the tie order and the interpreter lock; the O(n²) contact search is in the backlog.
+- Size: the module reached 3608 NLOC, over its hard limit of 3600. The simplifier's cuts (one Clipper2 union path, shared binding helpers, `x`/`y` once) bring it to 3454, with no behaviour change except that `grid_union` now splits pinches.
+- Questions for Peter: (1) the module budget: slice 2 measures about 1900 NLOC against its estimate of 1300, and step 9 needs about 50 more; raise 3000 to 3600, or keep 3000 and cut further? (2) a contour that runs along the same line twice in opposite directions (a zero-width slit, as a keyhole drawn as one loop): it stops the operation with `LOOPS_CROSS` for now; should it be accepted instead?
+- `tools/check`: PASS (11 of 14). Next: step 9, `build_chain`.
+
+### 2026-10-08, step 7: the rule 5 fallback
+
+- `grid_difference` and `contains`' fallback (REQ-G2D-166, 169 to 172; DEC-G2D-035): B ⊂ A when Clipper2's NonZero difference B minus A on the grid is less than half of B; the tie rules for two fallback results; refused grid calls are typed errors. Research 01 test 24 now goes through the real fallback.
+- `tools/check`: PASS (11 of 14). Next: step 8, `build_region`.
+
+### 2026-10-08, step 6: the grid bridge
+
+- `kernel/grid.cpp` and `grid_union` (REQ-G2D-029, 030, 031, 033, 034): re-centred, rounded to u, refused at 2^26 grid units, Clipper2's NonZero union, mapped back. Research 01 test 21 on 20 random inputs. The span limit is a named constant for now; the foundation parameter needs a two-module change (DEC-G2D-034).
+- Reviews of 4b, 5 and 4c applied (DEC-G2D-032, 033): the parent is the container whose containers are all the others, non-nesting containment is `LOOPS_CROSS`, diagnostics keyed by loop.
+- Pull requests: 4b, 5, 4c and 6 wait on local branches while 39 and 40 are open (two at most, never stacked). 4b, 5 and 4c share `_contain.py` and fix each other, so they go up as one pull request with the large-change label, which is Peter's to give.
+- `tools/check`: PASS (11 of 14). Next: step 7.
+
+### 2026-10-08, step 4c: self-crossings
+
+- `self_cycles` kernel and `self_contact` (REQ-G2D-160 for a loop with itself, 161, 238): the Seifert resolution before the area tests; a bow-tie wall now gives `LOOPS_CROSS` instead of vanishing as degenerate. A stretch run twice counts as crossing, provisionally (DEC-G2D-033). Containment moved to `_contain.py` (`nest`), shared with the tree.
+- `tools/check`: PASS (11 of 14). Next: the review fixes of 4b, 5 and 4c, then step 6.
+
+### 2026-10-08, step 5: parents, depths, normalisation
+
+- `loop_tree` (REQ-G2D-151, 153, 154, 162, 164 to 168, 170, 173 to 175): probes, parents, depths, normalised orientation, no loops when any cross. Without a far probe, provisional "not contained" until step 7's fallback (DEC-G2D-032). Done before 4c, which nests the cycles of a self-crossing with these rules.
+- `tools/check`: PASS (11 of 14). Next: 4c.
+
+### 2026-10-08, step 4b: crossings between loops
+
+- `find_crossings` (REQ-G2D-160, 161, 163, 237): the depth rule decides crossing against touching; `contact_points` reports where crossing loops meet. REQ-G2D-160 restated (DEC-G2D-031). The 88 tangent placements touch, though at least 80 of their flattenings cross properly. REQ-G2D-162 (no loops when any cross) comes with the tree in step 5.
+- `tools/check`: PASS (11 of 14). Next: 4c.
 
 ### 2026-10-08, step 4a: cleanup, area tests, duplicates
 
@@ -103,7 +183,9 @@ Total: about 1850 added lines of code (about 1300 NLOC) and 2550 of tests, in ni
 - From plan 0003: the region kernel holds the interpreter lock for n points × m rows; long kernels of this plan (loop tree, Clipper2 calls) need the release and the cancellation check of the kernel rules.
 
 - From step 3: `polyline_distances` releases the interpreter lock but takes no cancellation flag yet (`.claude/rules/kernels.md`); add it with the other long kernels.
-- From step 3: REQ-G2D-168 projects vertices onto the nearest segment, so step 5 needs `polyline_distances` to return that segment's index too (ties to the lowest index, for determinism).
+
+- From the 4c spec review: `self_cycles` tests all segment pairs; reuse the cell grid of `distance.cpp` (or a sweep by x) and add a cancellation flag. Direction at a node from the strand's own segment rather than the next (rounded) point, and snapping a constructed point that equals a vertex.
+- From the step 8 spec review: `grid_region`, `nearest_segments` and `self_cycles` take no cancellation flag; a vertex of one region loop lying on another loop's edge is not marked fixed (D-084 names pinch points; decide with the arc fit).
 
 ## Blockers
 

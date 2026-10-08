@@ -3,7 +3,9 @@
 
 from ._area import signed_area
 from ._box import Box, bounding_box
+from ._build import build_region
 from ._bulge import arc_from_bulge, bulges_from_arc
+from ._chain import FlatChain, build_chain
 from ._circle import Circle, circle_through
 from ._cleanup import cleanup
 from ._curves import Arc, Curve, Line, Point, make_arc, make_line
@@ -14,6 +16,7 @@ from ._polygon import FlatRegion, PolygonRegion, RegionKind, polygon_region
 from ._predicates import are_parallel, in_arc_circle, incircle, orient2d
 from ._region import PointLocation, point_in_region
 from ._rows import CurveRows, curve_rows
+from ._tree import loop_tree
 
 __all__ = [
     "AirSide",
@@ -23,6 +26,7 @@ __all__ = [
     "ClosestPoint",
     "Curve",
     "CurveRows",
+    "FlatChain",
     "FlatRegion",
     "Line",
     "LoopTree",
@@ -33,6 +37,8 @@ __all__ = [
     "arc_from_bulge",
     "are_parallel",
     "bounding_box",
+    "build_chain",
+    "build_region",
     "bulges_from_arc",
     "circle_through",
     "cleanup",
@@ -42,6 +48,7 @@ __all__ = [
     "flatten_loops",
     "in_arc_circle",
     "incircle",
+    "loop_tree",
     "make_arc",
     "make_line",
     "orient2d",

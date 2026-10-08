@@ -88,17 +88,37 @@ def polyline_distances(q: Annotated[NDArray[numpy.float64], dict(shape=(None, 2)
     Write per point its distance to the closed polylines where at most limit, else inf.
     """
 
+def basic_sin_cos(angles: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu', writable=False)], sines: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu')], cosines: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu')]) -> None:
+    """
+    The sine and cosine the topology flattening turns with, for tests (REQ-G2D-152).
+    """
+
 def crossing_depth(a: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], b: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], limit: float) -> tuple[bool, bool]:
     """
     Whether closed polyline a reaches farther than limit inside and outside closed polyline b.
     """
 
-def covered_by(a: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], b: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], limit: float) -> bool:
+def covered_by(a: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], b: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], b_starts: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu', writable=False)], limit: float) -> bool:
     """
-    Whether every point of closed polyline a lies within limit of closed polyline b.
+    Whether every point of closed polyline a lies within limit of the closed polylines b.
     """
 
-def basic_sin_cos(angles: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu', writable=False)], sines: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu')], cosines: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu')]) -> None:
+def contact_points(a: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], b: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], limit: float, out: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu')]) -> int:
     """
-    The sine and cosine the topology flattening turns with, for tests (REQ-G2D-152).
+    Write where closed polylines a and b meet, sorted; return their count (out may be short).
+    """
+
+def self_cycles(loop: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], points: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu')], cycles: Annotated[NDArray[numpy.int64], dict(shape=(None, 2), order='C', device='cpu')], nodes: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu')]) -> tuple[int, int, int, int]:
+    """
+    Resolve a closed polyline's self-contacts into cycles (per cycle its first point and loop position); return (status, points, cycles, nodes), the counts it needed.
+    """
+
+def grid_difference(b: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], a: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], u: float, max_span_units: float) -> tuple[int, float, float]:
+    """
+    Return (status, area of b minus a, area of b) in mm² from Clipper2's NonZero difference on the grid (REQ-G2D-169).
+    """
+
+def grid_region(points: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], loop_starts: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu', writable=False)], source_ids: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu', writable=False)], fill_rule: int, grid: Sequence[float], points_out: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu')], starts_out: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu')], ids_out: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu')], fixed_out: Annotated[NDArray[numpy.uint8], dict(shape=(None,), order='C', device='cpu')]) -> tuple[int, int, int]:
+    """
+    The region of flattened loops through Clipper2's grid (grid = u, the span limit in grid units, the reach of the source IDs); return (status, points, loops).
     """

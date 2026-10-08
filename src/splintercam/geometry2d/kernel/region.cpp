@@ -19,14 +19,6 @@ namespace {
 
 constexpr int octants = 8;
 
-double x(Point2 p) {
-    return std::get<0>(p);
-}
-
-double y(Point2 p) {
-    return std::get<1>(p);
-}
-
 int sign(double a, double b) {
     return (a > b) - (a < b);
 }

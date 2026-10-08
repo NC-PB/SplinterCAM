@@ -30,7 +30,7 @@ rules:
 modules:
   foundation:             { layer: 0, kernel: false, depends_on: [], research: ["01"], budget: 250 }
 
-  geometry2d:             { layer: 1, kernel: true,  depends_on: [foundation], research: ["02", "03"], budget: 3000 }
+  geometry2d:             { layer: 1, kernel: true,  depends_on: [foundation], research: ["02", "03"], budget: 3600 }
   geometry3d:             { layer: 1, kernel: true,  depends_on: [foundation], research: ["06", "07"] }
   io:                     { layer: 1, kernel: false, depends_on: [foundation, geometry2d, geometry3d], research: ["21"] }
 

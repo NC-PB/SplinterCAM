@@ -14,7 +14,7 @@
 
 For the next agent. Slice 1 is complete on `main`; nothing is in flight, no branch or pull request is open.
 
-Slice 1 is reviewed. Slice 2 is proposed as `docs/plans/active/0004-geometry2d-slice-2.md`; **do not start it** until Peter approves it and answers its questions.
+Slice 1 is reviewed. Slice 2 is proposed as `docs/plans/completed/0004-geometry2d-slice-2.md` (now complete); **do not start it** until Peter approves it and answers its questions.
 
 What exists (public API in `src/splintercam/geometry2d/__init__.py`; contract in its `SPEC.md`):
 

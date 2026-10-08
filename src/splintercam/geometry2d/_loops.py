@@ -34,7 +34,9 @@ class LoopTree:
     crossing_loops: NDArray[np.int64]
 
 
-def _vertex_counts(loops: CurveRows, flags: NDArray[np.uint8], t_mm: float) -> NDArray[np.int64]:
+def _vertex_counts(
+    loops: CurveRows, flags: NDArray[np.uint8], t_mm: float, min_vertices: int
+) -> NDArray[np.int64]:
     """Per row the vertices it adds to its flattened loop (DEC-G2D-028)."""
     rows = loops.rows
     counts = np.empty(rows.shape[0], dtype=np.int64)
@@ -49,16 +51,21 @@ def _vertex_counts(loops: CurveRows, flags: NDArray[np.uint8], t_mm: float) -> N
     sizes = np.diff(np.append(loops.row_starts, rows.shape[0]))
     loop_of_row = np.repeat(np.arange(sizes.size), sizes)
     totals = np.bincount(loop_of_row, weights=counts, minlength=sizes.size)
-    short = (totals[loop_of_row] < _MIN_LOOP_VERTICES) & (flags == 1) & (rows[:, 6] != 0.0)
+    short = (totals[loop_of_row] < min_vertices) & (flags == 1) & (rows[:, 6] != 0.0)
     counts[short & ~empty] = np.maximum(counts[short & ~empty], 2)
     return counts
 
 
-def _flattened(
-    loops: CurveRows, flags: NDArray[np.uint8], t_mm: float, portable: bool
+def flattened(
+    loops: CurveRows,
+    flags: NDArray[np.uint8],
+    t_mm: float,
+    portable: bool,
+    min_vertices: int = _MIN_LOOP_VERTICES,
 ) -> PolygonRegion:
-    # Each joint once, as the first vertex of the row after it; each vertex the ID of its row.
-    counts = _vertex_counts(loops, flags, t_mm)
+    """Each joint once, as the first vertex of the row after it; each vertex the ID of its row
+    (internal; an open chain asks no minimum)."""
+    counts = _vertex_counts(loops, flags, t_mm, min_vertices)
     kept = counts > 0
     points = np.empty((int(counts.sum()), 2), dtype=np.float64)
     rows = loops.rows[kept]
@@ -90,7 +97,7 @@ def flatten_loops(tree: LoopTree, kind: RegionKind, ctx: Context) -> FlatRegion:
     sweep = tree.loops.rows[:, 6]
     inscribed = sweep < 0.0 if kind is RegionKind.MATERIAL else sweep > 0.0
     flags = inscribed.astype(np.uint8)
-    region = _flattened(tree.loops, flags, ctx.tolerances.flatten_tol_mm, portable=False)
+    region = flattened(tree.loops, flags, ctx.tolerances.flatten_tol_mm, portable=False)
     return FlatRegion(region, 0.0)
 
 
@@ -102,4 +109,4 @@ def topology_flattening(loops: CurveRows, ctx: Context) -> PolygonRegion:
     Implements: REQ-G2D-029, REQ-G2D-152.
     """
     flags = np.ones(loops.rows.shape[0], dtype=np.uint8)
-    return _flattened(loops, flags, ctx.tolerances.grid_unit_mm, portable=True)
+    return flattened(loops, flags, ctx.tolerances.grid_unit_mm, portable=True)

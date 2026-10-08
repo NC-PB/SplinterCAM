@@ -166,7 +166,11 @@ def test_a_chain_of_near_duplicates_compares_with_kept_loops_only(ctx: Context) 
     result = screen_loops(_loops([_square(), _square(0.00015), _square(0.0003)], ctx), ctx)
     assert result.value is not None
     assert result.value.kept.tolist() == [0, 2]
-    assert [d.location for d in result.diagnostics] == ["loops 0 and 1"]
+    # The kept 0 and 2, 0.0003 mm apart, then cross: each reaches beyond t_topo into the other.
+    assert [(d.code, d.location) for d in result.diagnostics] == [
+        ("LOOPS_CROSS", "loops 0 and 2"),  # placed with its lower loop, 0
+        ("LOOP_DUPLICATE", "loops 0 and 1"),  # placed with the loop it removes, 1
+    ]
 
 
 NOTCH_TENTH = [(0, 0), (2, 0), (2, 5), (2.1, 5), (2.1, 0), (10, 0), (10, 10), (0, 10)]
@@ -349,7 +353,8 @@ def _cover(a: Points, b: Points, limit: float) -> bool:
     from splintercam import _kernels
 
     pa, pb = np.array(a, float).reshape(-1, 2), np.array(b, float).reshape(-1, 2)
-    return _kernels.geometry2d.covered_by(pa, pb, limit)
+    starts = np.zeros(1 if pb.size else 0, np.int64)
+    return _kernels.geometry2d.covered_by(pa, pb, starts, limit)
 
 
 @pytest.mark.req("REQ-G2D-158")
@@ -368,6 +373,6 @@ def test_the_pair_kernels_refuse_a_bad_limit(limit: float) -> None:
 
     square = np.array(_square(), dtype=np.float64)
     with pytest.raises(ValueError, match="limit"):
-        _kernels.geometry2d.covered_by(square, square, limit)
+        _kernels.geometry2d.covered_by(square, square, np.zeros(1, np.int64), limit)
     with pytest.raises(ValueError, match="limit"):
         _kernels.geometry2d.crossing_depth(square, square, limit)

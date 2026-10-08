@@ -16,14 +16,6 @@
 namespace splintercam::geometry2d {
 namespace {
 
-double x(Point2 p) {
-    return std::get<0>(p);
-}
-
-double y(Point2 p) {
-    return std::get<1>(p);
-}
-
 double line_distance(Point2 q, Point2 a, Point2 b) {
     const double dx = x(b) - x(a);
     const double dy = y(b) - y(a);
@@ -119,9 +111,13 @@ Grid build_grid(const std::vector<Segment>& segments, double limit) {
     return grid;
 }
 
-double nearest(Point2 q, const Grid& grid, const std::vector<Segment>& segments) {
+// The nearest segment to q among those filed near it: its distance and index (the lowest index on
+// a tie; the size when none is filed near q).
+std::pair<double, std::size_t> nearest(Point2 q, const Grid& grid,
+                                       const std::vector<Segment>& segments) {
     constexpr std::int64_t reach = 2;
     double best = std::numeric_limits<double>::infinity();
+    std::size_t index = segments.size();
     const std::int64_t cx = cell(x(q), grid.ox, grid.h);
     const std::int64_t cy = cell(y(q), grid.oy, grid.h);
     for (std::int64_t ix = cx - reach; ix <= cx + reach; ++ix) {
@@ -129,10 +125,14 @@ double nearest(Point2 q, const Grid& grid, const std::vector<Segment>& segments)
         const auto last = std::ranges::lower_bound(grid.entries, Entry{ix, cy + reach + 1, 0});
         for (auto e = first; e != last; ++e) {
             const Segment& s = segments.at(e->segment);
-            best = std::min(best, segment_distance(q, s.a, s.b));
+            const double d = segment_distance(q, s.a, s.b);
+            if (d < best || (d == best && e->segment < index)) {
+                best = d;
+                index = e->segment;
+            }
         }
     }
-    return best;
+    return {best, index};
 }
 
 // The segments filed within `reach` cells of any cell segment s crosses: sorted, unique.
@@ -232,17 +232,20 @@ struct FarPart {
     Point2 middle;
     bool from_start;
     bool to_end;
+    std::size_t seg; // the segment's index in `mine`
 };
 
 // The far parts of s: the gaps the covered intervals leave in [0, 1].
-void far_parts(const Segment& s, std::vector<Span>& spans, std::vector<FarPart>& out) {
+void far_parts(const Segment& s, std::size_t seg, std::vector<Span>& spans,
+               std::vector<FarPart>& out) {
     std::ranges::sort(spans, {}, &Span::low);
     double cursor = 0.0;
     const auto gap = [&](double end) {
         const double t = (cursor + end) / 2;
         out.push_back({.middle = {x(s.a) + t * (x(s.b) - x(s.a)), y(s.a) + t * (y(s.b) - y(s.a))},
                        .from_start = cursor == 0.0,
-                       .to_end = end == 1.0});
+                       .to_end = end == 1.0,
+                       .seg = seg});
     };
     for (const Span& span : spans) {
         if (span.low > cursor) {
@@ -267,7 +270,8 @@ template <typename Visit> void each_far_part(const FarQuery& query, Visit visit)
     const Grid grid = build_grid(theirs, query.limit);
     std::vector<Span> spans;
     std::vector<FarPart> parts;
-    for (const Segment& s : query.mine) {
+    for (std::size_t k = 0; k < query.mine.size(); ++k) {
+        const Segment& s = query.mine.subspan(k, 1).front();
         spans.clear();
         parts.clear();
         for (const std::size_t i : segments_near(grid, s)) {
@@ -276,11 +280,39 @@ template <typename Visit> void each_far_part(const FarQuery& query, Visit visit)
                 spans.push_back(part);
             }
         }
-        far_parts(s, spans, parts);
+        far_parts(s, k, spans, parts);
         for (const FarPart& part : parts) {
             if (!visit(part)) {
                 return;
             }
+        }
+    }
+}
+
+bool on_segment(Point2 q, const Segment& e) {
+    return orient_sign(e.a, e.b, q) == 0 && std::min(x(e.a), x(e.b)) <= x(q) &&
+           x(q) <= std::max(x(e.a), x(e.b)) && std::min(y(e.a), y(e.b)) <= y(q) &&
+           y(q) <= std::max(y(e.a), y(e.b));
+}
+
+// Where segments s and e meet: a proper crossing's point, else the ends lying on the other.
+void meet(const Segment& s, const Segment& e, std::vector<Point2>& out) {
+    const int o1 = orient_sign(e.a, e.b, s.a);
+    const int o2 = orient_sign(e.a, e.b, s.b);
+    const int o3 = orient_sign(s.a, s.b, e.a);
+    const int o4 = orient_sign(s.a, s.b, e.b);
+    if (o1 * o2 < 0 && o3 * o4 < 0) {
+        const Point2 d{x(s.b) - x(s.a), y(s.b) - y(s.a)};
+        const Point2 w{x(e.b) - x(e.a), y(e.b) - y(e.a)};
+        const double t =
+            ((x(e.a) - x(s.a)) * y(w) - (y(e.a) - y(s.a)) * x(w)) / (x(d) * y(w) - y(d) * x(w));
+        out.push_back({x(s.a) + t * x(d), y(s.a) + t * y(d)});
+        return;
+    }
+    for (const auto& [q, other] :
+         {std::pair{s.a, e}, std::pair{s.b, e}, std::pair{e.a, s}, std::pair{e.b, s}}) {
+        if (on_segment(q, other)) {
+            out.push_back(q);
         }
     }
 }
@@ -304,7 +336,7 @@ void polyline_distances(std::span<const double> q, const Polylines& lines, doubl
     }
     const Grid grid = build_grid(segments, limit);
     for (std::size_t i = 0; i < out.size(); ++i) {
-        const double d = nearest(point(q, i), grid, segments);
+        const double d = nearest(point(q, i), grid, segments).first;
         out.subspan(i, 1).front() = d <= limit ? d : std::numeric_limits<double>::infinity();
     }
 }
@@ -322,9 +354,10 @@ Depth crossing_depth(const Polylines& a, const Polylines& b, double limit) {
     }
     Depth depth;
     bool run_open = false; // the previous part reached its segment's end
+    std::size_t run_seg = 0;
     each_far_part({.mine = mine, .theirs = theirs, .limit = limit}, [&](const FarPart& part) {
         // A connected far part lies on one side of b: one point per run of joined parts.
-        if (!(part.from_start && run_open)) {
+        if (!(part.from_start && run_open && part.seg == run_seg + 1)) {
             const std::array<double, 2> q{x(part.middle), y(part.middle)};
             std::array<std::int8_t, 1> where{};
             point_locations(q, {.rows = rows, .length_eps_mm = 0.0}, where);
@@ -334,6 +367,7 @@ Depth crossing_depth(const Polylines& a, const Polylines& b, double limit) {
                 depth.outside || std::get<0>(where) == static_cast<std::int8_t>(Location::out);
         }
         run_open = part.to_end;
+        run_seg = part.seg;
         return !(depth.inside && depth.outside);
     });
     return depth;
@@ -351,6 +385,41 @@ bool covered_by(const Polylines& a, const Polylines& b, double limit) {
         return false; // the first far part decides
     });
     return covered;
+}
+
+std::vector<Point2> contact_points(const Polylines& a, const Polylines& b, double limit) {
+    const std::vector<Segment> mine = segments_of(a);
+    const std::vector<Segment> theirs = segments_of(b);
+    std::vector<Point2> found;
+    if (mine.empty() || theirs.empty()) {
+        return found;
+    }
+    const Grid grid = build_grid(theirs, limit);
+    for (const Segment& s : mine) {
+        for (const std::size_t i : segments_near(grid, s)) {
+            meet(s, theirs.at(i), found);
+        }
+    }
+    for (Point2& p : found) {
+        p = {x(p) + 0.0, y(p) + 0.0}; // −0.0 and 0.0 alike, so the order is the same everywhere
+    }
+    std::ranges::sort(found);
+    found.erase(std::ranges::unique(found).begin(), found.end());
+    return found;
+}
+
+void nearest_segments(std::span<const double> q, const Polylines& lines, double limit,
+                      std::span<std::int64_t> out) {
+    const std::vector<Segment> segments = segments_of(lines);
+    if (segments.empty()) {
+        std::ranges::fill(out, -1);
+        return;
+    }
+    const Grid grid = build_grid(segments, limit);
+    for (std::size_t i = 0; i < out.size(); ++i) {
+        const auto [d, index] = nearest(point(q, i), grid, segments);
+        out.subspan(i, 1).front() = d <= limit ? static_cast<std::int64_t>(index) : -1;
+    }
 }
 
 } // namespace splintercam::geometry2d

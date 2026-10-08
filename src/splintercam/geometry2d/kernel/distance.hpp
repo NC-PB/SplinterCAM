@@ -28,6 +28,12 @@ struct Polylines {
 void polyline_distances(std::span<const double> q, const Polylines& lines, double limit,
                         std::span<double> out);
 
+// Per query point the index of the nearest segment of `lines` within `limit` (segments counted
+// loop by loop, so a segment's index is the index of the vertex it starts at; the lowest on a
+// tie), or -1 when none lies within it.
+void nearest_segments(std::span<const double> q, const Polylines& lines, double limit,
+                      std::span<std::int64_t> out);
+
 // Whether polyline set `a` reaches more than `limit` into the region of `b` (inside) and more
 // than `limit` out of it (outside): a point of a's segments farther than `limit` from every
 // segment of b, classified by point in region against b (REQ-G2D-237).
@@ -40,5 +46,11 @@ struct Depth {
 // Whether every point of `a` lies within `limit` of a segment of `b`: the closed neighbourhoods
 // of b's segments cover a's (REQ-G2D-158). An empty b covers only an empty a.
 [[nodiscard]] bool covered_by(const Polylines& a, const Polylines& b, double limit);
+
+// The points where the segments of `a` and `b` meet, by exact signs: proper crossings (their
+// constructed point) and ends lying on the other segment; sorted by x, then y, unique
+// (REQ-G2D-160). `limit` (> 0) sizes the search grid only.
+[[nodiscard]] std::vector<Point2> contact_points(const Polylines& a, const Polylines& b,
+                                                 double limit);
 
 } // namespace splintercam::geometry2d

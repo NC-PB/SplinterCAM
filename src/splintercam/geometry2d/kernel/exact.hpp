@@ -15,6 +15,12 @@ using Points = std::span<const double>;
 using Scalars = std::span<const double>;
 using Signs = std::span<std::int8_t>;
 using Point2 = std::array<double, 2>;
+[[nodiscard]] inline double x(Point2 p) {
+    return std::get<0>(p);
+}
+[[nodiscard]] inline double y(Point2 p) {
+    return std::get<1>(p);
+}
 
 // The point of row `row` of `points`.
 [[nodiscard]] Point2 point(Points points, std::size_t row);
