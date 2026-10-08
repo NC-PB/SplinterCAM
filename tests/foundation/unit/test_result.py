@@ -9,7 +9,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from splintercam.foundation import Diagnostic, Result, Severity
+from splintercam.foundation import CANCELLED, Diagnostic, Result, Severity
 
 
 @pytest.mark.req("REQ-FND-004")
@@ -107,3 +107,14 @@ def test_ok_matches_its_definition_for_any_value_and_severities(
     )
     result: Result[object] = Result(value=value, diagnostics=diagnostics)
     assert result.ok == (value is not None and Severity.ERROR not in severities)
+
+
+@pytest.mark.req("REQ-FND-013")
+def test_cancelled_is_a_warning_with_the_code_cancelled() -> None:
+    assert CANCELLED.code == "CANCELLED"
+    assert CANCELLED.severity is Severity.WARNING
+    assert CANCELLED.message.strip()
+    assert CANCELLED.location is None
+    # A warning does not make a result with a value not ok; with no value it is not ok anyway.
+    assert Result(value=None, diagnostics=(CANCELLED,)).ok is False
+    assert Result(value=1, diagnostics=(CANCELLED,)).ok is True

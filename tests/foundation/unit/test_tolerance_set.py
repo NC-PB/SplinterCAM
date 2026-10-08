@@ -10,7 +10,7 @@ from fractions import Fraction
 
 import pytest
 
-from splintercam.foundation import BUDGET_PARTS, TOLERANCE_DEFAULTS, ToleranceSet
+from splintercam.foundation import BUDGET_PARTS, TOLERANCE_DEFAULTS, ToleranceSet, nearly_equal
 
 type _Shares = tuple[tuple[str, float], ...]
 
@@ -261,3 +261,40 @@ def test_grid_unit_is_the_declared_parameter_whatever_tol(tol_mm: float) -> None
     built = ToleranceSet.for_operation(tol_mm)
     assert built.value is not None
     assert built.value.grid_unit_mm == TOLERANCE_DEFAULTS["grid_unit_mm"].default == 0.0001
+
+
+def _arc_tol_expected(tol_mm: float) -> float:
+    """a = max(0.05·tol, 2u) from the declared parameters (D-058, D-132), in the SPEC's order."""
+    share = TOLERANCE_DEFAULTS["arc_tol_share"].default
+    floor_units = TOLERANCE_DEFAULTS["arc_tol_floor_grid_units"].default
+    return max(share * tol_mm, floor_units * TOLERANCE_DEFAULTS["grid_unit_mm"].default)
+
+
+@pytest.mark.req("REQ-FND-011")
+@pytest.mark.parametrize(
+    ("tol_mm", "floor_binds"),
+    [
+        (0.01, False),  # 0.05·tol = 0.0005 mm > 2u = 0.0002 mm
+        (0.0022858, True),  # tol_min: 0.05·tol = 0.00011429 mm < 2u
+        (0.05, False),  # 0.0025 mm
+    ],
+)
+def test_arc_tol_is_the_larger_of_its_share_and_the_floor(tol_mm: float, floor_binds: bool) -> None:
+    built = ToleranceSet.for_operation(tol_mm)
+    assert built.value is not None
+    share = TOLERANCE_DEFAULTS["arc_tol_share"].default * tol_mm
+    floor = TOLERANCE_DEFAULTS["arc_tol_floor_grid_units"].default * built.value.grid_unit_mm
+    assert (share < floor) is floor_binds
+    assert built.value.arc_tol_mm == _arc_tol_expected(tol_mm)
+    assert built.value.arc_tol_mm == (floor if floor_binds else share)
+
+
+@pytest.mark.req("REQ-FND-011")
+def test_arc_tol_agrees_with_the_floor_cost_of_the_geometry_part() -> None:
+    # stage_tol_mm charges max(0, 2u - 0.05·tol) for the floor: the same a (D-146).
+    built = ToleranceSet.for_operation(0.0022858).value
+    assert built is not None
+    share_mm = TOLERANCE_DEFAULTS["arc_tol_share"].default * built.chord_tol_mm
+    cost = built.stage_tol_mm("geometry") - 0.1 * built.chord_tol_mm
+    rounding = TOLERANCE_DEFAULTS["rounding_margin_grid_units"].default * built.grid_unit_mm
+    assert nearly_equal(cost - rounding, built.arc_tol_mm - share_mm, built.length_eps_mm)
