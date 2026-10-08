@@ -43,3 +43,8 @@ tol_min_step_mm = { default = 1e-7, unit = "mm", range = [1e-7, 1e-7], source = 
 # Declared here for geometry2d (REQ-G2D-230): the largest step of a flattened arc, π/2, at least
 # four steps per full circle (research 01, Flattening and Parameters).
 flatten_step_max_rad = { default = 1.5707963267948966, unit = "rad", range = [1.5707963267948966, 1.5707963267948966], source = "research 01, Parameters (ours)" }
+
+# Declared here for offset2d (REQ-OFF-042): the bias of the offset delta = t + a + 3u, and the most steps per
+# turn a round join may take (research 02, Parameters).
+offset_bias_grid_units = { default = 3, unit = "grid units", range = [3, 3], source = "D-132" }
+join_steps_max = { default = 65536, unit = "steps per turn", range = [65536, 65536], source = "research 02, Parameters (prototype REQ-OFF-014)" }

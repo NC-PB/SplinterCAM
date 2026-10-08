@@ -3,11 +3,12 @@
 
 from ._context import CancellationToken, Context, DebugSink
 from ._defaults import TOLERANCE_DEFAULTS, DeclaredParameter
-from ._result import Diagnostic, Result, Severity
+from ._result import CANCELLED, Diagnostic, Result, Severity
 from ._tolerance import BUDGET_PARTS, ToleranceSet, nearly_equal
 
 __all__ = [
     "BUDGET_PARTS",
+    "CANCELLED",
     "TOLERANCE_DEFAULTS",
     "CancellationToken",
     "Context",

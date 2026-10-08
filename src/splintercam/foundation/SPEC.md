@@ -4,11 +4,11 @@
 
 | | |
 | --- | --- |
-| Status | Reviewed: REQ-FND-001, 002, 008 and 009 (decisions D-056, D-146 and D-149, accepted by Peter; plan 0001, step 2) and REQ-FND-010 (Peter, 2026-10-02; step 5). Released for the stack test app (its own repository): REQ-FND-003 to 006; released by Peter on 2026-09-27: REQ-FND-007 |
+| Status | Reviewed: REQ-FND-001, 002, 008 and 009 (decisions D-056, D-146 and D-149, accepted by Peter; plan 0001, step 2) and REQ-FND-010 (Peter, 2026-10-02; step 5) and REQ-FND-011 to 013 (Peter, 2026-10-08, DEC-OFF-002). Released for the stack test app (its own repository): REQ-FND-003 to 006; released by Peter on 2026-09-27: REQ-FND-007 |
 | Layer | 0 |
 | Depends on | Python standard library and NumPy only |
 | Research | [01](../../../docs/research/01-foundations.md), section Tolerances. RESEARCH 18 (Project Spike) is being rewritten from public sources; until then this spec takes only general software practice from it: result values with diagnostics, a cancellation flag, no global state |
-| Decisions | D-028 (units), D-029 (default tolerances), D-049 (no values buried in code), D-055 (determinism), D-056 (tolerance budget), D-058 (arc tolerance), D-093 (import arc deviation), D-132 (grid, rounding margin, arc tolerance floor), D-146 (budget floors), D-149 (rounding allowance), D-097 (exact predicates in the float stages); text in [docs/spike/decisions-snapshot.md](../../../docs/spike/decisions-snapshot.md) |
+| Decisions | D-028 (units), D-029 (default tolerances), D-049 (no values buried in code), D-055 (determinism), D-056 (tolerance budget), D-058 (arc tolerance), D-093 (import arc deviation), D-132 (grid, rounding margin, arc tolerance floor), D-146 (budget floors), D-149 (rounding allowance), D-097 (exact predicates in the float stages), DEC-OFF-002 (the offset's parameters and `CANCELLED`); text in [docs/spike/decisions-snapshot.md](../../../docs/spike/decisions-snapshot.md) |
 | Owner | Peter Burgener |
 
 ## Purpose
@@ -42,6 +42,8 @@ class ToleranceSet:
     def grid_unit_mm(self) -> float: ...               # u (REQ-FND-001)
     @property
     def topology_tol_mm(self) -> float: ...            # t_topo (REQ-FND-009)
+    @property
+    def arc_tol_mm(self) -> float: ...                 # a = max(0.05·tol, 2u) (REQ-FND-011)
     @classmethod
     def for_operation(cls, tol_mm: float) -> Result[ToleranceSet]: ...   # REQ-FND-009
 
@@ -57,6 +59,8 @@ TOLERANCE_DEFAULTS: Mapping[str, DeclaredParameter]   # read once from tolerance
 def nearly_equal(a: float, b: float, tol: float) -> bool: ...
 
 class Severity(Enum): INFO, WARNING, ERROR
+
+CANCELLED: Diagnostic     # code "CANCELLED", WARNING: what every module returns, with no value, when ctx.cancel is set (REQ-FND-013)
 
 @dataclass(frozen=True, slots=True)
 class Diagnostic:
@@ -108,6 +112,9 @@ class Context:
 | REQ-FND-008 | THE default tolerance values SHALL be read from a documented defaults file where each value is a declared parameter with unit, default, range and source, and SHALL be: chord tolerance 0.05 mm for roughing and 0.01 mm for finishing operations (D-029); length epsilon 1e-6 mm; angle epsilon 1e-9 rad (Q-034 answer, logged as D-056); shares geometry 0.1, fit 0.3, control 0.5, reserve 0.1 (D-056), as the base of REQ-FND-009. No module SHALL hold these numbers as literals (D-049). IF an entry of the file is broken (a missing or extra key, a value of the wrong type, a default outside its range, no unit or source), THEN the import SHALL fail with `ValueError` naming the entry's key. | unit: `tests/foundation/unit/test_tolerance_defaults.py`; architecture check pending (`tools/arch-check`) | Reviewed (D-029, D-049, D-056; plan 0001, step 2). Changed 2026-10-02: a broken entry fails naming its key (Peter, step 5) |
 | REQ-FND-009 | THE function that builds an operation's `ToleranceSet` SHALL compute the budget parts from tol and the grid unit u: geometry = 0.1·tol + 6u + max(0, 2u − 0.05·tol); reserve = 0.1·tol, the operation's rounding allowance (D-149), written by the NCX writer; control = 0.5·tol; fit = the rest, clamped at 0; t_flat = 0.05·tol − 0.0001 mm − 3·eps_len; t_topo = 2u. WHEN tol is below tol_min = 8u/0.35 = 2/875 mm ≈ 0.00228571 mm, computed once, it SHALL return no set and the diagnostic `TOL_BELOW_MINIMUM` naming tol_min rounded up to 0.1 nm (0.0022858 mm) (D-146, D-149; research 01, Tolerances). | unit (research 01, tests 14 and 15): `tests/foundation/unit/test_tolerance_budget.py`, `test_tolerance_set.py`; property: `tests/foundation/property/test_tolerance_budget.py` | Reviewed (D-146, D-149; plan 0001, step 2). Changed 2026-10-02: the reserve's wording (Peter, step 5) |
 | REQ-FND-010 | WHEN tol is above 1 mm, the upper end of the tol range in the defaults file, THE function that builds an operation's `ToleranceSet` SHALL return no set and the diagnostic `TOL_ABOVE_MAXIMUM` (error), a guard against unit mistakes (research 01, Tolerances; Peter, 2026-10-02). | unit: `tests/foundation/unit/test_tolerance_budget.py` | Reviewed (Peter, 2026-10-02; plan 0001, step 5) |
+| REQ-FND-011 | THE `ToleranceSet` SHALL provide the arc tolerance a = max(0.05·tol, 2u) in mm as `arc_tol_mm`, computed from the declared parameters `arc_tol_share` and `arc_tol_floor_grid_units`, the same a that `stage_tol_mm` charges the floor of (D-058, D-132). | unit: `tests/foundation/unit/test_tolerance_set.py` (tol 0.01, tol_min 0.0022858 where the floor binds, 0.05) | Reviewed (Peter, 2026-10-08, DEC-OFF-002; plan 0005, step 2) |
+| REQ-FND-012 | THE defaults file SHALL declare `offset_bias_grid_units` = 3 (grid units; the bias of the offset δ = t + a + 3u, D-132) and `join_steps_max` = 65536 (steps per turn, the most a round join may take; research 02, Parameters, prototype REQ-OFF-014), each fixed (default at both ends of its range) with unit and source. | unit: `tests/foundation/unit/test_tolerance_defaults.py` | Reviewed (Peter, 2026-10-08, DEC-OFF-002; plan 0005, step 2) |
+| REQ-FND-013 | THE foundation module SHALL declare the diagnostic `CANCELLED` (severity warning) as the constant `CANCELLED`, which every module returns, with no value, when `ctx.cancel` is set. | unit: `tests/foundation/unit/test_result.py` | Reviewed (Peter, 2026-10-08, DEC-OFF-002; plan 0005, step 2) |
 
 ## Invariants
 
@@ -117,7 +124,7 @@ Value types are immutable, and hashable when their contents are (a `Result` hold
 
 Defines the budget; uses none itself. D-056: the operation tolerance tol covers the finished wall including the control. Geometry (flattening, offsets, snapping) gets 0.1·tol; the arc-fit band 0.3·tol lies on the air side; the control gets 0.5·tol, written per operation as NCX `TOLERANCE`; 0.1·tol is a reserve for output rounding, the operation's rounding allowance (D-149); the NCX writer writes it as the word `ROUND_LIMIT` (NCXchange draft D363; Peter, 2026-10-02). D-146 adds what the offset kernel's grid costs to geometry and takes it from the fit band: its rounding margin of 6 grid units (D-132) and max(0, 2u − 0.05·tol) for the floor of its arc tolerance a = max(0.05·tol, 2u) (D-058). The other 0.05·tol of geometry pays for arcs recognised at import (0.0001 mm, D-093), snapping (3·eps_len) and flattening, t_flat. At tol = 0.01 mm the parts are 0.0016 + 0.0024 + 0.005 + 0.001 mm and t_flat = 0.000397 mm. Below tol_min = 2/875 mm the fit band would be negative, and the operation is refused (REQ-FND-009); above 1 mm it is refused as a likely unit mistake (REQ-FND-010). The defaults file gives tol the range [0.0022858, 1.0]: its lower end is the user-facing minimum, tol_min rounded up to 0.1 nm, the value `TOL_BELOW_MINIMUM` names; `for_operation` itself accepts from tol_min.
 
-`stage_tol_mm` gives each part as REQ-FND-009 computes it: control and reserve are their share of tol; geometry is its share plus the grid cost; fit is its share minus the grid cost, clamped at 0. The parts are evaluated in double in the order of the formulas; at tol_min the fit band comes out as −7e-20 mm and is clamped (research 01, Tolerances). Every number comes from `tolerance_defaults.toml` next to the code (REQ-FND-008), each entry a table with `default`, `unit`, `range` ([min, max], inclusive; a fixed value has its default at both ends) and `source`. The entries of REQ-FND-008 are `chord_tol_roughing_mm`, `chord_tol_finishing_mm`, `length_eps_mm`, `angle_eps_rad`, `share_geometry`, `share_fit`, `share_control` and `share_reserve`; those REQ-FND-009 adds are `grid_unit_mm` (u), `rounding_margin_grid_units` (6), `arc_tol_share` (0.05), `arc_tol_floor_grid_units` (2), `import_arc_deviation_mm` (0.0001), `snap_allowance_length_eps` (3), `topology_tol_grid_units` (2) and `tol_min_step_mm` (0.1 nm). `flatten_step_max_rad` (π/2) is a declared parameter of geometry2d kept in this file, so that module reads no file of its own (geometry2d SPEC, REQ-G2D-230; plan 0003, step 4).
+`stage_tol_mm` gives each part as REQ-FND-009 computes it: control and reserve are their share of tol; geometry is its share plus the grid cost; fit is its share minus the grid cost, clamped at 0. The parts are evaluated in double in the order of the formulas; at tol_min the fit band comes out as −7e-20 mm and is clamped (research 01, Tolerances). Every number comes from `tolerance_defaults.toml` next to the code (REQ-FND-008), each entry a table with `default`, `unit`, `range` ([min, max], inclusive; a fixed value has its default at both ends) and `source`. The entries of REQ-FND-008 are `chord_tol_roughing_mm`, `chord_tol_finishing_mm`, `length_eps_mm`, `angle_eps_rad`, `share_geometry`, `share_fit`, `share_control` and `share_reserve`; those REQ-FND-009 adds are `grid_unit_mm` (u), `rounding_margin_grid_units` (6), `arc_tol_share` (0.05), `arc_tol_floor_grid_units` (2), `import_arc_deviation_mm` (0.0001), `snap_allowance_length_eps` (3), `topology_tol_grid_units` (2) and `tol_min_step_mm` (0.1 nm). `offset_bias_grid_units` (3) and `join_steps_max` (65536) are declared parameters of offset2d kept in this file for the same reason (offset2d SPEC, REQ-OFF-042; REQ-FND-012). `flatten_step_max_rad` (π/2) is a declared parameter of geometry2d kept in this file, so that module reads no file of its own (geometry2d SPEC, REQ-G2D-230; plan 0003, step 4).
 
 eps_len and eps_ang apply to the float stages (import, curve evaluation, snapping before exact predicates, D-097). Inside the offset kernel, coordinates sit on an integer grid of u = 0.0001 mm, and topology after a kernel call comes from that grid; t_topo = 2u is the distance below which the float stages treat features as touching (research 01, resolution chain). One Clipper2 call spans less than `grid_max_span_units` = 2^26 grid units in x and y, about 6.7 m at this u, enough for release 1 (Peter, 2026-10-08); larger machines come later through a coarser grid unit per job, not now.
 
@@ -131,6 +138,7 @@ D-055, three tiers: topology and decisions identical on every platform; output b
 | --- | --- | --- |
 | `for_operation` with tol below tol_min | no set | `TOL_BELOW_MINIMUM` (error), naming 0.0022858 mm |
 | `for_operation` with tol above 1 mm | no set | `TOL_ABOVE_MAXIMUM` (error) |
+| A computation finds `ctx.cancel` set | no value | `CANCELLED` (warning; the constant `CANCELLED`, REQ-FND-013) |
 | Invalid construction of a `ToleranceSet` (REQ-FND-002, including a chord tolerance below the floor of its own fit share and t_flat ≤ 0), `for_operation` with a non-finite tol, `stage_tol_mm` with a stage that is not a budget part | programming error | `ValueError` |
 | A broken defaults file entry | programming error at import | `ValueError` naming the entry's key |
 
@@ -162,3 +170,4 @@ Budget 250 NLOC (Peter, 2026-10-02), counted without comments and docstrings as 
 - 2026-10-02: plan 0003, step 2: `grid_unit_mm` on `ToleranceSet` (REQ-FND-001), so computations read u from their `Context` (Peter).
 - 2026-10-02: plan 0003, step 4: the defaults file holds `flatten_step_max_rad` (π/2) for geometry2d (REQ-G2D-230).
 - 2026-10-08: the defaults file holds `grid_max_span_units` (2^26) for geometry2d's Clipper2 calls (REQ-G2D-034; Peter, DEC-G2D-034).
+- 2026-10-08: plan 0005, step 2 (Peter, DEC-OFF-002): REQ-FND-011 (`ToleranceSet.arc_tol_mm`), REQ-FND-012 (`offset_bias_grid_units`, `join_steps_max` in the defaults file) and REQ-FND-013 (the constant `CANCELLED`) added for offset2d; the form of `CANCELLED` is DEC-FND-001.

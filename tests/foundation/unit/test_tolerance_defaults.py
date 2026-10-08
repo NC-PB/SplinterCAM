@@ -108,3 +108,26 @@ def test_a_broken_defaults_file_fails_naming_the_key(tmp_path: Path, entry: str)
     read: Callable[[Path], Mapping[str, object]] = defaults_module.read_defaults
     with pytest.raises(ValueError, match="broken_key_mm"):
         read(broken)
+
+
+@pytest.mark.req("REQ-FND-012")
+@pytest.mark.parametrize(
+    ("name", "default", "unit", "source"),
+    [
+        ("offset_bias_grid_units", 3, "grid units", "D-132"),
+        (
+            "join_steps_max",
+            65536,
+            "steps per turn",
+            "research 02, Parameters (prototype REQ-OFF-014)",
+        ),
+    ],
+)
+def test_offset_parameters_are_declared_and_fixed(
+    name: str, default: float, unit: str, source: str
+) -> None:
+    parameter = TOLERANCE_DEFAULTS[name]
+    assert parameter.default == default
+    assert parameter.unit == unit
+    assert parameter.source == source
+    assert parameter.range == (default, default)

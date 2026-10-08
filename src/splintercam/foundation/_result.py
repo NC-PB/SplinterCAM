@@ -71,3 +71,13 @@ class Result[T]:
         return self.value is not None and all(
             diagnostic.severity is not Severity.ERROR for diagnostic in self.diagnostics
         )
+
+
+CANCELLED = Diagnostic(
+    code="CANCELLED",
+    severity=Severity.WARNING,
+    message="the computation was cancelled before it finished; no result",
+)
+"""The diagnostic every module returns, with no value, when `ctx.cancel` is set (REQ-FND-013).
+A shared constant, not a registry: foundation has no registry of codes, and a frozen
+`Diagnostic` is safe to share (DEC-FND-001). Add a location with `dataclasses.replace`."""

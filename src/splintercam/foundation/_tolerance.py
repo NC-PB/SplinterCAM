@@ -82,7 +82,8 @@ class ToleranceSet:
 
     Build an operation's set with `for_operation`, which takes the defaults (REQ-FND-008).
 
-    Implements: REQ-FND-001, REQ-FND-002, REQ-FND-007, REQ-FND-009, REQ-FND-010.
+    Implements: REQ-FND-001, REQ-FND-002, REQ-FND-007, REQ-FND-009, REQ-FND-010,
+    REQ-FND-011.
     """
 
     chord_tol_mm: float
@@ -158,6 +159,12 @@ class ToleranceSet:
     def grid_unit_mm(self) -> float:
         """u in mm, the step of the offset kernel's integer grid (REQ-FND-001; D-058, D-132)."""
         return _GRID_UNIT_MM
+
+    @property
+    def arc_tol_mm(self) -> float:
+        """a = max(0.05·tol, 2u) in mm, the arc tolerance of the offset kernel's round joins
+        (REQ-FND-011; D-058, D-132). The same a that `stage_tol_mm` charges the floor of."""
+        return max(_ARC_TOL_SHARE * self.chord_tol_mm, _ARC_TOL_FLOOR_MM)
 
     @property
     def topology_tol_mm(self) -> float:
