@@ -1,6 +1,33 @@
-# Sources cited in this repository: snapshot of 2026-10-02
+# Sources cited in this repository: snapshot of 2026-10-08
 
 Public entries copied from Project Spike's source register (D-156); the register in project_spike is the master until the handover. Source PDFs are not in this repository.
+
+### SRC-004 Vatti 1992: polygon clipping
+
+- **Status:** processed
+- **Class:** L
+- **Type:** CACM 35(7), doi:10.1145/129902.129906
+- **Read:** 2026-09-27, all pages; details in the literature note
+- **Used for:** literature note in topic 02; point-sampling oracle for Booleans (A-053), per-edge tags (Q-037)
+- **Rule:** distil into the topic (D-044).
+
+### SRC-005 Held 1991: pocket machining, chapter 9 (direction-parallel milling mesh)
+
+- **Status:** processed
+- **Class:** L
+- **Type:** Springer LNCS 500, doi:10.1007/3-540-54103-9; only Part III, chapter 9, pp. 127–137
+- **Read:** 2026-09-27, all pages; details in the literature note
+- **Used for:** literature note in topic 04; A-006 doubtful; Q-062
+- **Rule:** distil into the topic (D-044).
+
+### SRC-030 Held 1991: On the Computational Geometry of Pocket Machining (whole book)
+
+- **Status:** processed
+- **Class:** L
+- **Type:** Springer LNCS 500, doi:10.1007/3-540-54103-9, 196 pages; chapter 9 already in SRC-005
+- **Read:** 2026-09-28, chapters as listed in the notes
+- **Used for:** literature notes in topics 02 (offsets defined by clearance), 03 (two: the Voronoi diagram of line and arc pockets; the full Voronoi route) and 04 (two: contour-parallel rules that do not depend on the offset method; what the direction-parallel chapters add); pointers in 04 and 10; A-004, A-005, A-006, A-053, A-054; Q-036, Q-037, Q-055, Q-058, Q-062, Q-063; new Q-076, Q-077. Chapter 9 is SRC-005
+- **Rule:** distil into the topic (D-044).
 
 ### SRC-024 Piegl and Tiller 1997: The NURBS Book, 2nd edition
 

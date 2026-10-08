@@ -132,3 +132,11 @@ Every file came from the stack test app's repository (scaffold, `foundation` cod
 | `uv.lock` | test_repo uv.lock |
 | `docs/spike/decisions-snapshot.md` | generated from Project Spike DECISIONS.md |
 | `docs/spike/sources-snapshot.md` | generated from Project Spike sources/register.md (public entries, local locations removed) |
+
+## Files moved on 2026-10-08
+
+| File | From |
+| --- | --- |
+| `docs/research/02-offsets-and-booleans.md` | project_spike research/02-offsets-and-booleans.md, brought to L4 on 2026-10-08 for plan 0005 |
+
+Scanned for references to proprietary sources (names of the proprietary system and its maker, its source register entry, private and inbox folders): none. The topic cites public literature (SRC-004, SRC-005, SRC-030, SRC-032), the prototype's measurements (SRC-118) and Clipper2's source read for its behaviour (SRC-122). `sources-snapshot.md` gains SRC-004, SRC-005 and SRC-030 (without local file locations, as before), `decisions-snapshot.md` gains D-062 and D-136.
