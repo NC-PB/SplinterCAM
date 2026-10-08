@@ -16,6 +16,7 @@ Layer 1. Implements docs/research/01 (slices 1 and 2; the rest is under "Later p
 ## Local rules
 
 - `kernel/vendor/predicates.c` is third-party and stays unchanged (ADR 0009): build quirks go into `kernel/shewchuk.c` and `CMakeLists.txt`.
+- `kernel/exact.hpp`, `kernel/distance.hpp` and `kernel/grid.hpp` are `offset2d`'s interface (DEC-G2D-040): change them only as a SPEC change, which Peter decides.
 - Only this module's Python code calls `splintercam._kernels.geometry2d`. Kernel outputs are arrays the Python side allocates and passes in.
 - Loops cross module boundaries as curve rows; single curves as `Line` and `Arc`.
 - Transcendental functions for constructions run in C++ with the platform's libm, never in NumPy, whose float64 ufuncs may pick SIMD code by CPU (D-055, tier 2).

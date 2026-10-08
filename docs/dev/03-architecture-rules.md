@@ -19,8 +19,8 @@ Agents follow patterns well and boundaries badly: given the chance, they import 
 
 ## Dependency rules
 
-1. A module may depend only on modules in lower layers, plus modules in its own layer that `modules.yaml` lists explicitly. No cycles.
-2. Strategies never depend on each other. Shared logic moves down into `toolpath`, `geometry2d` or `geometry3d`.
+1. A module imports only lower layers, or same-layer modules named in its `depends_on` in `modules.yaml`; all `depends_on` together form no cycle (Peter, 2026-10-08). `tools/arch-check` checks exactly these dependency rules: this one, no cycles, and rule 2.
+2. No strategy imports another strategy. Shared logic moves down into `toolpath`, `geometry2d` or `geometry3d`.
 3. C++ lives only in `kernel/` folders. A module's Python code calls its own kernel; other modules call that module's Python API, never another module's kernel. Kernels use only the C++ libraries listed in `modules.yaml` and never include OCCT, Qt or Python headers (only `bindings.cpp` includes nanobind).
 4. OCCT is used only through OCP, and only in `io`, `features` and `apps/desktop`. OCCT objects never leave those modules: between modules a shape travels as a `ShapeRef` (the serialised B-rep with its stable face and edge IDs), and meshes and curves travel as NumPy arrays.
 5. Nothing below layer 6 depends on a UI toolkit, a file dialog, the clock or the network. PySide6 is used only in `apps/desktop`. Files are read and written only in `io`, `job` and `apps`.

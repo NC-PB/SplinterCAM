@@ -28,11 +28,11 @@ Peter's answers during the work (each a DEC-G2D entry): crossings by the depth r
 
 Open, for later plans:
 
-- Plan 0005 (`docs/plans/active/0005-offset2d.md`, draft): waits for research 02; its two questions (how `offset2d`'s kernel reaches geometry2d's grid bridge, where the region's Clipper2 call lives) are Peter's.
+- Plan 0005 (`docs/plans/active/0005-offset2d.md`, draft): waits for research 02; its two questions answered by Peter on 2026-10-08 (DEC-G2D-040).
 - No kernel takes a cancellation flag yet (`polyline_distances`, `self_cycles`, `grid_region`, `nearest_segments`; `.claude/rules/kernels.md`).
 - `self_cycles` tests all segment pairs (about a second for 10^4 segments, estimated): reuse the cell grid of `distance.cpp`. Its directions at a node come from the next, rounded, point.
 - A vertex of one region loop on another loop's edge is not marked fixed (D-084 names pinch points; decide with the arc fit).
-- Provisional: a stretch run twice that is not a row-exact slit crosses (DEC-G2D-033); the 2^26 grid-span limit is a named constant, not yet a foundation parameter (DEC-G2D-034).
+- A stretch run twice that is not a row-exact slit crosses (DEC-G2D-033; Peter, 2026-10-08: keep it, keep a real drawing as a test file when one appears and ask again). The 2^26 grid-span limit becomes a declared foundation parameter (Peter, 2026-10-08, its own pull request; DEC-G2D-034).
 - The sweep test still exists four times (`_box.py`, `_distances.py`, `region.cpp` twice).
 - geometry2d measures 3599 NLOC against its budget of 3600: the next slice needs a budget of its own, or cuts.
 
