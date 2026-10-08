@@ -96,14 +96,26 @@ void canonical(std::vector<Clipper2Lib::Path64>& loops) {
     }
     // By the smallest point, then the signed area, then the rotated loops point by point: loops
     // tied on both still leave in one order, whatever Clipper2's path order (Peter, DEC-G2D-042).
-    std::ranges::sort(loops, [](const Clipper2Lib::Path64& a, const Clipper2Lib::Path64& b) {
-        const auto first = std::pair{key(a.front()), Clipper2Lib::Area(a)};
-        const auto second = std::pair{key(b.front()), Clipper2Lib::Area(b)};
-        if (first != second) {
-            return first < second;
+    // The first two keys are computed once per loop, not per comparison.
+    struct Sorted {
+        GridPoint start;
+        double area;
+        Clipper2Lib::Path64 loop;
+    };
+    std::vector<Sorted> keyed;
+    keyed.reserve(loops.size());
+    for (Clipper2Lib::Path64& loop : loops) {
+        keyed.push_back({key(loop.front()), Clipper2Lib::Area(loop), std::move(loop)});
+    }
+    std::ranges::sort(keyed, [](const Sorted& a, const Sorted& b) {
+        if (std::pair{a.start, a.area} != std::pair{b.start, b.area}) {
+            return std::pair{a.start, a.area} < std::pair{b.start, b.area};
         }
-        return std::ranges::lexicographical_compare(a, b, {}, key, key);
+        return std::ranges::lexicographical_compare(a.loop, b.loop, {}, key, key);
     });
+    for (std::size_t i = 0; i < loops.size(); ++i) {
+        loops.at(i) = std::move(keyed.at(i).loop);
+    }
 }
 
 std::vector<std::uint8_t> shared_points(const std::vector<Clipper2Lib::Path64>& loops) {

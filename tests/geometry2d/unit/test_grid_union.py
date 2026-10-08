@@ -130,7 +130,11 @@ def test_loops_tied_on_start_and_area_come_out_alike_in_both_input_orders(
     second = grid_union(*_layout([pair[1], pair[0]]), ctx)
     assert first.value is not None
     assert second.value is not None
-    assert first.value.loop_starts.tolist() == [0, len(pair[0])]
+    starts = first.value.loop_starts.tolist()
+    assert starts == [0, len(pair[0])]
+    # The explicit order: both start at (0, 0), so their second points ascend (by x, then y).
+    seconds = [tuple(first.value.points[i + 1].tolist()) for i in starts]
+    assert seconds == sorted(seconds)
     assert first.value.points.tobytes() == second.value.points.tobytes()
     assert first.value.loop_starts.tobytes() == second.value.loop_starts.tobytes()
     assert first.value.fixed.tobytes() == second.value.fixed.tobytes()
@@ -141,12 +145,17 @@ def test_a_fan_of_equal_triangles_at_one_point_comes_out_alike_in_any_input_orde
     ctx: Context,
 ) -> None:
     # Twenty thin triangles of area 5 meeting only at (0, 0), their smallest point: more loops
-    # than an insertion sort handles, so an unstable sort would order them by Clipper2's path
-    # order. The rotated loops compared point by point break the tie (Peter, DEC-G2D-042).
+    # than an insertion sort handles, so without the last tie-breaker the order would follow
+    # Clipper2's path order, which changes with the input order. The rotated loops compared
+    # point by point break the tie (Peter, DEC-G2D-042).
     fan = [[(0.0, 0.0), (10.0, 2.0 * k), (10.0, 2.0 * k + 1.0)] for k in range(-10, 10)]
     reference = grid_union(*_layout(fan), ctx).value
     assert reference is not None
     assert reference.loop_starts.size == len(fan)
+    # The explicit order: all start at (0, 0), so their second points ascend, whatever the sort.
+    seconds = [tuple(reference.points[i + 1].tolist()) for i in reference.loop_starts.tolist()]
+    assert seconds == sorted(seconds)
+    assert len(set(seconds)) == len(fan)
     for seed in range(5):
         order: list[int] = np.random.default_rng(seed).permutation(len(fan)).tolist()
         shuffled = [fan[i] for i in order]
@@ -154,3 +163,4 @@ def test_a_fan_of_equal_triangles_at_one_point_comes_out_alike_in_any_input_orde
         assert result is not None
         assert result.points.tobytes() == reference.points.tobytes()
         assert result.fixed.tobytes() == reference.fixed.tobytes()
+        assert result.source_ids.tobytes() == reference.source_ids.tobytes()
