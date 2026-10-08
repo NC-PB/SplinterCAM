@@ -194,15 +194,3 @@ def test_a_refused_fallback_for_the_cycles_is_reported_as_refused(
     assert result.diagnostics[0].location == "loop 0"
     assert result.value is not None
     assert result.value.loops.rows.shape[0] == 0  # no tree
-
-
-@pytest.mark.req("REQ-G2D-238")
-def test_a_zero_width_slit_crosses_for_now(ctx: Context) -> None:
-    # A keyhole drawn as one loop: the slit [6, 10] x {5} is run out to the square hole and back
-    # (DEC-G2D-033, provisional; asked of Peter in plan 0004).
-    loop: Points = [(0, 0), (10, 0), (10, 5), (6, 5), (6, 6), (4, 6), (4, 4), (6, 4), (6, 5)]
-    loop += [(10, 5), (10, 10), (0, 10)]
-    result = screen_loops(polygons([loop], ctx), ctx)
-    assert codes(result) == ["LOOPS_CROSS"]
-    assert result.value is not None
-    assert result.value.crossing_points.shape[0] >= 1

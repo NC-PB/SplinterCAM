@@ -18,6 +18,7 @@ from ._crossings import find_crossings
 from ._loops import topology_flattening
 from ._rows import CurveRows
 from ._selfcross import self_contact
+from ._slits import split_slits
 
 # Rule 2: a loop whose topology flattening has |A| <= 1.5·t_topo·L, thinner than about 3·t_topo on
 # average, is dropped (research 01, Loop tree, rule 2). A rule of the research, not a tuning share.
@@ -35,10 +36,12 @@ def _spike_note(diagnostic: Diagnostic, points: NDArray[np.float64], where: str)
 @dataclass(frozen=True, slots=True)
 class Screened:
     """The loops that survive rules 1 to 3: `kept` their input indices, ascending; per kept loop
-    its cleaned topology flattening ((n, 2), as given, not yet normalised) and that polyline's
-    signed area and length; the crossings among the kept loops (rule 4)."""
+    its rows, its cleaned topology flattening ((n, 2), as given, not yet normalised) and that
+    polyline's signed area and length; the crossings among the kept loops (rule 4). A loop split at
+    a slit gives several kept loops of one input index (REQ-G2D-241)."""
 
     kept: NDArray[np.int64]
+    rows: tuple[CurveRows, ...]
     polylines: tuple[NDArray[np.float64], ...]
     areas: NDArray[np.float64]
     lengths: NDArray[np.float64]
@@ -50,6 +53,7 @@ class Screened:
 @dataclass(frozen=True, slots=True)
 class _Candidate:
     index: int
+    rows: CurveRows
     polyline: NDArray[np.float64]
     area: float
     length: float
@@ -122,7 +126,7 @@ def _screen_one(
     if contact.kind == "touch":
         area = math.copysign(abs(area), contact.sign)  # the sign of its depth-0 cycles
     box = np.concatenate([polyline.min(axis=0), polyline.max(axis=0)])
-    return _Candidate(i, polyline, area, length, box), notes, None
+    return _Candidate(i, rows, polyline, area, length, box), notes, None
 
 
 def _all_crossings(
@@ -141,26 +145,30 @@ def _all_crossings(
 
 
 def screen_loops(loops: CurveRows, ctx: Context) -> Result[Screened]:
-    """Rules 1 to 3 of the loop tree on the loops' topology flattenings, in this order: cleanup
-    (spikes reported), the area test of REQ-G2D-133, the thinness test |A| <= 1.5·t_topo·L, and
-    duplicates (each loop against the kept loops before it in input order, the earlier kept).
+    """Rules 1 to 3 of the loop tree on the loops' topology flattenings, in this order:
+    zero-width slits removed, their loops split (REQ-G2D-241), cleanup (spikes reported), the
+    area test of REQ-G2D-133, the thinness test |A| <= 1.5·t_topo·L, and duplicates (each loop
+    against the kept loops before it in input order, the earlier kept).
     Diagnostics name the input loops and follow input-loop order. Internal (SPEC, Public
     interface).
 
-    Implements: REQ-G2D-154 to 161, REQ-G2D-163, REQ-G2D-236, REQ-G2D-237.
+    Implements: REQ-G2D-154 to 161, REQ-G2D-163, REQ-G2D-236, REQ-G2D-237, REQ-G2D-241.
     """
     t_topo = ctx.tolerances.topology_tol_mm
-    topology = topology_flattening(loops, ctx)
+    slits = split_slits(loops)
+    split = slits.pieces
+    topology = topology_flattening(split, ctx)
     pieces = zip(
+        slits.origin.tolist(),
         np.split(topology.points, topology.loop_starts[1:]),
-        np.split(loops.rows, loops.row_starts[1:]),
-        np.split(loops.ids, loops.row_starts[1:]),
+        np.split(split.rows, split.row_starts[1:]),
+        np.split(split.ids, split.row_starts[1:]),
         strict=True,
     )
-    notes: list[tuple[int, Diagnostic]] = []
+    notes: list[tuple[int, Diagnostic]] = list(slits.notes)
     kept: list[_Candidate] = []
     self_points: list[tuple[int, NDArray[np.float64]]] = []
-    for i, (points, rows, ids) in enumerate(pieces):
+    for i, points, rows, ids in pieces:
         candidate, loop_notes, crossing = _screen_one(i, points, CurveRows(rows, ids, _ONE), ctx)
         notes += [(i, note) for note in loop_notes]
         if crossing is not None:
@@ -182,6 +190,7 @@ def screen_loops(loops: CurveRows, ctx: Context) -> Result[Screened]:
     crossing_points, crossing_loops = _all_crossings(self_points, pair_points, pair_loops)
     screened = Screened(
         kept=np.array([c.index for c in kept], dtype=np.int64),
+        rows=tuple(c.rows for c in kept),
         polylines=tuple(c.polyline for c in kept),
         areas=np.array([c.area for c in kept], dtype=np.float64),
         lengths=np.array([c.length for c in kept], dtype=np.float64),

@@ -14,12 +14,6 @@ from ._screen import Screened, screen_loops
 _ONE_LOOP = np.zeros(1, np.int64)
 
 
-def _loop_rows(loops: CurveRows, i: int) -> CurveRows:
-    end = int(loops.row_starts[i + 1]) if i + 1 < loops.row_starts.size else loops.rows.shape[0]
-    first = int(loops.row_starts[i])
-    return CurveRows(loops.rows[first:end], loops.ids[first:end], _ONE_LOOP)
-
-
 def _reversed(rows: CurveRows) -> CurveRows:
     """The loop the other way round: rows in reverse order, ends swapped, sweeps negated."""
     r = rows.rows[::-1]
@@ -50,7 +44,7 @@ def loop_tree(loops: CurveRows, ctx: Context) -> Result[LoopTree]:
     if any(d.severity is Severity.ERROR for d in diagnostics):  # crossings or refusals, REQ-G2D-162
         return Result(_empty_tree(screened), tuple(diagnostics))
     kept = screened.kept.tolist()
-    rows = [_loop_rows(loops, i) for i in kept]
+    rows = list(screened.rows)
     nesting = nest(list(screened.polylines), screened.areas, screened.lengths, rows, ctx)
     parent, depth, crossing = nesting.parents, nesting.depths, nesting.crossing
     notes = [
@@ -78,8 +72,8 @@ def loop_tree(loops: CurveRows, ctx: Context) -> Result[LoopTree]:
         ordered = tuple(d for _, d in sorted(keyed, key=lambda pair: pair[0]))  # stable
         return Result(_empty_tree(screened), ordered)
     pieces: list[CurveRows] = []
-    for position, i in enumerate(screened.kept.tolist()):
-        rows = _loop_rows(loops, i)
+    for position, piece in enumerate(screened.rows):
+        rows = CurveRows(piece.rows, piece.ids, _ONE_LOOP)
         ccw = screened.areas[position] > 0
         pieces.append(rows if ccw == (depth[position] % 2 == 0) else _reversed(rows))
     sizes = [p.rows.shape[0] for p in pieces]
