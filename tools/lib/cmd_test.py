@@ -165,10 +165,8 @@ def _sanitize_step() -> StepResult:
         return StepResult("sanitizer", Status.FAIL, build_seconds, detail)
 
     python = SANITIZE_VENV / "bin/python"  # reached only on Linux and macOS (checked above)
-    # --capture=sys: a sanitizer report is written to file descriptor 2 and then aborts the
-    # process; pytest's default fd capture would swallow it with the process (plan 0004, step 3).
     code, pytest_seconds = _run(
-        [str(python), "-m", "pytest", "-q", "--capture=sys"], env=env, label="sanitizer test"
+        [str(python), "-m", "pytest", "-q"], env=env, label="sanitizer test"
     )
     total = build_seconds + pytest_seconds
     if code != 0:
