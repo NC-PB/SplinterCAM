@@ -44,6 +44,7 @@ class Screened:
     lengths: NDArray[np.float64]
     crossing_points: NDArray[np.float64]
     crossing_loops: NDArray[np.int64]
+    diagnostic_loops: tuple[int, ...]  # per diagnostic of the result, the loop it is filed with
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,6 +184,8 @@ def screen_loops(loops: CurveRows, ctx: Context) -> Result[Screened]:
         lengths=np.array([c.length for c in kept], dtype=np.float64),
         crossing_points=crossing_points,
         crossing_loops=crossing_loops,
+        diagnostic_loops=(),
     )
-    ordered = [note for _, note in sorted(notes, key=lambda pair: pair[0])]  # stable
-    return Result(screened, tuple(ordered))
+    ordered = sorted(notes, key=lambda pair: pair[0])  # stable
+    screened = dataclasses.replace(screened, diagnostic_loops=tuple(k for k, _ in ordered))
+    return Result(screened, tuple(note for _, note in ordered))

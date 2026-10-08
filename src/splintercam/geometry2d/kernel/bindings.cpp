@@ -301,6 +301,25 @@ void bind_distances(nb::module_& m) {
         nb::arg("q"), nb::arg("points"), nb::arg("loop_starts"), nb::arg("limit"), nb::arg("out"),
         "Write per point its distance to the closed polylines where at most limit, else inf.");
     m.def(
+        "basic_sin_cos",
+        [](const Values& angles, const DoubleOut& sines, const DoubleOut& cosines) {
+            check_rows(angles.shape(0), {sines.shape(0), cosines.shape(0)});
+            constexpr double max_angle = 4 * std::numbers::pi;
+            for (std::size_t i = 0; i < angles.shape(0); ++i) {
+                if (!(std::abs(angles(i)) <= max_angle)) { // also NaN
+                    throw nb::value_error("every angle must lie within ±4π");
+                }
+                const SinCos turn = basic_sin_cos(angles(i));
+                sines(i) = turn.sin;
+                cosines(i) = turn.cos;
+            }
+        },
+        nb::arg("angles"), nb::arg("sines"), nb::arg("cosines"),
+        "The sine and cosine the topology flattening turns with, for tests (REQ-G2D-152).");
+}
+
+void bind_pairs(nb::module_& m) {
+    m.def(
         "crossing_depth",
         [](const PointRows& a, const PointRows& b, double limit) {
             const std::array<std::int64_t, 1> start{0};
@@ -333,9 +352,13 @@ void bind_distances(nb::module_& m) {
         [](const PointRows& a, const PointRows& b, double limit, const PointsOut& out) {
             const std::array<std::int64_t, 1> start{0};
             check_pair(a, b, limit, start);
-            const std::vector<Point2> found =
-                contact_points({.points = points(a), .loop_starts = loop_of(a, start)},
-                               {.points = points(b), .loop_starts = loop_of(b, start)}, limit);
+            std::vector<Point2> found;
+            {
+                const nb::gil_scoped_release unlocked;
+                found =
+                    contact_points({.points = points(a), .loop_starts = loop_of(a, start)},
+                                   {.points = points(b), .loop_starts = loop_of(b, start)}, limit);
+            }
             const std::size_t written = std::min(found.size(), out.shape(0));
             for (std::size_t i = 0; i < written; ++i) {
                 out(i, 0) = std::get<0>(found.at(i));
@@ -346,22 +369,6 @@ void bind_distances(nb::module_& m) {
         nb::arg("a"), nb::arg("b"), nb::arg("limit"), nb::arg("out"),
         "Write where closed polylines a and b meet, sorted; return their count (out may be "
         "short).");
-    m.def(
-        "basic_sin_cos",
-        [](const Values& angles, const DoubleOut& sines, const DoubleOut& cosines) {
-            check_rows(angles.shape(0), {sines.shape(0), cosines.shape(0)});
-            constexpr double max_angle = 4 * std::numbers::pi;
-            for (std::size_t i = 0; i < angles.shape(0); ++i) {
-                if (!(std::abs(angles(i)) <= max_angle)) { // also NaN
-                    throw nb::value_error("every angle must lie within ±4π");
-                }
-                const SinCos turn = basic_sin_cos(angles(i));
-                sines(i) = turn.sin;
-                cosines(i) = turn.cos;
-            }
-        },
-        nb::arg("angles"), nb::arg("sines"), nb::arg("cosines"),
-        "The sine and cosine the topology flattening turns with, for tests (REQ-G2D-152).");
 }
 
 void bind_self_cycles(nb::module_& m) {
@@ -443,6 +450,7 @@ void bind(nb::module_& m) {
         "Write the arc flattened in `steps` steps, inscribed or circumscribed.");
     bind_flatten_rows(m);
     bind_distances(m);
+    bind_pairs(m);
     bind_self_cycles(m);
 }
 

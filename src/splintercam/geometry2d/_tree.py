@@ -51,24 +51,25 @@ def loop_tree(loops: CurveRows, ctx: Context) -> Result[LoopTree]:
         return Result(_empty_tree(screened), tuple(diagnostics))
     kept = screened.kept.tolist()
     rows = [_loop_rows(loops, i) for i in kept]
-    parent, crossing = nest(list(screened.polylines), screened.areas, screened.lengths, rows, ctx)
+    parent, depth, crossing = nest(
+        list(screened.polylines), screened.areas, screened.lengths, rows, ctx
+    )
     notes = [
-        Diagnostic(
-            "LOOPS_CROSS",
-            Severity.ERROR,
-            f"loops {kept[a]} and {kept[b]} each contain the other by a probe",
-            f"loops {kept[a]} and {kept[b]}",
+        (
+            kept[a],
+            Diagnostic(
+                "LOOPS_CROSS",
+                Severity.ERROR,
+                f"loops {kept[a]} and {kept[b]} contain each other, or do not nest",
+                f"loops {kept[a]} and {kept[b]}",
+            ),
         )
         for a, b in crossing
     ]
     if notes:
-        return Result(_empty_tree(screened), (*diagnostics, *notes))
-    depth: list[int] = []
-    for b in range(len(parent)):
-        d, up = 0, parent[b]
-        while up >= 0:
-            d, up = d + 1, parent[up]
-        depth.append(d)
+        keyed = [*zip(screened.diagnostic_loops, diagnostics, strict=True), *notes]
+        ordered = tuple(d for _, d in sorted(keyed, key=lambda pair: pair[0]))  # stable
+        return Result(_empty_tree(screened), ordered)
     pieces: list[CurveRows] = []
     for position, i in enumerate(screened.kept.tolist()):
         rows = _loop_rows(loops, i)

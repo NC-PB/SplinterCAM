@@ -232,17 +232,20 @@ struct FarPart {
     Point2 middle;
     bool from_start;
     bool to_end;
+    std::size_t seg; // the segment's index in `mine`
 };
 
 // The far parts of s: the gaps the covered intervals leave in [0, 1].
-void far_parts(const Segment& s, std::vector<Span>& spans, std::vector<FarPart>& out) {
+void far_parts(const Segment& s, std::size_t seg, std::vector<Span>& spans,
+               std::vector<FarPart>& out) {
     std::ranges::sort(spans, {}, &Span::low);
     double cursor = 0.0;
     const auto gap = [&](double end) {
         const double t = (cursor + end) / 2;
         out.push_back({.middle = {x(s.a) + t * (x(s.b) - x(s.a)), y(s.a) + t * (y(s.b) - y(s.a))},
                        .from_start = cursor == 0.0,
-                       .to_end = end == 1.0});
+                       .to_end = end == 1.0,
+                       .seg = seg});
     };
     for (const Span& span : spans) {
         if (span.low > cursor) {
@@ -267,7 +270,8 @@ template <typename Visit> void each_far_part(const FarQuery& query, Visit visit)
     const Grid grid = build_grid(theirs, query.limit);
     std::vector<Span> spans;
     std::vector<FarPart> parts;
-    for (const Segment& s : query.mine) {
+    for (std::size_t k = 0; k < query.mine.size(); ++k) {
+        const Segment& s = query.mine.subspan(k, 1).front();
         spans.clear();
         parts.clear();
         for (const std::size_t i : segments_near(grid, s)) {
@@ -276,7 +280,7 @@ template <typename Visit> void each_far_part(const FarQuery& query, Visit visit)
                 spans.push_back(part);
             }
         }
-        far_parts(s, spans, parts);
+        far_parts(s, k, spans, parts);
         for (const FarPart& part : parts) {
             if (!visit(part)) {
                 return;
@@ -350,9 +354,10 @@ Depth crossing_depth(const Polylines& a, const Polylines& b, double limit) {
     }
     Depth depth;
     bool run_open = false; // the previous part reached its segment's end
+    std::size_t run_seg = 0;
     each_far_part({.mine = mine, .theirs = theirs, .limit = limit}, [&](const FarPart& part) {
         // A connected far part lies on one side of b: one point per run of joined parts.
-        if (!(part.from_start && run_open)) {
+        if (!(part.from_start && run_open && part.seg == run_seg + 1)) {
             const std::array<double, 2> q{x(part.middle), y(part.middle)};
             std::array<std::int8_t, 1> where{};
             point_locations(q, {.rows = rows, .length_eps_mm = 0.0}, where);
@@ -362,6 +367,7 @@ Depth crossing_depth(const Polylines& a, const Polylines& b, double limit) {
                 depth.outside || std::get<0>(where) == static_cast<std::int8_t>(Location::out);
         }
         run_open = part.to_end;
+        run_seg = part.seg;
         return !(depth.inside && depth.outside);
     });
     return depth;
@@ -393,6 +399,9 @@ std::vector<Point2> contact_points(const Polylines& a, const Polylines& b, doubl
         for (const std::size_t i : segments_near(grid, s)) {
             meet(s, theirs.at(i), found);
         }
+    }
+    for (Point2& p : found) {
+        p = {x(p) + 0.0, y(p) + 0.0}; // −0.0 and 0.0 alike, so the order is the same everywhere
     }
     std::ranges::sort(found);
     found.erase(std::ranges::unique(found).begin(), found.end());

@@ -15,6 +15,7 @@ from ._region import PointLocation, point_in_region
 from ._rows import CurveRows
 
 _ONE_LOOP = np.zeros(1, np.int64)
+_CHUNK_PAIRS = 1 << 20  # vertex-segment pairs per NumPy chunk: memory, not a tolerance
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,10 +29,13 @@ class Containment:
 def _projections(a: NDArray[np.float64], b: NDArray[np.float64]) -> NDArray[np.float64]:
     """Each vertex of a projected onto the nearest segment of closed polyline b (rule 5)."""
     start, d = b, np.roll(b, -1, axis=0) - b
-    t = np.clip(((a[:, None, :] - start) * d).sum(axis=2) / (d * d).sum(axis=1), 0.0, 1.0)
-    feet = start + t[..., None] * d
-    nearest = np.argmin(((a[:, None, :] - feet) ** 2).sum(axis=2), axis=1)  # lowest index on ties
-    return feet[np.arange(a.shape[0]), nearest]
+    found: list[NDArray[np.float64]] = []
+    for chunk in np.array_split(a, max(1, a.shape[0] * b.shape[0] // _CHUNK_PAIRS)):
+        t = np.clip(((chunk[:, None, :] - start) * d).sum(axis=2) / (d * d).sum(axis=1), 0.0, 1.0)
+        feet = start + t[..., None] * d
+        nearest = np.argmin(((chunk[:, None, :] - feet) ** 2).sum(axis=2), axis=1)  # lowest first
+        found.append(feet[np.arange(chunk.shape[0]), nearest])
+    return np.vstack(found) if found else np.empty((0, 2))
 
 
 def contains(
@@ -47,9 +51,11 @@ def contains(
     for group in groups:
         candidates = _projections(a, b) if group is None else group
         far = np.flatnonzero(np.isinf(polyline_distances(candidates, a, _ONE_LOOP, t_topo)))
-        if far.size > 0:
-            location = point_in_region(candidates[far[:1]], a_rows, ctx)[0]
-            return Containment(bool(location == PointLocation.IN), True)
+        locations = point_in_region(candidates[far], a_rows, ctx)
+        # ON can only be a part of A that cleanup removed, a spike: the next probe decides.
+        decided = np.flatnonzero(locations != PointLocation.ON)
+        if decided.size > 0:
+            return Containment(bool(locations[decided[0]] == PointLocation.IN), True)
     return Containment(False, False)
 
 
@@ -75,9 +81,9 @@ def nest(
     lengths: NDArray[np.float64],
     rows: list[CurveRows],
     ctx: Context,
-) -> tuple[list[int], list[tuple[int, int]]]:
-    """Per loop its parent, the smallest loop containing it (-1 for none, the lower index on a
-    tie), and the pairs that contain each other by two probes (REQ-G2D-164 to 166, 173). Only
+) -> tuple[list[int], list[int], list[tuple[int, int]]]:
+    """Per loop its parent (-1 for none) and depth, its number of containers, and the pairs that
+    contain each other by two probes or do not nest (REQ-G2D-164 to 166, 173, 174). Only
     loops whose boxes overlap are tested; one way when their areas differ by more than
     t_topo·(L_A + L_B), both ways otherwise."""
     t_topo = ctx.tolerances.topology_tol_mm
@@ -105,5 +111,19 @@ def nest(
                 containers[b].append(a)
             elif decision == "cross":
                 crossing.append((a, b))
-    parents = [min(c, key=lambda k: (size[k], k)) if c else -1 for c in containers]
-    return parents, crossing
+    parents, unnested = _parents(containers)
+    return parents, [len(c) for c in containers], sorted({*crossing, *unnested})
+
+
+def _parents(containers: list[list[int]]) -> tuple[list[int], list[tuple[int, int]]]:
+    """The parent of each loop: the container whose own containers are all the others
+    (REQ-G2D-164). Without one the containment is no nesting (a cycle, or two containers beside
+    each other), and the loop and its first container are reported as crossing (DEC-G2D-032)."""
+    parents: list[int] = []
+    unnested: list[tuple[int, int]] = []
+    for k, mine in enumerate(containers):
+        inner = [p for p in mine if set(containers[p]) == set(mine) - {p}]
+        if mine and not inner:
+            unnested.append((min(k, mine[0]), max(k, mine[0])))
+        parents.append(inner[0] if inner else -1)
+    return parents, unnested
