@@ -31,3 +31,6 @@ failures/
 # Personal Claude Code settings
 .claude/settings.local.json
 CLAUDE.local.md
+
+# Git worktrees of Claude Code agents (Peter, 2026-10-09)
+.claude/worktrees/

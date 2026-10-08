@@ -77,8 +77,8 @@ struct Frame {
 void split_pinches(const Clipper2Lib::Path64& path, std::vector<Clipper2Lib::Path64>& out);
 
 // The loops in an order of their own, not Clipper2's (its intersection sort breaks ties by the
-// standard library): each starts at its smallest point, then by that point and signed area
-// (DEC-G2D-036).
+// standard library): each starts at its smallest point, then by that point, signed area and
+// the rotated loops point by point (DEC-G2D-036, DEC-G2D-042).
 void canonical(std::vector<Clipper2Lib::Path64>& loops);
 
 // Per vertex of `loops`, in order, 1 where two or more loop vertices share its point, a pinch

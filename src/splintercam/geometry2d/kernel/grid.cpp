@@ -94,8 +94,15 @@ void canonical(std::vector<Clipper2Lib::Path64>& loops) {
     for (Clipper2Lib::Path64& loop : loops) {
         std::ranges::rotate(loop, std::ranges::min_element(loop, {}, key));
     }
-    std::ranges::sort(loops, {}, [](const Clipper2Lib::Path64& loop) {
-        return std::pair{key(loop.front()), Clipper2Lib::Area(loop)};
+    // By the smallest point, then the signed area, then the rotated loops point by point: loops
+    // tied on both still leave in one order, whatever Clipper2's path order (Peter, DEC-G2D-042).
+    std::ranges::sort(loops, [](const Clipper2Lib::Path64& a, const Clipper2Lib::Path64& b) {
+        const auto first = std::pair{key(a.front()), Clipper2Lib::Area(a)};
+        const auto second = std::pair{key(b.front()), Clipper2Lib::Area(b)};
+        if (first != second) {
+            return first < second;
+        }
+        return std::ranges::lexicographical_compare(a, b, {}, key, key);
     });
 }
 

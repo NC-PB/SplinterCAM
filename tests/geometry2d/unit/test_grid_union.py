@@ -109,3 +109,48 @@ def test_the_span_limit_is_the_declared_parameter() -> None:
     assert declared.default == 2**26
     assert declared.unit == "grid units"
     assert declared.default == _grid.MAX_SPAN_GRID_UNITS
+
+
+@pytest.mark.req("REQ-G2D-181", "REQ-G2D-231")
+@pytest.mark.parametrize(
+    "pair",
+    [
+        # Two triangles of equal area meeting at their smallest point (0, 0): same start, same
+        # area, so only the last tie-breaker of the canonical order tells them apart.
+        ([(0.0, 0.0), (2.0, 1.0), (1.0, 2.0)], [(0.0, 0.0), (1.0, -2.0), (2.0, -1.0)]),
+        ([(0.0, 0.0), (3.0, 1.0), (1.0, 1.0)], [(0.0, 0.0), (1.0, -1.0), (3.0, -1.0)]),
+        (_box(0.0, 0.0, 2.0, 2.0), [(0.0, 0.0), (2.0, -1.0), (2.0, -3.0), (0.0, -2.0)]),
+    ],
+)
+def test_loops_tied_on_start_and_area_come_out_alike_in_both_input_orders(
+    pair: tuple[list[tuple[float, float]], list[tuple[float, float]]], ctx: Context
+) -> None:
+    # Peter, 2026-10-09 (DEC-G2D-042): the rotated loops compared point by point break the tie.
+    first = grid_union(*_layout([pair[0], pair[1]]), ctx)
+    second = grid_union(*_layout([pair[1], pair[0]]), ctx)
+    assert first.value is not None
+    assert second.value is not None
+    assert first.value.loop_starts.tolist() == [0, len(pair[0])]
+    assert first.value.points.tobytes() == second.value.points.tobytes()
+    assert first.value.loop_starts.tobytes() == second.value.loop_starts.tobytes()
+    assert first.value.fixed.tobytes() == second.value.fixed.tobytes()
+
+
+@pytest.mark.req("REQ-G2D-181", "REQ-G2D-231")
+def test_a_fan_of_equal_triangles_at_one_point_comes_out_alike_in_any_input_order(
+    ctx: Context,
+) -> None:
+    # Twenty thin triangles of area 5 meeting only at (0, 0), their smallest point: more loops
+    # than an insertion sort handles, so an unstable sort would order them by Clipper2's path
+    # order. The rotated loops compared point by point break the tie (Peter, DEC-G2D-042).
+    fan = [[(0.0, 0.0), (10.0, 2.0 * k), (10.0, 2.0 * k + 1.0)] for k in range(-10, 10)]
+    reference = grid_union(*_layout(fan), ctx).value
+    assert reference is not None
+    assert reference.loop_starts.size == len(fan)
+    for seed in range(5):
+        order: list[int] = np.random.default_rng(seed).permutation(len(fan)).tolist()
+        shuffled = [fan[i] for i in order]
+        result = grid_union(*_layout(shuffled), ctx).value
+        assert result is not None
+        assert result.points.tobytes() == reference.points.tobytes()
+        assert result.fixed.tobytes() == reference.fixed.tobytes()
