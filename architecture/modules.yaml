@@ -20,12 +20,13 @@ layers:
 
 rules:
   # The three dependency rules; tools/arch-check checks exactly these three (Peter, 2026-10-08).
-  - lower-layers-only        # a module imports only lower layers, or same-layer modules named in its depends_on
+  - lower-layers-only        # a module imports only lower layers, or same-layer modules named in its depends_on;
+                             # depends_on names every module it imports, lower layers too (Peter, 2026-10-08)
   - no-cycles                # all depends_on together form no cycle
   - no-strategy-to-strategy  # no strategy imports another strategy
   - kernels-private          # only a module's own Python code calls its kernel; a kernel includes another module's
-                             # kernel headers only when listed under kernel_includes, and only those that module's SPEC
-                             # names as its kernel interface (Peter, 2026-10-08)
+                             # kernel headers only when listed under kernel_includes, and only those that module lists
+                             # under kernel_interface, the headers its SPEC names as its kernel interface (Peter, 2026-10-08)
   - kernel-libraries-only    # kernels include only the libraries listed under kernel_libraries
   - external-allowlist       # external Python packages only in the modules listed under external
   - apps-use-job-only        # apps/* depend only on job
@@ -33,7 +34,7 @@ rules:
 modules:
   foundation:             { layer: 0, kernel: false, depends_on: [], research: ["01"], budget: 250 }
 
-  geometry2d:             { layer: 1, kernel: true,  depends_on: [foundation], research: ["03"], budget: 3600 }
+  geometry2d:             { layer: 1, kernel: true,  depends_on: [foundation], kernel_interface: [exact.hpp, distance.hpp, grid.hpp], research: ["03"], budget: 3600 }
   geometry3d:             { layer: 1, kernel: true,  depends_on: [foundation], research: ["06", "07"] }
   io:                     { layer: 1, kernel: false, depends_on: [foundation, geometry2d, geometry3d], research: ["21"] }
   offset2d:               { layer: 1, kernel: true,  depends_on: [foundation, geometry2d], kernel_includes: [geometry2d], research: ["02"], budget: 1500 }

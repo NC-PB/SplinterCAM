@@ -3,7 +3,7 @@
 
 Test folders without a module (tests/kernels/ for the build) are accepted too. Only the names and
 the `budget` key are read, with patterns instead of a YAML parser, to avoid a dependency;
-tools/arch-check will read the whole file.
+tools/arch-check reads the whole file (module_map.py).
 """
 
 import re

@@ -19,14 +19,14 @@ Agents follow patterns well and boundaries badly: given the chance, they import 
 
 ## Dependency rules
 
-1. A module imports only lower layers, or same-layer modules named in its `depends_on` in `modules.yaml`; all `depends_on` together form no cycle (Peter, 2026-10-08). `tools/arch-check` checks exactly these dependency rules: this one, no cycles, and rule 2.
+1. A module imports only lower layers, or same-layer modules named in its `depends_on` in `modules.yaml`; all `depends_on` together form no cycle (Peter, 2026-10-08). `depends_on` names every module a module imports, lower layers too, so an import it does not name fails (Peter, 2026-10-08, plan 0006). `tools/arch-check` checks exactly these dependency rules: this one, no cycles, and rule 2.
 2. No strategy imports another strategy. Shared logic moves down into `toolpath`, `geometry2d` or `geometry3d`.
 3. C++ lives only in `kernel/` folders. A module's Python code calls its own kernel; other modules call that module's Python API, never another module's kernel. Kernels use only the C++ libraries listed in `modules.yaml` and never include OCCT, Qt or Python headers (only `bindings.cpp` includes nanobind).
 4. OCCT is used only through OCP, and only in `io`, `features` and `apps/desktop`. OCCT objects never leave those modules: between modules a shape travels as a `ShapeRef` (the serialised B-rep with its stable face and edge IDs), and meshes and curves travel as NumPy arrays.
 5. Nothing below layer 6 depends on a UI toolkit, a file dialog, the clock or the network. PySide6 is used only in `apps/desktop`. Files are read and written only in `io`, `job` and `apps`.
 6. `apps/*` use only the public interface of `job`.
 
-The rules live in [`architecture/modules.yaml`](../../architecture/modules.yaml). `tools/arch-check` reads it, checks the Python imports of every module (import-linter), the includes of every kernel and the external packages each module uses, and fails on any violation. Changing `modules.yaml` needs a person's approval, because it changes what every agent is allowed to do.
+The rules live in [`architecture/modules.yaml`](../../architecture/modules.yaml). `tools/arch-check` reads it, checks the map itself, the Python imports of every module, the includes of every kernel and the external packages each module uses, and fails on any violation. It is a script on the standard library, without import-linter (Peter, 2026-10-08, plan 0006). Another module's kernel may include only the headers listed under `kernel_interface` on the providing module's entry. Changing `modules.yaml` needs a person's approval, because it changes what every agent is allowed to do.
 
 ## Design rules for the core
 
