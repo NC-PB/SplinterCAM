@@ -27,6 +27,11 @@ rounding_margin_grid_units = { default = 6, unit = "grid units", range = [6, 6],
 arc_tol_share = { default = 0.05, unit = "share of tol", range = [0.05, 0.05], source = "D-058" }
 arc_tol_floor_grid_units = { default = 2, unit = "grid units", range = [2, 2], source = "D-132 (Q-036 answer)" }
 
+# The largest span of one Clipper2 call in x or y, 2^26 grid units (about 6.7 m at u = 0.0001 mm): beyond it
+# some of Clipper2's double-precision tests stop being exact. Enough for release 1; larger machines later
+# through a coarser grid unit per job (Peter, 2026-10-08).
+grid_max_span_units = { default = 67108864, unit = "grid units", range = [67108864, 67108864], source = "SRC-122, SRC-032 note; research 01, Parameters" }
+
 # What the rest of the geometry part pays for besides flattening (research 01, Tolerances).
 import_arc_deviation_mm = { default = 0.0001, unit = "mm", range = [0.0001, 0.0001], source = "D-093 (Q-075)" }
 snap_allowance_length_eps = { default = 3, unit = "length epsilons", range = [3, 3], source = "ours (research 01, Tolerances)" }

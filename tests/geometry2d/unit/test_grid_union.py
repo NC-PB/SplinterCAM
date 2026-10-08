@@ -9,8 +9,8 @@ import pytest
 from numpy.typing import NDArray
 
 from geometry2d_checks import codes
-from splintercam.foundation import Context
-from splintercam.geometry2d import CurveRows, PointLocation, point_in_region
+from splintercam.foundation import TOLERANCE_DEFAULTS, Context
+from splintercam.geometry2d import CurveRows, PointLocation, _grid, point_in_region
 from splintercam.geometry2d._distances import polyline_distances
 from splintercam.geometry2d._grid import grid_union
 
@@ -100,3 +100,12 @@ def test_a_span_of_2_to_the_26_grid_units_is_refused(
         assert codes(result) == ["REGION_TOO_LARGE"]
     else:
         assert result.ok, result.diagnostics
+
+
+@pytest.mark.req("REQ-G2D-034", "REQ-G2D-230")
+def test_the_span_limit_is_the_declared_parameter() -> None:
+    # Peter, 2026-10-08: a declared foundation parameter, 2^26 grid units, enough for release 1.
+    declared = TOLERANCE_DEFAULTS["grid_max_span_units"]
+    assert declared.default == 2**26
+    assert declared.unit == "grid units"
+    assert declared.default == _grid.MAX_SPAN_GRID_UNITS

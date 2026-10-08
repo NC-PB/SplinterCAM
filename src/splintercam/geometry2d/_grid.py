@@ -8,13 +8,13 @@ import numpy as np
 from numpy.typing import NDArray
 
 from splintercam import _kernels
-from splintercam.foundation import Context, Diagnostic, Result, Severity
+from splintercam.foundation import TOLERANCE_DEFAULTS, Context, Diagnostic, Result, Severity
 
 from ._polygon import PolygonRegion
 
 # A Clipper2 call refuses input spanning 2^26 grid units or more (SRC-122; research 01,
-# Parameters): a named constant for now, provisionally (DEC-G2D-034).
-MAX_SPAN_GRID_UNITS = float(2**26)
+# Parameters), a declared parameter passed to the kernel as a plain value (REQ-G2D-034, 230).
+MAX_SPAN_GRID_UNITS = TOLERANCE_DEFAULTS["grid_max_span_units"].default
 _OK, _TOO_LARGE = 0, 1  # GridStatus in kernel/grid.hpp; 2 is a Clipper2 failure
 # Every output edge is a rounded piece of a flattened input edge, its ends within 2.83 grid units
 # of it (REQ-G2D-030), so its middle is too; twice t_topo (4 grid units) reaches that edge.
