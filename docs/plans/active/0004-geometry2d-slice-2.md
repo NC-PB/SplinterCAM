@@ -51,6 +51,7 @@ Total: about 1850 added lines of code (about 1300 NLOC) and 2550 of tests, in ni
 
 - The budget is 3600 NLOC, set in `architecture/modules.yaml`; the offsets go into a module of their own, `offset2d`, proposed in `docs/plans/active/0005-offset2d.md` (DEC-G2D-038). The medial axis gets its own module later.
 - A zero-width slit is accepted: removed, its loop split into the outer loop and the island, with a warning at its position (DEC-G2D-039, REQ-G2D-241).
+- After the spec review: a slit whose pieces wind wrongly (an island drawn the same way round as its outer loop, a shape beside it the other way) stops the operation with `LOOPS_CROSS`; it is not flipped (Peter, DEC-G2D-039).
 
 ### 2026-10-08, step 9: `build_chain`
 
