@@ -8,6 +8,8 @@
 #include <clipper2/clipper.h>
 #include <cmath>
 #include <limits>
+#include <map>
+#include <set>
 
 namespace splintercam::geometry2d {
 namespace {
@@ -58,31 +60,38 @@ Clipper2Lib::Paths64 to_grid(const Polylines& input, Frame frame, double u) {
     return paths;
 }
 
-} // namespace
-
-GridResult grid_union(const Polylines& input, GridLimits limits) {
-    GridResult result;
-    Frame frame{};
-    if (!frame_of(input.points, limits, frame)) {
-        result.status = GridStatus::too_large;
-        return result;
-    }
-    Clipper2Lib::Clipper64 clipper;
-    clipper.AddSubject(to_grid(input, frame, limits.u));
-    Clipper2Lib::Paths64 solution;
-    if (!clipper.Execute(Clipper2Lib::ClipType::Union, Clipper2Lib::FillRule::NonZero, solution)) {
-        result.status = GridStatus::failed;
-        return result;
-    }
-    for (const Clipper2Lib::Path64& path : solution) {
-        result.starts.push_back(static_cast<std::int64_t>(result.points.size()));
-        for (const Clipper2Lib::Point64& p : path) {
-            result.points.push_back({frame.cx + static_cast<double>(p.x) * limits.u,
-                                     frame.cy + static_cast<double>(p.y) * limits.u});
+// Splits `path` at every point it passes twice into loops that each keep the traversal of their
+// vertices; adds the points split at to `pinches` (REQ-G2D-181).
+using GridPoints = std::set<std::pair<std::int64_t, std::int64_t>>;
+void split_pinches(const Clipper2Lib::Path64& path, std::vector<Clipper2Lib::Path64>& out,
+                   GridPoints& pinches) {
+    std::vector<Clipper2Lib::Path64> todo{path};
+    while (!todo.empty()) {
+        Clipper2Lib::Path64 p = std::move(todo.back());
+        todo.pop_back();
+        std::map<std::pair<std::int64_t, std::int64_t>, std::size_t> seen;
+        bool split = false;
+        for (std::size_t j = 0; j < p.size() && !split; ++j) {
+            const auto [entry, added] = seen.try_emplace({p.at(j).x, p.at(j).y}, j);
+            if (added) {
+                continue;
+            }
+            const std::size_t i = entry->second;
+            pinches.insert({p.at(i).x, p.at(i).y});
+            todo.emplace_back(p.begin() + static_cast<std::ptrdiff_t>(i),
+                              p.begin() + static_cast<std::ptrdiff_t>(j));
+            Clipper2Lib::Path64 rest(p.begin() + static_cast<std::ptrdiff_t>(j), p.end());
+            rest.insert(rest.end(), p.begin(), p.begin() + static_cast<std::ptrdiff_t>(i));
+            todo.push_back(std::move(rest));
+            split = true;
+        }
+        if (!split && p.size() >= 3) {
+            out.push_back(std::move(p));
         }
     }
-    return result;
 }
+
+} // namespace
 
 GridAreas grid_difference(const Polylines& b, const Polylines& a, GridLimits limits) {
     GridAreas result;
@@ -106,6 +115,50 @@ GridAreas grid_difference(const Polylines& b, const Polylines& a, GridLimits lim
     const double unit_area = limits.u * limits.u; // grid units² to mm²
     result.difference_mm2 = std::abs(Clipper2Lib::Area(solution)) * unit_area;
     result.b_mm2 = std::abs(Clipper2Lib::Area(subject)) * unit_area;
+    return result;
+}
+
+GridRegion grid_region(const RegionInput& input, GridLimits limits) {
+    GridRegion result;
+    Frame frame{};
+    if (!frame_of(input.loops.points, limits, frame)) {
+        result.status = GridStatus::too_large;
+        return result;
+    }
+    Clipper2Lib::Clipper64 clipper;
+    clipper.AddSubject(to_grid(input.loops, frame, limits.u));
+    Clipper2Lib::Paths64 solution;
+    const auto rule = static_cast<Clipper2Lib::FillRule>(input.fill_rule); // checked by the binding
+    if (!clipper.Execute(Clipper2Lib::ClipType::Union, rule, solution)) {
+        result.status = GridStatus::failed;
+        return result;
+    }
+    std::vector<Clipper2Lib::Path64> loops;
+    GridPoints pinches;
+    for (const Clipper2Lib::Path64& path : solution) {
+        split_pinches(path, loops, pinches);
+    }
+    std::vector<double> middles;
+    for (const Clipper2Lib::Path64& loop : loops) {
+        result.starts.push_back(static_cast<std::int64_t>(result.points.size()));
+        for (std::size_t k = 0; k < loop.size(); ++k) {
+            const Clipper2Lib::Point64& p = loop.at(k);
+            const Clipper2Lib::Point64& q = loop.at((k + 1) % loop.size());
+            result.points.push_back({frame.cx + static_cast<double>(p.x) * limits.u,
+                                     frame.cy + static_cast<double>(p.y) * limits.u});
+            middles.insert(middles.end(),
+                           {frame.cx + static_cast<double>(p.x + q.x) / 2 * limits.u,
+                            frame.cy + static_cast<double>(p.y + q.y) / 2 * limits.u});
+            result.fixed.push_back(pinches.contains({p.x, p.y}) ? 1 : 0);
+        }
+    }
+    std::vector<std::int64_t> nearest(result.points.size());
+    nearest_segments(middles, input.loops, input.id_reach, nearest);
+    for (const std::int64_t segment : nearest) {
+        result.ids.push_back(
+            segment < 0 ? -1
+                        : input.source_ids.subspan(static_cast<std::size_t>(segment), 1).front());
+    }
     return result;
 }
 

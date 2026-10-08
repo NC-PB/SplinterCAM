@@ -47,7 +47,7 @@ def loop_tree(loops: CurveRows, ctx: Context) -> Result[LoopTree]:
     if screened is None:  # screen_loops always returns its loops
         raise RuntimeError("screen_loops returned no value")
     diagnostics = list(screened_result.diagnostics)
-    if screened.crossing_points.shape[0] > 0:
+    if any(d.severity is Severity.ERROR for d in diagnostics):  # crossings or refusals, REQ-G2D-162
         return Result(_empty_tree(screened), tuple(diagnostics))
     kept = screened.kept.tolist()
     rows = [_loop_rows(loops, i) for i in kept]

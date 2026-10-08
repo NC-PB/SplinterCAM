@@ -28,6 +28,12 @@ struct Polylines {
 void polyline_distances(std::span<const double> q, const Polylines& lines, double limit,
                         std::span<double> out);
 
+// Per query point the index of the nearest segment of `lines` within `limit` (segments counted
+// loop by loop, so a segment's index is the index of the vertex it starts at; the lowest on a
+// tie), or -1 when none lies within it.
+void nearest_segments(std::span<const double> q, const Polylines& lines, double limit,
+                      std::span<std::int64_t> out);
+
 // Whether polyline set `a` reaches more than `limit` into the region of `b` (inside) and more
 // than `limit` out of it (outside): a point of a's segments farther than `limit` from every
 // segment of b, classified by point in region against b (REQ-G2D-237).

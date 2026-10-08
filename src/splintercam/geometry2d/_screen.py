@@ -102,6 +102,9 @@ def _screen_one(
             [*notes, Diagnostic("LOOPS_CROSS", Severity.ERROR, message, where)],
             contact.nodes,
         )
+    if contact.kind == "refused":
+        message = f"the containment fallback for the cycles of {where} failed"
+        return None, [*notes, Diagnostic(contact.code, Severity.ERROR, message, where)], None
     if contact.kind == "degenerate":
         message = f"{where} touches itself everywhere: every cycle lies within t_topo of the others"
         return None, [*notes, Diagnostic("LOOP_DEGENERATE", Severity.WARNING, message, where)], None

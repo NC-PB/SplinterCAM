@@ -3,6 +3,7 @@
 
 from ._area import signed_area
 from ._box import Box, bounding_box
+from ._build import build_region
 from ._bulge import arc_from_bulge, bulges_from_arc
 from ._circle import Circle, circle_through
 from ._cleanup import cleanup
@@ -34,6 +35,7 @@ __all__ = [
     "arc_from_bulge",
     "are_parallel",
     "bounding_box",
+    "build_region",
     "bulges_from_arc",
     "circle_through",
     "cleanup",

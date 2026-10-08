@@ -203,10 +203,7 @@ void check_counts(std::span<const double> rows, std::span<const std::uint8_t> in
         if (count < low || count > high) {
             throw nb::value_error("a count that row_vertex_counts cannot give");
         }
-        total += static_cast<std::size_t>(count);
-        if (total > points) {
-            throw nb::value_error("out needs one point per counted vertex");
-        }
+        total += static_cast<std::size_t>(count); // at most 2^31 per row: no overflow
     }
     if (total != points) {
         throw nb::value_error("out needs one point per counted vertex");
@@ -242,13 +239,6 @@ void bind_flatten_rows(nb::module_& m) {
         "Write the loops' rows flattened one after another, each joint once (REQ-G2D-199).");
 }
 
-// One closed loop of `rows` (none when it is empty), for the pair kernels.
-std::span<const std::int64_t> loop_of(const PointRows& rows,
-                                      const std::array<std::int64_t, 1>& start) {
-    return rows.shape(0) == 0 ? std::span<const std::int64_t>{}
-                              : std::span<const std::int64_t>{start};
-}
-
 void check_polylines(std::span<const std::int64_t> starts, std::span<const double> vertices) {
     const auto count = static_cast<std::int64_t>(vertices.size() / 2);
     std::int64_t previous = -1;
@@ -269,18 +259,46 @@ void check_polylines(std::span<const std::int64_t> starts, std::span<const doubl
     }
 }
 
+// Checked closed polylines: `rows` split at `loop_starts`.
+Polylines loops_of(const PointRows& rows, std::span<const std::int64_t> starts) {
+    check_polylines(starts, {rows.data(), rows.size()});
+    return {.points = points(rows), .loop_starts = starts};
+}
+
+Polylines loops_of(const PointRows& rows, const Counts& loop_starts) {
+    return loops_of(rows, {loop_starts.data(), loop_starts.size()});
+}
+
+constexpr std::array<std::int64_t, 1> first_row{0};
+
+// One checked closed polyline (none when `rows` is empty).
+Polylines one_loop(const PointRows& rows) {
+    return loops_of(rows, rows.shape(0) == 0 ? std::span<const std::int64_t>{}
+                                             : std::span<const std::int64_t>{first_row});
+}
+
+std::pair<Polylines, Polylines> two_loops(const PointRows& a, const PointRows& b) {
+    return {one_loop(a), one_loop(b)};
+}
+
 void check_limit(double limit) {
     if (!(limit > 0.0) || !std::isfinite(limit)) {
         throw nb::value_error("limit must be finite and > 0");
     }
 }
 
-// The pair kernels' input: a positive finite limit, finite vertices.
-void check_pair(const PointRows& a, const PointRows& b, double limit,
-                const std::array<std::int64_t, 1>& start) {
-    check_limit(limit);
-    check_polylines(loop_of(a, start), {a.data(), a.size()});
-    check_polylines(loop_of(b, start), {b.data(), b.size()});
+// Each output array is filled as far as it reaches; the caller retries with the counts.
+void copy_points(const std::vector<Point2>& from, const PointsOut& to) {
+    for (std::size_t i = 0; i < std::min(from.size(), to.shape(0)); ++i) {
+        to(i, 0) = std::get<0>(from.at(i));
+        to(i, 1) = std::get<1>(from.at(i));
+    }
+}
+
+template <typename T, typename Out> void copy_values(const std::vector<T>& from, const Out& to) {
+    for (std::size_t i = 0; i < std::min(from.size(), to.shape(0)); ++i) {
+        to(i) = from.at(i);
+    }
 }
 
 void bind_distances(nb::module_& m) {
@@ -289,15 +307,11 @@ void bind_distances(nb::module_& m) {
         [](const PointRows& q, const PointRows& vertices, const Counts& loop_starts, double limit,
            const DoubleOut& out) {
             check_rows(q.shape(0), {out.shape(0)});
-            if (!(limit > 0.0) || !std::isfinite(limit)) {
-                throw nb::value_error("limit must be finite and > 0");
-            }
-            const std::span<const std::int64_t> starts{loop_starts.data(), loop_starts.size()};
-            check_polylines(starts, {vertices.data(), vertices.size()});
+            check_limit(limit);
+            const auto [queries, lines] =
+                std::pair{std::span{q.data(), q.size()}, loops_of(vertices, loop_starts)};
             const nb::gil_scoped_release unlocked; // a long loop over plain arrays
-            polyline_distances({q.data(), q.size()},
-                               {.points = points(vertices), .loop_starts = starts}, limit,
-                               {out.data(), out.size()});
+            polyline_distances(queries, lines, limit, {out.data(), out.size()});
         },
         nb::arg("q"), nb::arg("points"), nb::arg("loop_starts"), nb::arg("limit"), nb::arg("out"),
         "Write per point its distance to the closed polylines where at most limit, else inf.");
@@ -323,12 +337,10 @@ void bind_pairs(nb::module_& m) {
     m.def(
         "crossing_depth",
         [](const PointRows& a, const PointRows& b, double limit) {
-            const std::array<std::int64_t, 1> start{0};
-            check_pair(a, b, limit, start);
+            check_limit(limit);
+            const auto [mine, theirs] = two_loops(a, b);
             const nb::gil_scoped_release unlocked;
-            const Depth depth =
-                crossing_depth({.points = points(a), .loop_starts = loop_of(a, start)},
-                               {.points = points(b), .loop_starts = loop_of(b, start)}, limit);
+            const Depth depth = crossing_depth(mine, theirs, limit);
             return std::pair{depth.inside, depth.outside};
         },
         nb::arg("a"), nb::arg("b"), nb::arg("limit"),
@@ -337,34 +349,24 @@ void bind_pairs(nb::module_& m) {
     m.def(
         "covered_by",
         [](const PointRows& a, const PointRows& b, const Counts& b_starts, double limit) {
-            const std::array<std::int64_t, 1> start{0};
             check_limit(limit);
-            check_polylines(loop_of(a, start), {a.data(), a.size()});
-            const std::span<const std::int64_t> starts{b_starts.data(), b_starts.size()};
-            check_polylines(starts, {b.data(), b.size()});
+            const auto [mine, others] = std::pair{one_loop(a), loops_of(b, b_starts)};
             const nb::gil_scoped_release unlocked;
-            return covered_by({.points = points(a), .loop_starts = loop_of(a, start)},
-                              {.points = points(b), .loop_starts = starts}, limit);
+            return covered_by(mine, others, limit);
         },
         nb::arg("a"), nb::arg("b"), nb::arg("b_starts"), nb::arg("limit"),
         "Whether every point of closed polyline a lies within limit of the closed polylines b.");
     m.def(
         "contact_points",
         [](const PointRows& a, const PointRows& b, double limit, const PointsOut& out) {
-            const std::array<std::int64_t, 1> start{0};
-            check_pair(a, b, limit, start);
+            check_limit(limit);
+            const auto [mine, theirs] = two_loops(a, b);
             std::vector<Point2> found;
             {
                 const nb::gil_scoped_release unlocked;
-                found =
-                    contact_points({.points = points(a), .loop_starts = loop_of(a, start)},
-                                   {.points = points(b), .loop_starts = loop_of(b, start)}, limit);
+                found = contact_points(mine, theirs, limit);
             }
-            const std::size_t written = std::min(found.size(), out.shape(0));
-            for (std::size_t i = 0; i < written; ++i) {
-                out(i, 0) = std::get<0>(found.at(i));
-                out(i, 1) = std::get<1>(found.at(i));
-            }
+            copy_points(found, out);
             return found.size();
         },
         nb::arg("a"), nb::arg("b"), nb::arg("limit"), nb::arg("out"),
@@ -372,52 +374,57 @@ void bind_pairs(nb::module_& m) {
         "short).");
 }
 
+using Ids = nb::ndarray<const std::int64_t, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
+using FlagsOut = nb::ndarray<std::uint8_t, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
+
 void bind_grid(nb::module_& m) {
     m.def(
         "grid_difference",
         [](const PointRows& b, const PointRows& a, double u, double max_span_units) {
-            const std::array<std::int64_t, 1> start{0};
             check_limit(u);
-            check_polylines(loop_of(b, start), {b.data(), b.size()});
-            check_polylines(loop_of(a, start), {a.data(), a.size()});
+            const auto [subject, clip] = two_loops(b, a);
             const nb::gil_scoped_release unlocked;
             const GridAreas areas =
-                grid_difference({.points = points(b), .loop_starts = loop_of(b, start)},
-                                {.points = points(a), .loop_starts = loop_of(a, start)},
-                                {.u = u, .max_span_units = max_span_units});
+                grid_difference(subject, clip, {.u = u, .max_span_units = max_span_units});
             return std::tuple{static_cast<int>(areas.status), areas.difference_mm2, areas.b_mm2};
         },
         nb::arg("b"), nb::arg("a"), nb::arg("u"), nb::arg("max_span_units"),
         "Return (status, area of b minus a, area of b) in mm² from Clipper2's NonZero difference "
-        "on "
-        "the grid (REQ-G2D-169).");
+        "on the grid (REQ-G2D-169).");
     m.def(
-        "grid_union",
-        [](const PointRows& vertices, const Counts& loop_starts, double u, double max_span_units,
-           const PointsOut& points_out, const CountsOut& starts_out) {
-            const std::span<const std::int64_t> starts{loop_starts.data(), loop_starts.size()};
-            check_polylines(starts, {vertices.data(), vertices.size()});
-            check_limit(u);
-            GridResult result;
+        "grid_region",
+        [](const PointRows& vertices, const Counts& loop_starts, const Ids& source_ids,
+           int fill_rule, const std::array<double, 3>& grid, const PointsOut& points_out,
+           const CountsOut& starts_out, const CountsOut& ids_out, const FlagsOut& fixed_out) {
+            const auto [loops, ids] = std::pair{loops_of(vertices, loop_starts),
+                                                std::span{source_ids.data(), source_ids.size()}};
+            check_rows(vertices.shape(0), {ids.size()});
+            check_limit(std::get<0>(grid));
+            check_limit(std::get<2>(grid));
+            if (fill_rule < 0 || fill_rule > 2) {
+                throw nb::value_error("fill_rule must be 0 (EvenOdd), 1 (NonZero) or 2 (Positive)");
+            }
+            GridRegion region;
             {
                 const nb::gil_scoped_release unlocked;
-                result = grid_union({.points = points(vertices), .loop_starts = starts},
-                                    {.u = u, .max_span_units = max_span_units});
+                region = grid_region({.loops = loops,
+                                      .source_ids = ids,
+                                      .fill_rule = fill_rule,
+                                      .id_reach = std::get<2>(grid)},
+                                     {.u = std::get<0>(grid), .max_span_units = std::get<1>(grid)});
             }
-            for (std::size_t i = 0; i < std::min(result.points.size(), points_out.shape(0)); ++i) {
-                points_out(i, 0) = std::get<0>(result.points.at(i));
-                points_out(i, 1) = std::get<1>(result.points.at(i));
-            }
-            for (std::size_t i = 0; i < std::min(result.starts.size(), starts_out.shape(0)); ++i) {
-                starts_out(i) = result.starts.at(i);
-            }
-            return std::tuple{static_cast<int>(result.status), result.points.size(),
-                              result.starts.size()};
+            copy_points(region.points, points_out);
+            copy_values(region.starts, starts_out);
+            copy_values(region.ids, ids_out);
+            copy_values(region.fixed, fixed_out);
+            return std::tuple{static_cast<int>(region.status), region.points.size(),
+                              region.starts.size()};
         },
-        nb::arg("points"), nb::arg("loop_starts"), nb::arg("u"), nb::arg("max_span_units"),
-        nb::arg("points_out"), nb::arg("starts_out"),
-        "The NonZero union of closed polylines through Clipper2's grid; return (status, points, "
-        "loops), the counts it needed.");
+        nb::arg("points"), nb::arg("loop_starts"), nb::arg("source_ids"), nb::arg("fill_rule"),
+        nb::arg("grid"), nb::arg("points_out"), nb::arg("starts_out"), nb::arg("ids_out"),
+        nb::arg("fixed_out"),
+        "The region of flattened loops through Clipper2's grid (grid = u, the span limit in grid "
+        "units, the reach of the source IDs); return (status, points, loops).");
 }
 
 void bind_self_cycles(nb::module_& m) {
@@ -425,15 +432,12 @@ void bind_self_cycles(nb::module_& m) {
         "self_cycles",
         [](const PointRows& loop, const PointsOut& points_out, const CyclesOut& cycles_out,
            const PointsOut& nodes_out) {
-            const std::array<std::int64_t, 1> start{0};
-            check_polylines(loop_of(loop, start), {loop.data(), loop.size()});
-            const SelfCycles cycles = self_cycles(points(loop));
-            const auto copy_points = [](const std::vector<Point2>& from, const PointsOut& to) {
-                for (std::size_t i = 0; i < std::min(from.size(), to.shape(0)); ++i) {
-                    to(i, 0) = std::get<0>(from.at(i));
-                    to(i, 1) = std::get<1>(from.at(i));
-                }
-            };
+            const Polylines checked = one_loop(loop);
+            SelfCycles cycles;
+            {
+                const nb::gil_scoped_release unlocked;
+                cycles = self_cycles(checked.points);
+            }
             copy_points(cycles.points, points_out);
             copy_points(cycles.nodes, nodes_out);
             for (std::size_t i = 0; i < std::min(cycles.starts.size(), cycles_out.shape(0)); ++i) {
@@ -457,9 +461,7 @@ void bind(nb::module_& m) {
     m.def(
         "check_arcs",
         [](const Rows& rows, double length_eps_mm, const Int8Out& out) {
-            if (out.shape(0) != rows.shape(0)) {
-                throw nb::value_error("out needs one element per row");
-            }
+            check_rows(rows.shape(0), {out.shape(0)});
             check_arcs(view(rows), length_eps_mm, view(out));
         },
         nb::arg("rows"), nb::arg("length_eps_mm"), nb::arg("out"),
@@ -467,9 +469,7 @@ void bind(nb::module_& m) {
     m.def(
         "basic_atan2",
         [](const Values& y, const Values& x, const DoubleOut& out) {
-            if (x.shape(0) != y.shape(0) || out.shape(0) != y.shape(0)) {
-                throw nb::value_error("y, x and out need the same length");
-            }
+            check_rows(y.shape(0), {x.shape(0), out.shape(0)});
             for (std::size_t i = 0; i < out.shape(0); ++i) {
                 out(i) = basic_atan2(y(i), x(i));
             }

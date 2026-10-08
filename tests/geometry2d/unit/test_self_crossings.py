@@ -8,7 +8,9 @@ import pytest
 
 from geometry2d_checks import codes, polygons
 from splintercam.foundation import Context
+from splintercam.geometry2d import _selfcross as selfcross
 from splintercam.geometry2d import curve_rows, loop_tree
+from splintercam.geometry2d._contain import Nesting
 from splintercam.geometry2d._screen import screen_loops
 
 Points = list[tuple[float, float]]
@@ -90,9 +92,42 @@ def test_a_loop_crossing_itself_is_reported(ctx: Context, name: str) -> None:
     assert result.value.kept.size == 0
     assert codes(result) == ["LOOPS_CROSS"]
     assert result.diagnostics[0].location == "loop 0"
-    if name != "curl of 1e-4 mm":
-        assert result.value.crossing_points.shape[0] >= 1
-        assert (result.value.crossing_loops == 0).all()  # the pair (0, 0)
+    assert result.value.crossing_points.shape[0] >= 1  # a stretch run twice: its ends
+    assert (result.value.crossing_loops == 0).all()  # the pair (0, 0)
+
+
+# Spec review of 4c: lobes of area +15 and -20 whose ends at the node sort as in, out, out, in
+# from +x; pairing them twice joined both lobes into one cycle, a touching loop.
+EIGHT: Points = [(10, 0), (0, 0), (0, -3), (5, -3), (5, 4), (10, 4)]
+
+
+@pytest.mark.req("REQ-G2D-238", "REQ-G2D-160")
+@pytest.mark.parametrize("quarter", range(4))
+@pytest.mark.parametrize("backward", [False, True])
+def test_a_figure_eight_crosses_from_every_start_and_turn(
+    ctx: Context, quarter: int, backward: bool
+) -> None:
+    c, s = [(1, 0), (0, 1), (-1, 0), (0, -1)][quarter]
+    turned = [(c * x - s * y, s * x + c * y) for x, y in EIGHT]
+    for k in range(len(turned)):
+        loop = turned[k:] + turned[:k]
+        result = screen_loops(polygons([loop[::-1] if backward else loop], ctx), ctx)
+        assert codes(result) == ["LOOPS_CROSS"], k
+        assert result.value is not None
+        assert result.value.crossing_points.tolist() == [[5.0 * c, 5.0 * s]]
+
+
+@pytest.mark.req("REQ-G2D-238", "REQ-G2D-162")
+def test_a_wall_running_a_stretch_twice_leaves_no_tree(ctx: Context) -> None:
+    # Spec review of 4c: [50, 60] x {0} is run twice in one direction; the island inside kept a
+    # tree of its own when the stretch gave no crossing points.
+    wall: Points = [(0, 0), (60, 0), (60, -1), (50, -1), (50, 0), (100, 0), (100, 100), (0, 100)]
+    island = [(10.0, 10.0), (20.0, 10.0), (20.0, 20.0), (10.0, 20.0)]
+    result = loop_tree(polygons([wall, island], ctx), ctx)
+    assert codes(result) == ["LOOPS_CROSS"]
+    assert result.value is not None
+    assert result.value.loops.rows.shape[0] == 0
+    assert result.value.crossing_points.tolist() == [[50.0, 0.0], [60.0, 0.0]]
 
 
 @pytest.mark.req("REQ-G2D-238", "REQ-G2D-163")
@@ -140,3 +175,22 @@ def test_crossing_points_sort_by_pair_then_x_then_y(ctx: Context) -> None:
     assert result.value is not None
     assert result.value.crossing_loops.tolist() == [[0, 0], [1, 2], [1, 2]]
     assert codes(result) == ["LOOPS_CROSS", "LOOPS_CROSS"]
+
+
+@pytest.mark.req("REQ-G2D-238", "REQ-G2D-034")
+def test_a_refused_fallback_for_the_cycles_is_reported_as_refused(
+    ctx: Context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Spec review of 4c: the refusal was reported as LOOPS_CROSS, "crosses itself".
+    def refusing(polylines: list[object], *_: object) -> Nesting:
+        k = len(polylines)
+        return Nesting([-1] * k, [0] * k, [], [(0, 1, "REGION_TOO_LARGE")])
+
+    monkeypatch.setattr(selfcross, "nest", refusing)
+    island = [(4.0, 1.0), (6.0, 1.0), (6.0, 2.0), (4.0, 2.0)]
+    name = next(iter(TOUCHING))
+    result = loop_tree(polygons([TOUCHING[name], island], ctx), ctx)
+    assert codes(result) == ["REGION_TOO_LARGE"]
+    assert result.diagnostics[0].location == "loop 0"
+    assert result.value is not None
+    assert result.value.loops.rows.shape[0] == 0  # no tree

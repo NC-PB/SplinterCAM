@@ -8,7 +8,7 @@
 - Research: `docs/research/01-foundations.md`: Loop tree, Kernel arrays (polygon region), Tolerances (resolution chain), Flattening (side rule); tests 7, 16, 19, 21 and 24
 - Branch: one pull request per session (docs/dev/07); a step with a new algorithm or over about 100 lines of non-test code gets its own, from `main` after the previous merge, never stacked
 - Owner: Peter Burgener; agents: Claude Code sessions
-- Status (2026-10-07): approved by Peter with his answers below (DEC-G2D-022); step 1 done and reviewed (DEC-G2D-024 to 027); steps 2 and 3 done; steps 1 to 7 done; step 8 next.
+- Status (2026-10-07): approved by Peter with his answers below (DEC-G2D-022); step 1 done and reviewed (DEC-G2D-024 to 027); steps 2 and 3 done; steps 1 to 8 done; step 9 next.
 
 ## Questions for Peter before step 1
 
@@ -33,7 +33,7 @@ Answered 2026-10-07: yes to all six, as proposed (DEC-G2D-022).
 - [x] 5. **Loop tree II: parents, depths, normalisation.** Done before 4c (2026-10-08), since 4c nests cycles with these rules; the "no probe" case is provisional until step 7 (DEC-G2D-032). The containment probes in their order (164 to 168), depth and orientation (174, 175), a winding of 1 inside normalised regions (151), and independence of tol (154). Research 01 test 7. Size: about 250 + 350.
 - [x] 6. **The Clipper2 bridge.** Re-centre on the bounding box and round to u (033); refuse a span of 2^26 grid units or more with an error diagnostic (034); the resolution chain property, every output vertex within 2.83 grid units of the input polylines and point in region unchanged beyond t_topo (030, 031). Research 01 test 21. Size: about 200 + 300.
 - [x] 7. **The rule 5 fallback.** The Clipper2 difference with NonZero, and the tie rules for loops tested both ways (166, 169 to 173). Research 01 test 24. Size: about 150 + 300.
-- [ ] 8. **`build_region`.** The PolyTree of the side-correct flattened, normalised loops (118, 176, 177); compared with the loop tree as point sets and by depth parity (178, 179); topology from the integer result only (032); source IDs by the nearest input edge (180); pinch points split by exact integer tests and marked as fixed nodes (181); an extra clearance of 0 (124, lines and arcs). Size: about 350 + 400; split into 8 and 8b if the review fixes push it past 400.
+- [x] 8. **`build_region`.** The PolyTree of the side-correct flattened, normalised loops (118, 176, 177); compared with the loop tree as point sets and by depth parity (178, 179); topology from the integer result only (032); source IDs by the nearest input edge (180); pinch points split by exact integer tests and marked as fixed nodes (181); an extra clearance of 0 (124, lines and arcs). Size: about 350 + 400; split into 8 and 8b if the review fixes push it past 400.
 - [ ] 9. **`build_chain` for open chains.** The tool's side as the air side of every arc (117), and an extra clearance of 0 (125, lines and arcs). Size: about 100 + 150.
 
 Total: about 1850 added lines of code (about 1300 NLOC) and 2550 of tests, in nine steps; the steps with a new algorithm get a pull request each, the rest share session pull requests (docs/dev/07).
@@ -46,6 +46,15 @@ Total: about 1850 added lines of code (about 1300 NLOC) and 2550 of tests, in ni
 
 <!-- Newest first. What was done, what tools/check reported, what is next. At most about 30 lines per session;
      numbers go into tables. Above 300 lines, older entries move to an archive file next to the plan. -->
+
+### 2026-10-08, step 8: `build_region`
+
+- `build_region` and `grid_region` (REQ-G2D-032, 118, 124, 162, 176 to 181, 235; DEC-G2D-036): the Positive PolyTree of the side-correct flattenings, pinches split and fixed, source IDs by the nearest flattened input edge. Research 01, rule 7's two Clipper2 cases reproduce; the vertex pinch only for some input orders.
+- Differential property tests on test 7's generator with rounded boxes, 10,000 cases each with `HYPOTHESIS_PROFILE=thorough`.
+- The 4c spec review (DEC-G2D-033): two blockers reproduced and fixed (a figure eight paired into one touching cycle; a stretch run twice gave no crossing points, and the island beside it kept a tree), and the cover rule, the refusal code, the tie order and the interpreter lock; the O(n²) contact search is in the backlog.
+- Size: the module reached 3608 NLOC, over its hard limit of 3600. The simplifier's cuts (one Clipper2 union path, shared binding helpers, `x`/`y` once) bring it to 3454, with no behaviour change except that `grid_union` now splits pinches.
+- Questions for Peter: (1) the module budget: slice 2 measures about 1900 NLOC against its estimate of 1300, and step 9 needs about 50 more; raise 3000 to 3600, or keep 3000 and cut further? (2) a contour that runs along the same line twice in opposite directions (a zero-width slit, as a keyhole drawn as one loop): it stops the operation with `LOOPS_CROSS` for now; should it be accepted instead?
+- `tools/check`: PASS (11 of 14). Next: step 9, `build_chain`.
 
 ### 2026-10-08, step 7: the rule 5 fallback
 
@@ -131,6 +140,9 @@ Total: about 1850 added lines of code (about 1300 NLOC) and 2550 of tests, in ni
 
 - From step 3: `polyline_distances` releases the interpreter lock but takes no cancellation flag yet (`.claude/rules/kernels.md`); add it with the other long kernels.
 - From step 3: REQ-G2D-168 projects vertices onto the nearest segment, so step 5 needs `polyline_distances` to return that segment's index too (ties to the lowest index, for determinism).
+
+- From the 4c spec review: `self_cycles` tests all segment pairs; reuse the cell grid of `distance.cpp` (or a sweep by x) and add a cancellation flag. Direction at a node from the strand's own segment rather than the next (rounded) point, and snapping a constructed point that equals a vertex.
+- Module budget: geometry2d measures 3607 NLOC after step 8 (hard limit 3600); slice 2 so far about 2050 against its estimate of 1300. See the questions in the progress log.
 
 ## Blockers
 

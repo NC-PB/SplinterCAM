@@ -16,14 +16,6 @@
 namespace splintercam::geometry2d {
 namespace {
 
-double x(Point2 p) {
-    return std::get<0>(p);
-}
-
-double y(Point2 p) {
-    return std::get<1>(p);
-}
-
 double line_distance(Point2 q, Point2 a, Point2 b) {
     const double dx = x(b) - x(a);
     const double dy = y(b) - y(a);
@@ -119,9 +111,13 @@ Grid build_grid(const std::vector<Segment>& segments, double limit) {
     return grid;
 }
 
-double nearest(Point2 q, const Grid& grid, const std::vector<Segment>& segments) {
+// The nearest segment to q among those filed near it: its distance and index (the lowest index on
+// a tie; the size when none is filed near q).
+std::pair<double, std::size_t> nearest(Point2 q, const Grid& grid,
+                                       const std::vector<Segment>& segments) {
     constexpr std::int64_t reach = 2;
     double best = std::numeric_limits<double>::infinity();
+    std::size_t index = segments.size();
     const std::int64_t cx = cell(x(q), grid.ox, grid.h);
     const std::int64_t cy = cell(y(q), grid.oy, grid.h);
     for (std::int64_t ix = cx - reach; ix <= cx + reach; ++ix) {
@@ -129,10 +125,14 @@ double nearest(Point2 q, const Grid& grid, const std::vector<Segment>& segments)
         const auto last = std::ranges::lower_bound(grid.entries, Entry{ix, cy + reach + 1, 0});
         for (auto e = first; e != last; ++e) {
             const Segment& s = segments.at(e->segment);
-            best = std::min(best, segment_distance(q, s.a, s.b));
+            const double d = segment_distance(q, s.a, s.b);
+            if (d < best || (d == best && e->segment < index)) {
+                best = d;
+                index = e->segment;
+            }
         }
     }
-    return best;
+    return {best, index};
 }
 
 // The segments filed within `reach` cells of any cell segment s crosses: sorted, unique.
@@ -336,7 +336,7 @@ void polyline_distances(std::span<const double> q, const Polylines& lines, doubl
     }
     const Grid grid = build_grid(segments, limit);
     for (std::size_t i = 0; i < out.size(); ++i) {
-        const double d = nearest(point(q, i), grid, segments);
+        const double d = nearest(point(q, i), grid, segments).first;
         out.subspan(i, 1).front() = d <= limit ? d : std::numeric_limits<double>::infinity();
     }
 }
@@ -406,6 +406,20 @@ std::vector<Point2> contact_points(const Polylines& a, const Polylines& b, doubl
     std::ranges::sort(found);
     found.erase(std::ranges::unique(found).begin(), found.end());
     return found;
+}
+
+void nearest_segments(std::span<const double> q, const Polylines& lines, double limit,
+                      std::span<std::int64_t> out) {
+    const std::vector<Segment> segments = segments_of(lines);
+    if (segments.empty()) {
+        std::ranges::fill(out, -1);
+        return;
+    }
+    const Grid grid = build_grid(segments, limit);
+    for (std::size_t i = 0; i < out.size(); ++i) {
+        const auto [d, index] = nearest(point(q, i), grid, segments);
+        out.subspan(i, 1).front() = d <= limit ? static_cast<std::int64_t>(index) : -1;
+    }
 }
 
 } // namespace splintercam::geometry2d

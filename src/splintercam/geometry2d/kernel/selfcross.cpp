@@ -14,24 +14,12 @@
 namespace splintercam::geometry2d {
 namespace {
 
-double x(Point2 p) {
-    return std::get<0>(p);
-}
-
-double y(Point2 p) {
-    return std::get<1>(p);
-}
-
 struct Position { // a point of the loop: segment `seg` at parameter t in [0, 1)
     std::size_t seg;
     double t;
     Point2 p;
-    auto operator<=>(const Position& other) const {
-        return std::pair{seg, t} <=> std::pair{other.seg, other.t};
-    }
-    bool operator==(const Position& other) const {
-        return seg == other.seg && t == other.t;
-    }
+    auto
+    operator<=>(const Position& other) const = default; // p breaks ties: same on every platform
 };
 
 bool within_box(Point2 q, Point2 a, Point2 b) {
@@ -94,7 +82,8 @@ void ends_on(const Loop& loop, std::size_t i, std::size_t j, std::vector<Positio
     }
 }
 
-// Adds where segments i and j (not neighbours) meet; false for a shared stretch.
+// Adds where segments i and j (not neighbours) meet; false for a shared stretch, whose ends it
+// adds.
 bool meet(const Loop& loop, std::size_t i, std::size_t j, std::vector<Position>& out) {
     const Point2 a = loop.start(i);
     const Point2 b = loop.end(i);
@@ -103,6 +92,7 @@ bool meet(const Loop& loop, std::size_t i, std::size_t j, std::vector<Position>&
     const std::array<int, 4> o{orient_sign(c, d, a), orient_sign(c, d, b), orient_sign(a, b, c),
                                orient_sign(a, b, d)};
     if (o == std::array<int, 4>{0, 0, 0, 0} && shared_stretch(a, b, c, d)) {
+        ends_on(loop, i, j, out);
         return false;
     }
     if (std::get<0>(o) * std::get<1>(o) < 0 && std::get<2>(o) * std::get<3>(o) < 0) {
@@ -139,21 +129,22 @@ std::optional<bool> before(Point2 node, Point2 p, Point2 q) {
     return turn > 0;
 }
 
-// Every position where non-adjacent segments meet, sorted along the loop; nullopt for a stretch.
-std::optional<std::vector<Position>> positions_of(const Loop& loop) {
+// Every position where non-adjacent segments meet, sorted along the loop, and whether the loop
+// runs a stretch twice (its ends are positions too).
+std::pair<std::vector<Position>, bool> positions_of(const Loop& loop) {
     const std::size_t n = loop.size();
     std::vector<Position> positions;
+    bool stretch = false;
     for (std::size_t i = 0; i < n; ++i) {
         for (std::size_t j = i + 2; j < n; ++j) {
             const bool neighbours = i == 0 && j == n - 1; // across the closing vertex
-            if (!neighbours && !meet(loop, i, j, positions)) {
-                return std::nullopt;
-            }
+            stretch = (!neighbours && !meet(loop, i, j, positions)) || stretch;
         }
     }
     std::ranges::sort(positions);
-    positions.erase(std::ranges::unique(positions).begin(), positions.end());
-    return positions;
+    const auto key = [](const Position& q) { return std::pair{q.seg, q.t}; };
+    positions.erase(std::ranges::unique(positions, {}, key).begin(), positions.end());
+    return {positions, stretch};
 }
 
 // The points of the loop from one position to the next.
@@ -175,7 +166,6 @@ std::vector<Point2> piece(const Loop& loop, const Position& from, const Position
 
 // Pairs the ends at one node (sorted counter-clockwise) into `next`; false for a tie.
 bool pair_ends(Point2 here, std::vector<End>& around, std::vector<std::size_t>& next) {
-    const std::size_t unset = next.size();
     bool tie = false;
     std::ranges::sort(around, [&](const End& p, const End& q) {
         const std::optional<bool> order = before(here, p.toward, q.toward);
@@ -185,24 +175,26 @@ bool pair_ends(Point2 here, std::vector<End>& around, std::vector<std::size_t>& 
     if (tie) {
         return false;
     }
+    // Start after the lowest running balance (incoming +1, outgoing -1): from there every
+    // outgoing end meets an open incoming end, the matching of balanced parentheses on a circle.
+    std::ptrdiff_t balance = 0;
+    std::ptrdiff_t lowest = 0;
+    std::size_t first = 0;
+    for (std::size_t i = 0; i < around.size(); ++i) {
+        balance += around.at(i).incoming ? 1 : -1;
+        if (balance < lowest) {
+            lowest = balance;
+            first = i + 1;
+        }
+    }
     std::vector<std::size_t> open;
-    const auto join = [&](const End& e) {
-        if (open.empty()) {
-            return;
-        }
-        const std::size_t arriving = open.back();
-        open.pop_back();
-        if (next.at(arriving) == unset) {
-            next.at(arriving) = e.piece;
-        }
-    };
-    for (std::size_t pass = 0; pass < 2; ++pass) {
-        for (const End& e : around) {
-            if (!e.incoming) {
-                join(e);
-            } else if (pass == 0) {
-                open.push_back(e.piece);
-            }
+    for (std::size_t i = 0; i < around.size(); ++i) {
+        const End& e = around.at((first + i) % around.size());
+        if (e.incoming) {
+            open.push_back(e.piece);
+        } else {
+            next.at(open.back()) = e.piece; // a node has as many incoming as outgoing ends
+            open.pop_back();
         }
     }
     return true;
@@ -233,12 +225,7 @@ SelfCycles self_cycles(std::span<const double> flat) {
         loop.v.push_back(point(flat, i));
     }
     SelfCycles result;
-    const std::optional<std::vector<Position>> found = positions_of(loop);
-    if (!found.has_value()) {
-        result.status = SelfContact::overlap;
-        return result;
-    }
-    const std::vector<Position>& positions = *found;
+    const auto [positions, stretch] = positions_of(loop);
     if (positions.empty()) {
         return result;
     }
@@ -255,6 +242,13 @@ SelfCycles self_cycles(std::span<const double> flat) {
         node.at(k) = entry->second;
         path.push_back(piece(loop, positions.at(k), positions.at((k + 1) % positions.size())));
     }
+    for (const auto& entry : node_of) {
+        result.nodes.push_back({entry.first.first, entry.first.second});
+    }
+    result.status = SelfContact::overlap;
+    if (stretch) {
+        return result;
+    }
     std::vector<std::vector<End>> ends(node_of.size());
     for (std::size_t k = 0; k < path.size(); ++k) {
         const std::vector<Point2>& line = path.at(k);
@@ -265,15 +259,11 @@ SelfCycles self_cycles(std::span<const double> flat) {
     std::vector<std::size_t> next(path.size(), path.size());
     for (std::size_t m = 0; m < ends.size(); ++m) {
         if (!pair_ends(node_point.at(m), ends.at(m), next)) {
-            result.status = SelfContact::overlap;
             return result;
         }
     }
     result.status = SelfContact::cycles;
     trace(path, next, result);
-    for (const auto& entry : node_of) {
-        result.nodes.push_back({entry.first.first, entry.first.second});
-    }
     return result;
 }
 

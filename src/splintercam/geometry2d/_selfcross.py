@@ -23,11 +23,13 @@ _SIMPLE, _CYCLES, _OVERLAP = 0, 1, 2  # SelfContact in kernel/selfcross.hpp
 @dataclass(frozen=True, slots=True)
 class SelfContact:
     """`simple` (no self-contact), `touch` (the loop touches itself; `sign` is its depth-0
-    cycles'), `cross`, or `degenerate` (every cycle a sliver); `nodes` where it meets itself."""
+    cycles'), `cross`, `degenerate` (every cycle a sliver), or `refused` (the grid fallback that
+    nests its cycles refused, with that `code`); `nodes` where it meets itself."""
 
-    kind: Literal["simple", "touch", "cross", "degenerate"]
+    kind: Literal["simple", "touch", "cross", "degenerate", "refused"]
     sign: float
     nodes: NDArray[np.float64]
+    code: str = ""
 
 
 def _cycles(
@@ -68,25 +70,23 @@ def _rows(polyline: NDArray[np.float64]) -> CurveRows:
 
 def _kept(cycles: list[NDArray[np.float64]], signs: list[float], t_topo: float) -> list[int]:
     """The cycles not within t_topo of the others; of two that cover each other, both go when
-    their signs differ and both stay when they agree (REQ-G2D-238)."""
+    their signs differ and both stay when they agree (REQ-G2D-238). A covered cycle stays only as
+    such a pair, and not when the uncovered cycles alone cover it."""
     flagged = [_covered(c, cycles[:k] + cycles[k + 1 :], t_topo) for k, c in enumerate(cycles)]
     keep: list[int] = []
     for k, c in enumerate(cycles):
-        if not flagged[k]:
-            keep.append(k)
-            continue
         unflagged = [cycles[j] for j in range(len(cycles)) if j != k and not flagged[j]]
-        if _covered(c, unflagged, t_topo):
-            continue  # a sliver along the other cycles
-        partners = [
-            j
-            for j in range(len(cycles))
-            if j != k
-            and flagged[j]
-            and _covered(c, [cycles[j]], t_topo)
-            and _covered(cycles[j], [c], t_topo)
-        ]
-        if not partners or any(signs[j] == signs[k] for j in partners):
+        if not flagged[k] or (
+            not _covered(c, unflagged, t_topo)
+            and any(
+                j != k
+                and flagged[j]
+                and signs[j] == signs[k]
+                and _covered(c, [cycles[j]], t_topo)
+                and _covered(cycles[j], [c], t_topo)
+                for j in range(len(cycles))
+            )
+        ):
             keep.append(k)
     return keep
 
@@ -115,14 +115,14 @@ def self_contact(loop: NDArray[np.float64], ctx: Context) -> SelfContact:
     lengths = np.array([measures[k][1] for k in order])
     nesting = nest(polylines, areas, lengths, [_rows(p) for p in polylines], ctx)
     parents = nesting.parents
-    if nesting.crossing or nesting.refused:  # refused: conservatively a crossing
-        return SelfContact("cross", 0.0, nodes)
+    if nesting.refused:
+        return SelfContact("refused", 0.0, nodes, nesting.refused[0][2])
     roots = {math.copysign(1.0, areas[k]) for k, p in enumerate(parents) if p < 0}
     alternates = all(
         math.copysign(1.0, areas[k]) != math.copysign(1.0, areas[p])
         for k, p in enumerate(parents)
         if p >= 0
     )
-    if len(roots) > 1 or not alternates:
+    if nesting.crossing or len(roots) > 1 or not alternates:
         return SelfContact("cross", 0.0, nodes)
     return SelfContact("touch", roots.pop(), nodes)
