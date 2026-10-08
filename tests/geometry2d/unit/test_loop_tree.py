@@ -10,7 +10,7 @@ import pytest
 from geometry2d_checks import codes, polygons
 from splintercam.foundation import Context
 from splintercam.geometry2d import LoopTree, loop_tree, signed_area
-from splintercam.geometry2d._tree import Containment, both_ways
+from splintercam.geometry2d._contain import Containment, both_ways
 
 Points = list[tuple[float, float]]
 

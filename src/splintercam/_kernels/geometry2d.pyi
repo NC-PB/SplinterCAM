@@ -93,14 +93,19 @@ def crossing_depth(a: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), or
     Whether closed polyline a reaches farther than limit inside and outside closed polyline b.
     """
 
-def covered_by(a: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], b: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], limit: float) -> bool:
+def covered_by(a: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], b: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], b_starts: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu', writable=False)], limit: float) -> bool:
     """
-    Whether every point of closed polyline a lies within limit of closed polyline b.
+    Whether every point of closed polyline a lies within limit of the closed polylines b.
     """
 
 def contact_points(a: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], b: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], limit: float, out: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu')]) -> int:
     """
     Write where closed polylines a and b meet, sorted; return their count (out may be short).
+    """
+
+def self_cycles(loop: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], points: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu')], starts: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu')], first_edge: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu')], nodes: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu')]) -> tuple[int, int, int, int]:
+    """
+    Resolve a closed polyline's self-contacts into cycles; return (status, points, cycles, nodes), the counts it needed (the outputs may be short).
     """
 
 def basic_sin_cos(angles: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu', writable=False)], sines: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu')], cosines: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu')]) -> None:

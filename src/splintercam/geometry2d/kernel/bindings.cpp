@@ -9,6 +9,7 @@
 #include "exact.hpp"
 #include "flatten.hpp"
 #include "region.hpp"
+#include "selfcross.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -18,6 +19,7 @@
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/array.h>
 #include <nanobind/stl/pair.h>
+#include <nanobind/stl/tuple.h>
 #include <numbers>
 #include <span>
 #include <utility>
@@ -313,15 +315,18 @@ void bind_distances(nb::module_& m) {
         "b.");
     m.def(
         "covered_by",
-        [](const PointRows& a, const PointRows& b, double limit) {
+        [](const PointRows& a, const PointRows& b, const Counts& b_starts, double limit) {
             const std::array<std::int64_t, 1> start{0};
-            check_pair(a, b, limit, start);
+            check_limit(limit);
+            check_polylines(loop_of(a, start), {a.data(), a.size()});
+            const std::span<const std::int64_t> starts{b_starts.data(), b_starts.size()};
+            check_polylines(starts, {b.data(), b.size()});
             const nb::gil_scoped_release unlocked;
             return covered_by({.points = points(a), .loop_starts = loop_of(a, start)},
-                              {.points = points(b), .loop_starts = loop_of(b, start)}, limit);
+                              {.points = points(b), .loop_starts = starts}, limit);
         },
-        nb::arg("a"), nb::arg("b"), nb::arg("limit"),
-        "Whether every point of closed polyline a lies within limit of closed polyline b.");
+        nb::arg("a"), nb::arg("b"), nb::arg("b_starts"), nb::arg("limit"),
+        "Whether every point of closed polyline a lies within limit of the closed polylines b.");
     m.def(
         "contact_points",
         [](const PointRows& a, const PointRows& b, double limit, const PointsOut& out) {
@@ -340,6 +345,32 @@ void bind_distances(nb::module_& m) {
         nb::arg("a"), nb::arg("b"), nb::arg("limit"), nb::arg("out"),
         "Write where closed polylines a and b meet, sorted; return their count (out may be "
         "short).");
+    m.def(
+        "self_cycles",
+        [](const PointRows& loop, const PointsOut& points_out, const CountsOut& starts_out,
+           const CountsOut& first_out, const PointsOut& nodes_out) {
+            const std::array<std::int64_t, 1> start{0};
+            check_polylines(loop_of(loop, start), {loop.data(), loop.size()});
+            const SelfCycles cycles = self_cycles(points(loop));
+            const auto copy_points = [](const std::vector<Point2>& from, const PointsOut& to) {
+                for (std::size_t i = 0; i < std::min(from.size(), to.shape(0)); ++i) {
+                    to(i, 0) = std::get<0>(from.at(i));
+                    to(i, 1) = std::get<1>(from.at(i));
+                }
+            };
+            copy_points(cycles.points, points_out);
+            copy_points(cycles.nodes, nodes_out);
+            for (std::size_t i = 0; i < std::min(cycles.starts.size(), starts_out.shape(0)); ++i) {
+                starts_out(i) = cycles.starts.at(i);
+                first_out(i) = cycles.first_edge.at(i);
+            }
+            return std::tuple{static_cast<int>(cycles.status), cycles.points.size(),
+                              cycles.starts.size(), cycles.nodes.size()};
+        },
+        nb::arg("loop"), nb::arg("points"), nb::arg("starts"), nb::arg("first_edge"),
+        nb::arg("nodes"),
+        "Resolve a closed polyline's self-contacts into cycles; return (status, points, cycles, "
+        "nodes), the counts it needed (the outputs may be short).");
     m.def(
         "basic_sin_cos",
         [](const Values& angles, const DoubleOut& sines, const DoubleOut& cosines) {

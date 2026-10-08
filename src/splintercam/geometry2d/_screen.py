@@ -54,7 +54,9 @@ class _Candidate:
 
 
 def _covered(a: NDArray[np.float64], b: NDArray[np.float64], t_topo: float) -> bool:
-    return _kernels.geometry2d.covered_by(a, b, t_topo)  # no point of a farther than t_topo
+    return _kernels.geometry2d.covered_by(
+        a, b, np.zeros(1, np.int64), t_topo
+    )  # no point of a farther than t_topo
 
 
 def _duplicate_of(
