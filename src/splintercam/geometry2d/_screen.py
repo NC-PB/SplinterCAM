@@ -3,6 +3,7 @@
 removed (research 01, Loop tree, rules 1 to 3)."""
 
 import dataclasses
+import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -16,6 +17,7 @@ from ._cleanup import cleanup
 from ._crossings import find_crossings
 from ._loops import topology_flattening
 from ._rows import CurveRows
+from ._selfcross import self_contact
 
 # Rule 2: a loop whose topology flattening has |A| <= 1.5·t_topo·L, thinner than about 3·t_topo on
 # average, is dropped (research 01, Loop tree, rule 2). A rule of the research, not a tuning share.
@@ -75,6 +77,65 @@ def _duplicate_of(
     return None
 
 
+_ONE = np.zeros(1, np.int64)
+
+
+def _screen_one(
+    i: int, points: NDArray[np.float64], rows: CurveRows, ctx: Context
+) -> tuple[_Candidate | None, list[Diagnostic], NDArray[np.float64] | None]:
+    """Rules 1 and 2 for loop i, with its crossings with itself (REQ-G2D-238) before the area
+    tests: the candidate, or None when dropped; its notes; and, when it crosses itself, the
+    points where it does (pair (i, i))."""
+    where = f"loop {i}"
+    t_topo = ctx.tolerances.topology_tol_mm
+    cleaned = cleanup(points, ctx)
+    notes = [_spike_note(d, points, where) for d in cleaned.diagnostics]
+    if cleaned.value is None:  # cleanup always returns the kept indices
+        raise RuntimeError(f"cleanup returned no vertices for {where}")
+    polyline = points[cleaned.value]
+    contact = self_contact(polyline, ctx)
+    if contact.kind == "cross":
+        message = f"{where} crosses itself, deeper than t_topo"
+        return (
+            None,
+            [*notes, Diagnostic("LOOPS_CROSS", Severity.ERROR, message, where)],
+            contact.nodes,
+        )
+    if contact.kind == "degenerate":
+        message = f"{where} touches itself everywhere: every cycle lies within t_topo of the others"
+        return None, [*notes, Diagnostic("LOOP_DEGENERATE", Severity.WARNING, message, where)], None
+    area_test = signed_area(rows, ctx)
+    if area_test.value is None:
+        return (
+            None,
+            [*notes, *(dataclasses.replace(d, location=where) for d in area_test.diagnostics)],
+            None,
+        )
+    area, length = polygon_area_length(polyline)
+    if abs(area) <= _THINNESS_FACTOR * t_topo * length:
+        message = f"|A| = {abs(area):.3g} mm² of its flattening is at most 1.5·t_topo·L"
+        return None, [*notes, Diagnostic("LOOP_DEGENERATE", Severity.WARNING, message, where)], None
+    if contact.kind == "touch":
+        area = math.copysign(abs(area), contact.sign)  # the sign of its depth-0 cycles
+    box = np.concatenate([polyline.min(axis=0), polyline.max(axis=0)])
+    return _Candidate(i, polyline, area, length, box), notes, None
+
+
+def _all_crossings(
+    self_points: list[tuple[int, NDArray[np.float64]]],
+    pair_points: NDArray[np.float64],
+    pair_loops: NDArray[np.int64],
+) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
+    """Every crossing point with its loop pair, sorted by the pair, then x, then y (REQ-G2D-236);
+    a loop crossing itself is the pair (i, i)."""
+    points = [pair_points, *(nodes for _, nodes in self_points)]
+    pairs = [pair_loops, *(np.full((nodes.shape[0], 2), i, np.int64) for i, nodes in self_points)]
+    all_points = np.vstack(points).reshape(-1, 2)
+    all_pairs = np.vstack(pairs).reshape(-1, 2)
+    order = np.lexsort((all_points[:, 1], all_points[:, 0], all_pairs[:, 1], all_pairs[:, 0]))
+    return all_points[order], all_pairs[order]
+
+
 def screen_loops(loops: CurveRows, ctx: Context) -> Result[Screened]:
     """Rules 1 to 3 of the loop tree on the loops' topology flattenings, in this order: cleanup
     (spikes reported), the area test of REQ-G2D-133, the thinness test |A| <= 1.5·t_topo·L, and
@@ -94,24 +155,14 @@ def screen_loops(loops: CurveRows, ctx: Context) -> Result[Screened]:
     )
     notes: list[tuple[int, Diagnostic]] = []
     kept: list[_Candidate] = []
+    self_points: list[tuple[int, NDArray[np.float64]]] = []
     for i, (points, rows, ids) in enumerate(pieces):
-        where = f"loop {i}"
-        cleaned = cleanup(points, ctx)
-        notes += [(i, _spike_note(d, points, where)) for d in cleaned.diagnostics]
-        if cleaned.value is None:  # cleanup always returns the kept indices
-            raise RuntimeError(f"cleanup returned no vertices for {where}")
-        area_test = signed_area(CurveRows(rows, ids, np.zeros(1, np.int64)), ctx)
-        if area_test.value is None:
-            notes += [(i, dataclasses.replace(d, location=where)) for d in area_test.diagnostics]
+        candidate, loop_notes, crossing = _screen_one(i, points, CurveRows(rows, ids, _ONE), ctx)
+        notes += [(i, note) for note in loop_notes]
+        if crossing is not None:
+            self_points.append((i, crossing))
+        if candidate is None:
             continue
-        polyline = points[cleaned.value]
-        area, length = polygon_area_length(polyline)
-        if abs(area) <= _THINNESS_FACTOR * t_topo * length:
-            message = f"|A| = {abs(area):.3g} mm² of its flattening is at most 1.5·t_topo·L"
-            notes.append((i, Diagnostic("LOOP_DEGENERATE", Severity.WARNING, message, where)))
-            continue
-        box = np.concatenate([polyline.min(axis=0), polyline.max(axis=0)])
-        candidate = _Candidate(i, polyline, area, length, box)
         boxes = np.array([c.box for c in kept]).reshape(-1, 4)
         original = _duplicate_of(candidate, kept, boxes, ctx)
         if original is not None:
@@ -120,10 +171,11 @@ def screen_loops(loops: CurveRows, ctx: Context) -> Result[Screened]:
             notes.append((i, Diagnostic("LOOP_DUPLICATE", Severity.WARNING, message, location)))
             continue
         kept.append(candidate)
-    crossing_points, crossing_loops, crossing_notes = find_crossings(
+    pair_points, pair_loops, crossing_notes = find_crossings(
         [c.index for c in kept], [c.polyline for c in kept], t_topo
     )
     notes += crossing_notes
+    crossing_points, crossing_loops = _all_crossings(self_points, pair_points, pair_loops)
     screened = Screened(
         kept=np.array([c.index for c in kept], dtype=np.int64),
         polylines=tuple(c.polyline for c in kept),
