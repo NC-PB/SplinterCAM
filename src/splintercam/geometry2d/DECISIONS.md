@@ -295,3 +295,13 @@
 - Rejected: refusing the tree when no probe exists (it would stop test 24's notched pair, which has an answer); "contained" as the provisional answer (it invents nesting for loops beside each other).
 - Where: REQ-G2D-151, 153, 154, 162, 164 to 168, 170, 173 to 175; `_tree.py`.
 
+## DEC-G2D-033: a loop's crossings with itself
+
+- Date: 2026-10-08; decided by: ours (plan 0004, step 4c), on Peter's answer of DEC-G2D-024
+- Status: Active; the treatment of a stretch run twice is provisional
+- Decision: `self_cycles` (`kernel/selfcross.cpp`) finds where non-adjacent segments of the cleaned topology flattening meet by exact signs (a proper crossing's point is constructed once, on one segment, so both strands share it bit for bit), cuts the loop into pieces between these points, and at each point joins every incoming end to the first outgoing end after it counter-clockwise with balanced ends between, the ends ordered by exact half-plane and orient2d tests. It returns the cycles, each with the loop position it starts at, and the points. `self_contact` (`_selfcross.py`) then drops cycles covered within t_topo by the others (two covering each other go together when their signs differ, stay when they agree), nests the rest with `nest` (moved to `_contain.py`, shared with the tree), and calls the loop crossing when its depth-0 cycles differ in sign or a child has its parent's sign. It runs in `screen_loops` after cleanup and before the area tests; a crossing loop gets `LOOPS_CROSS` with its points as the pair (i, i), an all-sliver loop `LOOP_DEGENERATE`, a touching loop the sign of its depth-0 cycles.
+- Provisional: a stretch the loop runs twice, and two ends leaving a point in exactly one direction, cannot be ordered at the point, and the loop counts as crossing (a `LOOPS_CROSS`, so the operation stops instead of guessing; D-163, the conservative option). REQ-G2D-238's list wanted a curl of 1e-4 mm to touch; it crosses until the resolution contracts such stretches.
+- Why: measured on the SPEC's cases (2026-10-08): the bow-tie, a figure eight, a loop run round twice, a CW petal and the 0.0015 mm fishtail cross; the pinch, the 1e-4 mm fishtail, a pinched annulus and three CCW petals through one point touch.
+- Rejected: splitting at one crossing (undefined for several, DEC-G2D-024); dropping cycles by average thinness (DEC-G2D-024); contracting shared stretches now (the order of coincident ends needs its own rule; deferred).
+- Where: REQ-G2D-160, 161, 238; `kernel/selfcross.cpp`, `_selfcross.py`, `_contain.py`, `_screen.py`.
+

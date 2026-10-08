@@ -38,6 +38,7 @@ using Int8Out = nb::ndarray<std::int8_t, nb::shape<-1>, nb::c_contig, nb::device
 using Flags = nb::ndarray<const std::uint8_t, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
 using Counts = nb::ndarray<const std::int64_t, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
 using CountsOut = nb::ndarray<std::int64_t, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
+using CyclesOut = nb::ndarray<std::int64_t, nb::shape<-1, 2>, nb::c_contig, nb::device::cpu>;
 using Pair = std::array<double, 2>;
 
 std::span<const double> view(const Rows& rows) {
@@ -346,32 +347,6 @@ void bind_distances(nb::module_& m) {
         "Write where closed polylines a and b meet, sorted; return their count (out may be "
         "short).");
     m.def(
-        "self_cycles",
-        [](const PointRows& loop, const PointsOut& points_out, const CountsOut& starts_out,
-           const CountsOut& first_out, const PointsOut& nodes_out) {
-            const std::array<std::int64_t, 1> start{0};
-            check_polylines(loop_of(loop, start), {loop.data(), loop.size()});
-            const SelfCycles cycles = self_cycles(points(loop));
-            const auto copy_points = [](const std::vector<Point2>& from, const PointsOut& to) {
-                for (std::size_t i = 0; i < std::min(from.size(), to.shape(0)); ++i) {
-                    to(i, 0) = std::get<0>(from.at(i));
-                    to(i, 1) = std::get<1>(from.at(i));
-                }
-            };
-            copy_points(cycles.points, points_out);
-            copy_points(cycles.nodes, nodes_out);
-            for (std::size_t i = 0; i < std::min(cycles.starts.size(), starts_out.shape(0)); ++i) {
-                starts_out(i) = cycles.starts.at(i);
-                first_out(i) = cycles.first_edge.at(i);
-            }
-            return std::tuple{static_cast<int>(cycles.status), cycles.points.size(),
-                              cycles.starts.size(), cycles.nodes.size()};
-        },
-        nb::arg("loop"), nb::arg("points"), nb::arg("starts"), nb::arg("first_edge"),
-        nb::arg("nodes"),
-        "Resolve a closed polyline's self-contacts into cycles; return (status, points, cycles, "
-        "nodes), the counts it needed (the outputs may be short).");
-    m.def(
         "basic_sin_cos",
         [](const Values& angles, const DoubleOut& sines, const DoubleOut& cosines) {
             check_rows(angles.shape(0), {sines.shape(0), cosines.shape(0)});
@@ -387,6 +362,34 @@ void bind_distances(nb::module_& m) {
         },
         nb::arg("angles"), nb::arg("sines"), nb::arg("cosines"),
         "The sine and cosine the topology flattening turns with, for tests (REQ-G2D-152).");
+}
+
+void bind_self_cycles(nb::module_& m) {
+    m.def(
+        "self_cycles",
+        [](const PointRows& loop, const PointsOut& points_out, const CyclesOut& cycles_out,
+           const PointsOut& nodes_out) {
+            const std::array<std::int64_t, 1> start{0};
+            check_polylines(loop_of(loop, start), {loop.data(), loop.size()});
+            const SelfCycles cycles = self_cycles(points(loop));
+            const auto copy_points = [](const std::vector<Point2>& from, const PointsOut& to) {
+                for (std::size_t i = 0; i < std::min(from.size(), to.shape(0)); ++i) {
+                    to(i, 0) = std::get<0>(from.at(i));
+                    to(i, 1) = std::get<1>(from.at(i));
+                }
+            };
+            copy_points(cycles.points, points_out);
+            copy_points(cycles.nodes, nodes_out);
+            for (std::size_t i = 0; i < std::min(cycles.starts.size(), cycles_out.shape(0)); ++i) {
+                cycles_out(i, 0) = cycles.starts.at(i);
+                cycles_out(i, 1) = cycles.first_edge.at(i);
+            }
+            return std::tuple{static_cast<int>(cycles.status), cycles.points.size(),
+                              cycles.starts.size(), cycles.nodes.size()};
+        },
+        nb::arg("loop"), nb::arg("points"), nb::arg("cycles"), nb::arg("nodes"),
+        "Resolve a closed polyline's self-contacts into cycles (per cycle its first point and loop "
+        "position); return (status, points, cycles, nodes), the counts it needed.");
 }
 
 } // namespace
@@ -440,6 +443,7 @@ void bind(nb::module_& m) {
         "Write the arc flattened in `steps` steps, inscribed or circumscribed.");
     bind_flatten_rows(m);
     bind_distances(m);
+    bind_self_cycles(m);
 }
 
 } // namespace splintercam::geometry2d

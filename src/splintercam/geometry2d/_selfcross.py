@@ -36,15 +36,19 @@ def _cycles(
     kernel = _kernels.geometry2d
     room = 4 * loop.shape[0] + 8
     while True:
-        points, starts = np.empty((room, 2)), np.empty(room, np.int64)
-        first, nodes = np.empty(room, np.int64), np.empty((room, 2))
-        status, n_points, n_cycles, n_nodes = kernel.self_cycles(loop, points, starts, first, nodes)
+        points, cycles, nodes = (
+            np.empty((room, 2)),
+            np.empty((room, 2), np.int64),
+            np.empty((room, 2)),
+        )
+        status, n_points, n_cycles, n_nodes = kernel.self_cycles(loop, points, cycles, nodes)
         if max(n_points, n_cycles, n_nodes) <= room:
             break
         room = max(n_points, n_cycles, n_nodes)
-    ends = [*starts[1:n_cycles].tolist(), n_points] if n_cycles else []
-    cycles = [points[a:b].copy() for a, b in zip(starts[:n_cycles].tolist(), ends, strict=True)]
-    return status, cycles, first[:n_cycles].copy(), nodes[:n_nodes].copy()
+    starts, first = cycles[:n_cycles, 0], cycles[:n_cycles, 1].copy()
+    ends = [*starts[1:].tolist(), n_points] if n_cycles else []
+    found = [points[a:b].copy() for a, b in zip(starts.tolist(), ends, strict=True)]
+    return status, found, first, nodes[:n_nodes].copy()
 
 
 def _covered(a: NDArray[np.float64], others: list[NDArray[np.float64]], t_topo: float) -> bool:

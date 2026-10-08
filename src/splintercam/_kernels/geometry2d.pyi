@@ -103,12 +103,12 @@ def contact_points(a: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), or
     Write where closed polylines a and b meet, sorted; return their count (out may be short).
     """
 
-def self_cycles(loop: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], points: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu')], starts: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu')], first_edge: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu')], nodes: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu')]) -> tuple[int, int, int, int]:
-    """
-    Resolve a closed polyline's self-contacts into cycles; return (status, points, cycles, nodes), the counts it needed (the outputs may be short).
-    """
-
 def basic_sin_cos(angles: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu', writable=False)], sines: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu')], cosines: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu')]) -> None:
     """
     The sine and cosine the topology flattening turns with, for tests (REQ-G2D-152).
+    """
+
+def self_cycles(loop: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], points: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu')], cycles: Annotated[NDArray[numpy.int64], dict(shape=(None, 2), order='C', device='cpu')], nodes: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu')]) -> tuple[int, int, int, int]:
+    """
+    Resolve a closed polyline's self-contacts into cycles (per cycle its first point and loop position); return (status, points, cycles, nodes), the counts it needed.
     """
