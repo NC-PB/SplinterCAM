@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: Apache-2.0
+# The standard headers a kernel may include, read by tools/lib/arch_kernels.py (plan 0006).
+# Words separated by spaces and line breaks; lines starting with # are comments.
+# The C++ library headers: ISO/IEC 14882:2020, [headers] (the deprecated <codecvt> and
+# <strstream> left out).
+algorithm any array atomic barrier bit bitset charconv chrono compare complex concepts
+condition_variable coroutine deque exception execution filesystem format forward_list fstream
+functional future initializer_list iomanip ios iosfwd iostream istream iterator latch limits list
+locale map memory memory_resource mutex new numbers numeric optional ostream queue random ranges
+ratio regex scoped_allocator semaphore set shared_mutex source_location span sstream stack
+stdexcept stop_token streambuf string string_view syncstream system_error thread tuple
+type_traits typeindex typeinfo unordered_map unordered_set utility valarray variant vector version
+# The C++ headers for C library facilities: ISO/IEC 14882:2020, [headers].
+cassert cctype cerrno cfenv cfloat cinttypes climits clocale cmath csetjmp csignal cstdarg cstddef
+cstdint cstdio cstdlib cstring ctime cuchar cwchar cwctype
+# The C headers, for the C wrappers of vendored code: ISO/IEC 9899:2018, clause 7.
+assert.h complex.h ctype.h errno.h fenv.h float.h inttypes.h iso646.h limits.h locale.h math.h
+setjmp.h signal.h stdalign.h stdarg.h stdatomic.h stdbool.h stddef.h stdint.h stdio.h stdlib.h
+stdnoreturn.h string.h tgmath.h threads.h time.h uchar.h wchar.h wctype.h

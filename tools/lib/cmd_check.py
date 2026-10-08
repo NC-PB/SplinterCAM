@@ -2,20 +2,21 @@
 """tools/check [--json]: format check, lint, size, build and tests; must pass before a task is done.
 
 First version (plan 0001, step 1): it runs the whole test suite, not only the changed modules.
-arch-check, trace-check and licence-check are not written yet; they are reported as skipped.
+trace-check and licence-check are not written yet; they are reported as skipped.
 """
 
 import argparse
 import sys
 from collections.abc import Sequence
 
+from cmd_arch_check import arch_check_step
 from cmd_build import build_step
 from cmd_format import all_files, format_steps
 from cmd_lint import lint_steps
 from cmd_size_check import size_check_step
 from runner import Status, StepResult, UsageError, finish, run_step, skip, usage_error
 
-NOT_WRITTEN_YET = ("arch-check", "trace-check", "licence-check")
+NOT_WRITTEN_YET = ("trace-check", "licence-check")
 
 
 def main(argv: Sequence[str]) -> int:
@@ -29,6 +30,7 @@ def main(argv: Sequence[str]) -> int:
         results += format_steps(all_files(), check=True)
         results += lint_steps(None)
         results.append(size_check_step())
+        results.append(arch_check_step())
         if build.status is Status.PASS:
             results.append(run_step("pytest", ["pytest", "-q"], reproduce="uv run pytest"))
         else:

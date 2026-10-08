@@ -14,7 +14,7 @@ Tests are the sensors that let agents work unsupervised between reviews. RESEARC
 | Regression | `testdata/regressions/<issue>/` | Minimised failures; never deleted |
 | Differential | `tests/<m>/differential/` | Same question answered by an independent library (Clipper2, OpenCAMLib, a G-code interpreter) |
 | End-to-end | `tests/apps/cli/` | Job file → G-code → independent parser → simulated stock → compared with the part |
-| Architecture | `tools/arch-check` | `modules.yaml` rules: Python imports (import-linter), kernel includes, OCP and PySide6 only where allowed |
+| Architecture | `tools/arch-check` | `modules.yaml` rules: Python imports, kernel includes, OCP and PySide6 only where allowed |
 | Traceability | `tools/trace-check` | Every reviewed requirement has a test; lines in `src/` that no requirement's test runs are listed |
 | Size | `tools/size-check` | Change, file and module size limits ([12](12-lean-code.md), section 3) |
 | Duplication and dead code | jscpd and vulture in `tools/lint` | New copied code and unused code ([12](12-lean-code.md), section 4) |

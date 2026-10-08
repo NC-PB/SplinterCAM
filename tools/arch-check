@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# tools/arch-check: the rules of architecture/modules.yaml (docs/dev/03; tools/README.md).
+# Logic: tools/lib/cmd_arch_check.py. It needs only the standard library, so it runs without
+# tools/bootstrap, like tools/size-check (plan 0006).
+cd "$(dirname "$0")/.." || exit 2
+if ! command -v uv >/dev/null 2>&1; then
+  echo "arch-check: ERROR (uv not found; see README.md, Prerequisites)"
+  exit 2
+fi
+exec uv run --no-project --python 3.13 python tools/lib/cmd_arch_check.py "$@"

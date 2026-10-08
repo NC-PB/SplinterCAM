@@ -39,7 +39,7 @@ Run from the repository root. All are stack-neutral wrappers in `tools/`.
 - `tools/replay <failure-file>`: re-run a dumped failing input.
 - `tools/golden-diff <case>`: how the output differs from the approved golden files.
 - `tools/new-module <name>`: scaffold a module (only when asked).
-After cloning, run `tools/bootstrap`; on Windows, run the `tools/` scripts from Git Bash. Written so far: `bootstrap`, `build`, `format`, `lint`, `test-one`, `test`, `size-check`, `check` (`tools/README.md` says what each wraps). `tools/check` reports the checks that do not exist yet as skipped. `render`, `replay`, `golden-diff` and `new-module` come in later plan steps.
+After cloning, run `tools/bootstrap`; on Windows, run the `tools/` scripts from Git Bash. Written so far: `bootstrap`, `build`, `format`, `lint`, `test-one`, `test`, `size-check`, `arch-check`, `check` (`tools/README.md` says what each wraps). `tools/check` reports the checks that do not exist yet as skipped. `render`, `replay`, `golden-diff` and `new-module` come in later plan steps.
 
 ## How to work
 

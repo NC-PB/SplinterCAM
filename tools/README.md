@@ -27,7 +27,7 @@ Agents and people run the same commands, whatever the stack. Each command is a s
 
 ## Implementation (ADR 0004)
 
-The scripts were written in the stack test app (its plan 0001, in the test app's own repository). Written so far: `bootstrap`, `build`, `format`, `lint`, `test-one`, `check`, `test` there, and `size-check` here (this repository's plan 0001, step 3).
+The scripts were written in the stack test app (its plan 0001, in the test app's own repository). Written so far: `bootstrap`, `build`, `format`, `lint`, `test-one`, `check`, `test` there, and `size-check` (this repository's plan 0001, step 3) and `arch-check` (plan 0006) here.
 
 `build` regenerates the kernel stubs in `src/splintercam/_kernels/` (nanobind stubgen; while no module has a kernel, the single file `src/splintercam/_kernels.pyi`) after every `uv sync`, so pyright sees the kernel API even though the compiled module itself is what Python imports.
 
@@ -43,9 +43,9 @@ What each one wraps:
 | `lint` | `ruff check`, `pyright --warnings` (strict), `clang-tidy --verify-config`, `clang-tidy` on the kernel sources with the build's `compile_commands.json` (on macOS with the SDK from `xcrun`; skipped on Windows, where the Visual Studio generator writes no compile database) |
 | `test-one` | `pytest tests/<module>` with Hypothesis, after `build`; requirement IDs work as `-k` keywords (`REQ_OFF_003`) |
 | `test` | `build`, then `pytest` over the whole suite. `--all` additionally builds the kernels a second time with `SPLINTERCAM_SANITIZE` (CMakeLists.txt) into a separate `.venv-sanitize` environment and reruns the suite against it with the ASan/UBSan runtime preloaded (Linux and macOS only; skipped on Windows, which has no supported sanitizer build) |
-| `check` | `build`, `format --check`, `lint`, `size-check`, `pytest`. First version: runs the whole suite, and reports `arch-check`, `trace-check` and `licence-check` as skipped until they exist |
+| `check` | `build`, `format --check`, `lint`, `size-check`, `arch-check`, `pytest`. First version: runs the whole suite, and reports `trace-check` and `licence-check` as skipped until they exist |
 | `size-check` | A script: files over 400 lines reported and over 800 failing (generated files excepted), Python functions over 60 lines reported, each module's NLOC against the `budget` in `modules.yaml` (over it reported, over it + 20 % failing); a file it cannot parse fails. The hard function limits are ruff's and clang-tidy's, in `lint` (`docs/plans/completed/0001-protected-changes.patch`, applied). NLOC leaves out comments and docstrings, as lizard does. With `--change BASE`, only the change limit: lines of non-test code added since the merge base, over 200 reported, over 400 failing unless `--large-change`; tests, test data, Markdown and generated files and removed lines do not count, binary files are named (plan 0002). Needs only the standard library, so it runs without `bootstrap` |
-| `arch-check` | import-linter contracts generated from `modules.yaml`, plus a script for kernel includes and allowed external packages |
+| `arch-check` | A script on the standard library (Peter, 2026-10-08, plan 0006): reads `modules.yaml` in full (`lib/module_map.py`, the YAML subset it uses) and checks the map itself (declared dependencies, layers, cycles, the rule list), every Python import under `src/splintercam/` (`lib/arch_python.py`, including `_kernels.<module>`) and every kernel include (`lib/arch_kernels.py`: standard headers, `kernel_libraries`, `kernel_interface`). One line per violation, `path:line: rule: what`. Runs without `bootstrap`, like `size-check` |
 | `trace-check` | A script reading the `@pytest.mark.req` markers and the requirement tables in the SPEC files |
 | `licence-check` | `reuse lint`, a licence report of the lock file, the banned Qt modules, `testdata/LICENSES.md` |
 | `render` | A script drawing the debug-sink output as SVG; screenshots of the viewer for 3D cases |
