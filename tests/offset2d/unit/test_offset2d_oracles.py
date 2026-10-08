@@ -337,6 +337,7 @@ def test_bands_at_the_three_tolerances_of_test_10(
     assert built.value is not None, built.diagnostics
     tolerances = built.value
     assert arc_tol_mm(tolerances) == pytest.approx(a_mm, rel=1e-9)
+    assert arc_tol_mm(tolerances) == tolerances.arc_tol_mm  # foundation's, REQ-FND-011
     assert offset_band_mm(tolerances) == pytest.approx(band_mm, rel=1e-9)
     assert true_curve_band_mm(tolerances) == pytest.approx(true_band_mm, rel=1e-9)
     assert boolean_band_mm(tolerances) == pytest.approx(0.0003, rel=1e-9)

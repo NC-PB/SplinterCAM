@@ -269,11 +269,9 @@ def both_operands(a: CurveRows, b: CurveRows) -> CurveRows:
 
 
 def arc_tol_mm(tolerances: ToleranceSet) -> float:
-    """a = max(0.05·tol, 2u), Clipper2's ArcTolerance (D-058, D-132, D-146): the `ToleranceSet`'s
-    `arc_tol_mm` once foundation offers it (DEC-OFF-002), until then from the declared defaults."""
-    offered = getattr(tolerances, "arc_tol_mm", None)
-    if isinstance(offered, float):
-        return offered
+    """a = max(0.05·tol, 2u), Clipper2's ArcTolerance (D-058, D-132, D-146), computed from the
+    declared defaults, independently of foundation's `arc_tol_mm` (REQ-FND-011), which the
+    oracles' self-tests compare with it."""
     share = TOLERANCE_DEFAULTS["arc_tol_share"].default
     floor = TOLERANCE_DEFAULTS["arc_tol_floor_grid_units"].default * tolerances.grid_unit_mm
     return max(share * tolerances.chord_tol_mm, floor)

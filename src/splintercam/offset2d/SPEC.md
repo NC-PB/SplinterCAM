@@ -176,7 +176,7 @@ Clean-up of the input is geometry2d's and reported there (`CLEANUP_SPIKE`, `LOOP
 ## Test plan
 
 - Unit: research 02's tests 1, 3 to 8, 11 to 15, 18 and 21, and the Vatti note's test 7; one case per row of Failure modes.
-- Property: source IDs and fixed flags on test 10's random regions (every vertex has an input ID and a flag of 0 or 1; vertices at shared grid points are fixed); the Boolean oracle (test 2) and the offset oracle (test 9), point sampling against the definitions with d computed exactly against the lines and arcs (`tests/support/geometry2d_oracles.py`), independent of Clipper2 (A-053); the band (test 10); translation (test 17); determinism (test 19). Generators: random nested loops of lines and arcs from geometry2d's test 7 generator, with islands whose flattening overlaps the wall's.
+- Property: source IDs and fixed flags on test 10's random regions (every vertex has an input ID and a flag of 0 or 1; vertices at shared grid points are fixed); the Boolean oracle (test 2) and the offset oracle (test 9), point sampling against the definitions with d computed against the true lines and arcs within 64·ε·S (`tests/support/offset2d_oracles.py`, generators in `offset2d_strategies.py`), independent of Clipper2 (A-053); the band (test 10); translation (test 17); determinism (test 19). Generators: random nested loops of lines and arcs from geometry2d's test 7 generator, with islands whose flattening overlaps the wall's.
 - Golden cases: `pocket-island-touching-wall` (test 16), new.
 - Differential: test 20, shapely/GEOS buffers with round joins as point sets outside the band (D-060), once shapely is a test dependency (Open questions, 3).
 - Cross-platform: tests 6, 7, 15 and 19 on the three systems in CI.

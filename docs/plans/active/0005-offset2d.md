@@ -62,6 +62,7 @@ Total: about 1230 added lines of code (about 1050 NLOC) and 2080 of tests, in ni
 - Pull request 46 merged. Peter answered the four questions as recommended and accepted the deviations: DEC-OFF-001 to 006 in `src/splintercam/offset2d/DECISIONS.md`; every requirement but REQ-OFF-032 `Reviewed`. Step 1 done.
 - RR-001 answered in research 02 (Booleans, test 22), pull request 47: REQ-OFF-032 is released from that text after it merges.
 - ADR drafted for DEC-OFF-003: `docs/adr/0010-shapely-geos-test-only.md` (Proposed; shapely/GEOS in a test-only group for test 20, D-060). A person decides before step 9.
+- Test oracles for steps 4 to 9, written in parallel by a test-designer from the SPEC and research only: `tests/support/offset2d_oracles.py` (d to the true lines and arcs within 64·ε·S, inside on the true curves, the definitions of research 02, Booleans, a seeded sampler outside a band, the band widths from a `ToleranceSet`) and `offset2d_strategies.py` (test 7's nested shapes, pockets with islands, bulged pockets, test 21's touching island); self-tests in `tests/offset2d/` (48), untagged until offset2d code exists. Mutated by hand: each broken rule fails a test.
 - Next: step 2 (foundation).
 
 ### 2026-10-08, SPEC draft
