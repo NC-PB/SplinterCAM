@@ -1,4 +1,4 @@
-# Plan 0004: geometry2d, slice 2 (proposal)
+# Plan 0004: geometry2d, slice 2
 
 <!-- Lives in docs/plans/active/ while work is ongoing, then moves to docs/plans/completed/.
      The agent updates the progress log at the end of every session, before stopping. -->
@@ -8,7 +8,39 @@
 - Research: `docs/research/01-foundations.md`: Loop tree, Kernel arrays (polygon region), Tolerances (resolution chain), Flattening (side rule); tests 7, 16, 19, 21 and 24
 - Branch: one pull request per session (docs/dev/07); a step with a new algorithm or over about 100 lines of non-test code gets its own, from `main` after the previous merge, never stacked
 - Owner: Peter Burgener; agents: Claude Code sessions
-- Status (2026-10-07): approved by Peter with his answers below (DEC-G2D-022); step 1 done and reviewed (DEC-G2D-024 to 027); steps 2 and 3 done; steps 1 to 9 done; the pull requests next.
+- Status (2026-10-08): complete. Approved by Peter on 2026-10-07 (DEC-G2D-022); steps 1 to 9 done and reviewed, merged in pull requests 34 to 40 and the closing pull request of 2026-10-08 (steps 4b to 9, the zero-width slits, the budget); see Handover.
+
+## Handover
+
+For the next agent. Slice 2 is complete on `main`; nothing is in flight.
+
+What exists, beside slice 1 (public API in `src/splintercam/geometry2d/__init__.py`; contract in its `SPEC.md`):
+
+| Area | Python | Kernel |
+| --- | --- | --- |
+| Polygon regions | `PolygonRegion`, `polygon_region`, `FlatRegion`, `RegionKind` | — |
+| Side-correct flattening | `flatten_loops`; internal `topology_flattening` | `flatten.cpp` (`row_vertex_counts`, `flatten_rows`), `angle.cpp` (`basic_sin_cos`) |
+| Loop tree | `loop_tree`, `LoopTree`; internal `screen_loops` (`_screen.py`), `_slits.py`, `_selfcross.py`, `_crossings.py`, `_contain.py` | `distance.cpp` (distances, depth rule, covers, contacts, nearest segments), `selfcross.cpp` (Seifert cycles) |
+| Grid bridge, region | `build_region`; internal `region_with_fill_rule`, `grid_union`, `FillRule` (`_grid.py`, `_build.py`) | `grid.cpp` (Clipper2 2.0.1: union with a fill rule, difference, pinch split, canonical order) |
+| Open chains | `build_chain`, `FlatChain` (`_chain.py`) | `flatten.cpp` |
+
+Peter's answers during the work (each a DEC-G2D entry): crossings by the depth rule (024); the Positive fill rule (025); the PolyTree's rounding left to plan 0005 (026); the deviations of REQ-G2D-030, 119, 178, 179 (027); the budget 3600 NLOC and the offsets in their own module `offset2d` (038); zero-width slits removed with a warning, and pieces that wind wrongly stop the operation (039).
+
+Open, for later plans:
+
+- Plan 0005 (`docs/plans/active/0005-offset2d.md`, draft): waits for research 02; its two questions (how `offset2d`'s kernel reaches geometry2d's grid bridge, where the region's Clipper2 call lives) are Peter's.
+- No kernel takes a cancellation flag yet (`polyline_distances`, `self_cycles`, `grid_region`, `nearest_segments`; `.claude/rules/kernels.md`).
+- `self_cycles` tests all segment pairs (about a second for 10^4 segments, estimated): reuse the cell grid of `distance.cpp`. Its directions at a node come from the next, rounded, point.
+- A vertex of one region loop on another loop's edge is not marked fixed (D-084 names pinch points; decide with the arc fit).
+- Provisional: a stretch run twice that is not a row-exact slit crosses (DEC-G2D-033); the 2^26 grid-span limit is a named constant, not yet a foundation parameter (DEC-G2D-034).
+- The sweep test still exists four times (`_box.py`, `_distances.py`, `region.cpp` twice).
+- geometry2d measures 3599 NLOC against its budget of 3600: the next slice needs a budget of its own, or cuts.
+
+How the work ran (keep doing it this way):
+
+- The local steps were chained while at most two pull requests could be open; that chain landed as one pull request with the label `large-change`. Next time open each step's pull request as soon as a slot frees, so no chain builds up.
+- Every reviewer counterexample was reproduced before acting; the reviews found real bugs in every step (4c's pairing and stretches, 8's fixed flags and order, the slit's spikes, T-cuts and windings).
+- `tools/check` does not run the change-size check: run `tools/size-check --change origin/main` before pushing to a pull request.
 
 ## Questions for Peter before step 1
 
@@ -151,7 +183,6 @@ Total: about 1850 added lines of code (about 1300 NLOC) and 2550 of tests, in ni
 - From plan 0003: the region kernel holds the interpreter lock for n points × m rows; long kernels of this plan (loop tree, Clipper2 calls) need the release and the cancellation check of the kernel rules.
 
 - From step 3: `polyline_distances` releases the interpreter lock but takes no cancellation flag yet (`.claude/rules/kernels.md`); add it with the other long kernels.
-- From step 3: REQ-G2D-168 projects vertices onto the nearest segment, so step 5 needs `polyline_distances` to return that segment's index too (ties to the lowest index, for determinism).
 
 - From the 4c spec review: `self_cycles` tests all segment pairs; reuse the cell grid of `distance.cpp` (or a sweep by x) and add a cancellation flag. Direction at a node from the strand's own segment rather than the next (rounded) point, and snapping a constructed point that equals a vertex.
 - From the step 8 spec review: `grid_region`, `nearest_segments` and `self_cycles` take no cancellation flag; a vertex of one region loop lying on another loop's edge is not marked fixed (D-084 names pinch points; decide with the arc fit).

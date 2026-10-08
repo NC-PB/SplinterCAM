@@ -1,6 +1,6 @@
 # AGENTS.md: geometry2d
 
-Layer 1. Implements docs/research/01 (slices 1 and 2; the rest is under "Later parts" in the SPEC). Contract: `./SPEC.md`. Why it is built this way: `./DECISIONS.md` (read it before changing behaviour). Public API: `./__init__.py`. C++ part: `./kernel/`. Depends on: foundation. Slice 1 is complete and reviewed: `docs/plans/completed/0003-geometry2d-slice-1.md` (Handover). Slice 2: `docs/plans/active/0004-geometry2d-slice-2.md` (approved; its SPEC cut is step 1).
+Layer 1. Implements docs/research/01 (slices 1 and 2; the rest is under "Later parts" in the SPEC). Contract: `./SPEC.md`. Why it is built this way: `./DECISIONS.md` (read it before changing behaviour). Public API: `./__init__.py`. C++ part: `./kernel/`. Depends on: foundation. Slice 1 is complete and reviewed: `docs/plans/completed/0003-geometry2d-slice-1.md` (Handover). Slice 2 is complete and reviewed: `docs/plans/completed/0004-geometry2d-slice-2.md` (Handover). The offsets go to the module `offset2d` (plan 0005, DEC-G2D-038).
 
 ## Commands
 
