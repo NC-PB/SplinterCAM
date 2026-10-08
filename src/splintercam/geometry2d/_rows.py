@@ -60,14 +60,17 @@ def _value_error(rows: NDArray[np.float64]) -> str | None:
     return None
 
 
-def _continuity_error(rows: NDArray[np.float64], starts: NDArray[np.int64]) -> str | None:
+def _continuity_error(
+    rows: NDArray[np.float64], starts: NDArray[np.int64], closed: bool
+) -> str | None:
     # Each row starts bit for bit where the row before it in its loop ends; the first row of a
-    # loop follows the loop's last row (research 01, Kernel arrays).
+    # loop follows the loop's last row (research 01, Kernel arrays), not that of an open chain.
     bits = rows.view(np.int64)
     previous = np.arange(rows.shape[0], dtype=np.int64) - 1
     ends = np.append(starts[1:], rows.shape[0])
     previous[starts] = ends - 1
     gaps = (bits[:, 0:2] != bits[previous, 2:4]).any(axis=1)
+    gaps[starts] &= closed
     if gaps.any():
         return f"row {int(np.flatnonzero(gaps)[0])} does not start where the row before it ends"
     return None
@@ -83,10 +86,17 @@ def curve_rows(
 
     Implements: REQ-G2D-188 to 194, REQ-G2D-196, REQ-G2D-197, REQ-G2D-201.
     """
+    return checked_rows(rows, ids, row_starts, ctx, closed=True)
+
+
+def checked_rows(
+    rows: ArrayLike, ids: ArrayLike, row_starts: ArrayLike, ctx: Context, closed: bool
+) -> Result[CurveRows]:
+    """`curve_rows`, with the closure of each loop checked only when `closed` (internal)."""
     copies = [np.array(value, order="C", copy=True) for value in (rows, ids, row_starts)]
     rows_copy, ids_copy, starts_copy = copies
     error = _structure_error(rows_copy, ids_copy, starts_copy)
-    error = error or _value_error(rows_copy) or _continuity_error(rows_copy, starts_copy)
+    error = error or _value_error(rows_copy) or _continuity_error(rows_copy, starts_copy, closed)
     if error is not None:
         return Result(None, (Diagnostic("CURVE_INVALID", Severity.ERROR, error),))
     inconsistency = arc_inconsistency(rows_copy, ctx.tolerances.length_eps_mm)

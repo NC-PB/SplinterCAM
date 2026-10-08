@@ -5,6 +5,7 @@ from ._area import signed_area
 from ._box import Box, bounding_box
 from ._build import build_region
 from ._bulge import arc_from_bulge, bulges_from_arc
+from ._chain import FlatChain, build_chain
 from ._circle import Circle, circle_through
 from ._cleanup import cleanup
 from ._curves import Arc, Curve, Line, Point, make_arc, make_line
@@ -25,6 +26,7 @@ __all__ = [
     "ClosestPoint",
     "Curve",
     "CurveRows",
+    "FlatChain",
     "FlatRegion",
     "Line",
     "LoopTree",
@@ -35,6 +37,7 @@ __all__ = [
     "arc_from_bulge",
     "are_parallel",
     "bounding_box",
+    "build_chain",
     "build_region",
     "bulges_from_arc",
     "circle_through",

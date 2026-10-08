@@ -336,3 +336,12 @@
 - Why: measured (2026-10-08): research 01, rule 7's two Clipper2 2.0.1 cases reproduce: an island sharing an edge with its parent becomes a notch of the parent's boundary; an island touching its hole at a vertex comes back as one path through that vertex for some input orders (with the island given first), split into a CW hole and a CCW island with the vertex fixed. Test 7's generator with rounded boxes (lines and quarter arcs), 10,000 cases: the region and the tree classify alike farther than t_flat + 3u from every true boundary; with gaps of 0.05 mm the three fill rules agree and each region loop's orientation is its tree loop's depth parity. A pocket wall and a tangent island give a smaller Positive than NonZero area (winding −1 kept out).
 - Rejected: the ID reach as a fraction of t_flat (an output edge on a flattened arc lies within rounding of its input edge, but a merged edge's midpoint can lie up to t_topo from both inputs); re-nesting the split pieces into the tree (topic 02, research 01 rule 7).
 - Where: REQ-G2D-032, 118, 124, 162, 176 to 181, 235; `_build.py`, `kernel/grid.cpp`, `kernel/distance.cpp`.
+
+## DEC-G2D-037: the open chain of a profile
+
+- Date: 2026-10-08; decided by: ours (plan 0004, step 9)
+- Status: Active
+- Decision: `build_chain` checks its rows with `curve_rows`' own checks as one loop without the closure test (`checked_rows(..., closed=False)`), so every rule keeps its code and message, and flattens them with the loops' two kernel passes: each arc inscribed when its centre lies on the air side (the side the tool works on; left of the arc for a positive sweep, as `flatten` decides it, REQ-G2D-113), each joint once, the last row's end appended. The 3-vertex minimum of a loop (REQ-G2D-186) does not apply, so each row's vertices equal `flatten`'s bit for bit. `FlatChain` lives in `_chain.py`; its arrays are read-only.
+- Why: one set of checks for rows, closed or open, keeps REQ-G2D-234's codes those of REQ-G2D-188 to 193; reusing the loop flattening keeps one kernel path (the module budget).
+- Rejected: flattening row by row with `flatten` in a Python loop (the split rule: loops over segments go to the kernel); a separate validator for chains.
+- Where: REQ-G2D-117, 125, 127, 231, 234; `_chain.py`, `_rows.py`, `_loops.py`.
