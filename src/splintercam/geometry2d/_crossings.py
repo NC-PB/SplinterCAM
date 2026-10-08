@@ -8,6 +8,8 @@ from numpy.typing import NDArray
 from splintercam import _kernels
 from splintercam.foundation import Diagnostic, Severity
 
+from ._contain import overlapping_pairs
+
 
 def contact_points(
     a: NDArray[np.float64], b: NDArray[np.float64], limit_mm: float
@@ -39,26 +41,20 @@ def find_crossings(
 
     Implements: REQ-G2D-160, REQ-G2D-161, REQ-G2D-163, REQ-G2D-237.
     """
-    boxes = [(p.min(axis=0), p.max(axis=0)) for p in polylines]
+    boxes = np.array([[*p.min(axis=0), *p.max(axis=0)] for p in polylines]).reshape(-1, 4)
     points: list[NDArray[np.float64]] = []
     pairs: list[tuple[int, int]] = []
     notes: list[tuple[int, Diagnostic]] = []
-    for a in range(len(polylines)):
-        for b in range(a + 1, len(polylines)):
-            (low_a, high_a), (low_b, high_b) = boxes[a], boxes[b]
-            if np.any(low_a > high_b) or np.any(low_b > high_a):
-                continue
-            pa, pb = polylines[a], polylines[b]
-            if not (_reaches_through(pa, pb, t_topo) or _reaches_through(pb, pa, t_topo)):
-                continue  # they touch at most (REQ-G2D-163)
-            found = contact_points(pa, pb, t_topo)
-            i, j = indices[a], indices[b]
-            points.append(found)
-            pairs += [(i, j)] * found.shape[0]
-            message = f"loops {i} and {j} cross at {found.shape[0]} points, deeper than t_topo"
-            notes.append(
-                (i, Diagnostic("LOOPS_CROSS", Severity.ERROR, message, f"loops {i} and {j}"))
-            )
+    for a, b in overlapping_pairs(boxes):
+        pa, pb = polylines[a], polylines[b]
+        if not (_reaches_through(pa, pb, t_topo) or _reaches_through(pb, pa, t_topo)):
+            continue  # they touch at most (REQ-G2D-163)
+        found = contact_points(pa, pb, t_topo)
+        i, j = indices[a], indices[b]
+        points.append(found)
+        pairs += [(i, j)] * found.shape[0]
+        message = f"loops {i} and {j} cross at {found.shape[0]} points, deeper than t_topo"
+        notes.append((i, Diagnostic("LOOPS_CROSS", Severity.ERROR, message, f"loops {i} and {j}")))
     crossing_points = np.vstack(points) if points else np.empty((0, 2), dtype=np.float64)
     crossing_loops = np.array(pairs, dtype=np.int64).reshape(-1, 2)
     return crossing_points, crossing_loops, notes

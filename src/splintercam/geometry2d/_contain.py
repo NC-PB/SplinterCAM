@@ -91,26 +91,23 @@ def nest(
     boxes = np.array([[*p.min(axis=0), *p.max(axis=0)] for p in polylines]).reshape(-1, 4)
     containers: list[list[int]] = [[] for _ in polylines]
     crossing: list[tuple[int, int]] = []
-    for a in range(len(polylines)):
-        for b in range(a + 1, len(polylines)):
-            if np.any(boxes[a, :2] > boxes[b, 2:]) or np.any(boxes[b, :2] > boxes[a, 2:]):
-                continue
+    for a, b in overlapping_pairs(boxes):
 
-            def inside(inner: int, outer: int) -> Containment:
-                return contains(polylines[inner], polylines[outer], rows[outer], ctx)
+        def inside(inner: int, outer: int) -> Containment:
+            return contains(polylines[inner], polylines[outer], rows[outer], ctx)
 
-            if abs(size[a] - size[b]) <= t_topo * (lengths[a] + lengths[b]):
-                decision = both_ways(inside(a, b), inside(b, a))
-            elif size[a] > size[b]:
-                decision = "b in a" if inside(b, a).contained else "apart"
-            else:
-                decision = "a in b" if inside(a, b).contained else "apart"
-            if decision == "a in b":
-                containers[a].append(b)
-            elif decision == "b in a":
-                containers[b].append(a)
-            elif decision == "cross":
-                crossing.append((a, b))
+        if abs(size[a] - size[b]) <= t_topo * (lengths[a] + lengths[b]):
+            decision = both_ways(inside(a, b), inside(b, a))
+        elif size[a] > size[b]:
+            decision = "b in a" if inside(b, a).contained else "apart"
+        else:
+            decision = "a in b" if inside(a, b).contained else "apart"
+        if decision == "a in b":
+            containers[a].append(b)
+        elif decision == "b in a":
+            containers[b].append(a)
+        elif decision == "cross":
+            crossing.append((a, b))
     parents, unnested = _parents(containers)
     return parents, [len(c) for c in containers], sorted({*crossing, *unnested})
 
@@ -127,3 +124,14 @@ def _parents(containers: list[list[int]]) -> tuple[list[int], list[tuple[int, in
             unnested.append((min(k, mine[0]), max(k, mine[0])))
         parents.append(inner[0] if inner else -1)
     return parents, unnested
+
+
+def overlapping_pairs(boxes: NDArray[np.float64]) -> list[tuple[int, int]]:
+    """The pairs (a < b) of (k, 4) boxes [x_min, y_min, x_max, y_max] that overlap or touch, in
+    order, from one broadcast comparison (the pair loops of rules 4 and 5)."""
+    low, high = boxes[:, None, :2], boxes[:, None, 2:]
+    apart = (low > np.swapaxes(high, 0, 1)).any(axis=2) | (np.swapaxes(low, 0, 1) > high).any(
+        axis=2
+    )
+    a, b = np.nonzero(np.triu(~apart, k=1))
+    return list(zip(a.tolist(), b.tolist(), strict=True))

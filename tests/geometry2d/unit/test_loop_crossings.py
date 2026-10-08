@@ -2,9 +2,11 @@
 """Unit tests for crossings between loops (research 01, Loop tree, rule 4; test 7; REQ-G2D-237)."""
 
 import math
+from fractions import Fraction
 
 import numpy as np
 import pytest
+from numpy.typing import NDArray
 
 from geometry2d_checks import codes, polygons
 from splintercam.foundation import Context
@@ -13,6 +15,7 @@ from splintercam.geometry2d._crossings import contact_points
 from splintercam.geometry2d._screen import Screened, screen_loops
 
 Points = list[tuple[float, float]]
+Exact = tuple[Fraction, Fraction]
 
 
 def _box(x0: float, y0: float, x1: float, y1: float) -> Points:
@@ -79,6 +82,29 @@ def _circle(cx: float, r: float, start: float) -> list[float]:
     return [*p, *p, cx, 0.0, math.tau]
 
 
+def _proper_crossings(p: NDArray[np.float64], q: NDArray[np.float64]) -> int:
+    """Proper crossings between the segments of closed polylines p and q near the tangent point
+    (x > 9.9), by Exact rationals (the oracle of DEC-G2D-024's measurement)."""
+
+    def segments(poly: NDArray[np.float64]) -> list[tuple[Exact, Exact]]:
+        out: list[tuple[Exact, Exact]] = []
+        rows: list[list[float]] = poly.tolist()
+        for a, b in zip(rows, rows[1:] + rows[:1], strict=True):
+            if max(a[0], b[0]) > 9.9 and abs(a[1]) < 0.5:
+                out.append(((Fraction(a[0]), Fraction(a[1])), (Fraction(b[0]), Fraction(b[1]))))
+        return out
+
+    def orient(a: Exact, b: Exact, c: Exact) -> int:
+        v: Fraction = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+        return int(v > 0) - int(v < 0)
+
+    return sum(
+        orient(a, b, c) * orient(a, b, d) < 0 and orient(c, d, a) * orient(c, d, b) < 0
+        for a, b in segments(p)
+        for c, d in segments(q)
+    )
+
+
 @pytest.mark.req("REQ-G2D-237", "REQ-G2D-163")
 def test_tangent_circles_touch_in_all_88_placements(ctx: Context) -> None:
     crossing_flattenings = 0
@@ -91,10 +117,8 @@ def test_tangent_circles_touch_in_all_88_placements(ctx: Context) -> None:
             assert result.value is not None
             assert codes(result) == []
             outer, inner = result.value.polylines
-            crossing_flattenings += (
-                contact_points(outer, inner, ctx.tolerances.topology_tol_mm).shape[0] > 1
-            )
-    assert crossing_flattenings >= 80  # their flattenings do cross properly (DEC-G2D-024)
+            crossing_flattenings += _proper_crossings(outer, inner) > 0
+    assert crossing_flattenings == 86  # REQ-G2D-237's measurement (DEC-G2D-024)
 
 
 @pytest.mark.req("REQ-G2D-237")
@@ -116,7 +140,7 @@ def test_a_square_with_its_corner_on_a_circle_touches(ctx: Context) -> None:
 @pytest.mark.req("REQ-G2D-160")
 def test_contact_points_find_a_crossing_by_a_tiny_dip() -> None:
     # A triangle dipping 2^-40 mm below the square's bottom edge: two proper crossings, found by
-    # exact signs (inside the predicates' range, DEC-G2D-008), though far shallower than t_topo.
+    # Exact signs (inside the predicates' range, DEC-G2D-008), though far shallower than t_topo.
     square = np.array(_box(0, 0, 10, 10), dtype=np.float64)
     dip = np.array([(2.0, 5.0), (5.0, -(2.0**-40)), (8.0, 5.0)], dtype=np.float64)
     found = contact_points(square, dip, 1.0)
@@ -133,3 +157,69 @@ def test_contact_points_find_shared_vertices_and_stretches() -> None:
     assert contact_points(square, beside, 1.0).tolist() == [[10.0, 2.0], [10.0, 8.0]]
     far = np.array(_box(30, 0, 40, 10), dtype=np.float64)
     assert contact_points(square, far, 1.0).shape == (0, 2)
+
+
+@pytest.mark.req("REQ-G2D-161")
+def test_loops_meeting_only_at_vertices_and_stretches_report_those_points(ctx: Context) -> None:
+    screened, _ = _screen([_box(0, 0, 10, 10), _box(5, 0, 15, 10)], ctx)
+    assert screened.crossing_points.tolist() == [[5.0, 0.0], [5.0, 10.0], [10.0, 0.0], [10.0, 10.0]]
+
+
+@pytest.mark.req("REQ-G2D-161")
+def test_the_shallow_contacts_of_a_crossing_pair_are_reported_too(ctx: Context) -> None:
+    # Deep through the right edge, 0.0001 mm out of the left one: all four points.
+    screened, found = _screen([_box(0, 0, 10, 10), _box(-0.0001, 2, 15, 8)], ctx)
+    assert found == ["LOOPS_CROSS"]
+    # Constructed crossing points: within a rounding unit or two of the Exact ones.
+    expected = [[0.0, 2.0], [0.0, 8.0], [10.0, 2.0], [10.0, 8.0]]
+    np.testing.assert_allclose(screened.crossing_points, expected, rtol=0, atol=4 * math.ulp(10.0))
+
+
+@pytest.mark.req("REQ-G2D-160", "REQ-G2D-237")
+def test_a_dip_of_one_rounding_unit_is_found_and_touches(ctx: Context) -> None:
+    square = np.array(_box(0, 1, 10, 11), dtype=np.float64)
+    dip = [(2.0, 5.0), (5.0, math.nextafter(1.0, 0.0)), (8.0, 5.0)]
+    found = contact_points(square, np.array(dip, dtype=np.float64), 1.0)
+    # Both crossings lie within a rounding unit of (5, 1), so their constructed points coincide.
+    assert found.shape[0] >= 1
+    assert np.abs(found[:, 0] - 5.0).max() <= 4 * math.ulp(5.0)
+    assert np.abs(found[:, 1] - 1.0).max() <= 2 * math.ulp(1.0)
+    _, codes_found = _screen([_box(0, 1, 10, 11), dip], ctx)
+    assert codes_found == []  # far shallower than t_topo
+
+
+@pytest.mark.req("REQ-G2D-236", "REQ-G2D-161")
+@pytest.mark.parametrize("swap", [False, True])
+def test_crossings_sort_by_pair_then_x_then_y(ctx: Context, swap: bool) -> None:
+    a, b, c = _box(0, 0, 10, 10), _box(5, 5, 15, 15), _box(12, 0, 22, 10)
+    screened, found = _screen([b, a, c] if swap else [a, b, c], ctx)
+    assert found == ["LOOPS_CROSS", "LOOPS_CROSS"]
+    pairs = screened.crossing_loops.tolist()
+    assert pairs == sorted(pairs)
+    first_pair = [
+        p for p, q in zip(screened.crossing_points.tolist(), pairs, strict=True) if q == pairs[0]
+    ]
+    assert first_pair == sorted(first_pair)
+
+
+@pytest.mark.req("REQ-G2D-160")
+def test_more_contacts_than_vertices_are_all_returned() -> None:
+    # Two combs of 10 teeth cross 100 times, more than their 84 vertices.
+    teeth = 10
+    up: list[tuple[float, float]] = [(0.0, 0.0)]
+    across: list[tuple[float, float]] = [(-1.0, 0.5)]
+    for k in range(teeth):
+        x = 1.0 + 2.0 * k
+        up += [(x, 0.0), (x, 30.0), (x + 1.0, 30.0), (x + 1.0, 0.0)]
+        y = 1.0 + 2.0 * k + 5.0
+        across += [(-1.0, y), (40.0, y), (40.0, y + 1.0), (-1.0, y + 1.0)]
+    found = contact_points(np.array(up), np.array(across), 1.0)
+    assert found.shape[0] >= 4 * teeth * teeth
+
+
+@pytest.mark.req("REQ-G2D-160")
+@pytest.mark.parametrize("limit", [0.0, math.nan])
+def test_contact_points_refuse_a_bad_limit(limit: float) -> None:
+    square = np.array(_box(0, 0, 10, 10), dtype=np.float64)
+    with pytest.raises(ValueError, match="limit"):
+        contact_points(square, square, limit)
