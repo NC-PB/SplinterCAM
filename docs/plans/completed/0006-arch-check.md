@@ -8,6 +8,7 @@
 - Research: none
 - Branch: `feat/arch-check`, one pull request
 - Owner: Peter Burgener; agents: Claude Code local sessions
+- Status (2026-10-08): complete. Steps 1 and 2 done and reviewed, merged in pull request 44 with the label `large-change`.
 
 ## Context
 
@@ -35,6 +36,10 @@
 
 <!-- Newest first. What was done, what tools/check reported, what is next. At most about 30 lines per session;
      numbers go into tables. Above 300 lines, older entries move to an archive file next to the plan. -->
+
+### 2026-10-08, closed
+
+- Peter reviewed and merged pull request 44. The plan moved to `docs/plans/completed/`; the Backlog stays open for later plans.
 
 ### 2026-10-08, session 1
 

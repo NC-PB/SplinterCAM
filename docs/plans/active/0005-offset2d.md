@@ -4,11 +4,11 @@
      The agent updates the progress log at the end of every session, before stopping. -->
 
 - Goal: a module `offset2d` offsets the machining regions of geometry2d by a clearance t ≥ 0 on a side (D-058, D-132) and joins and subtracts regions (the Booleans of topic 02), with source IDs and fixed nodes carried through for the arc fit (D-023, D-084).
-- Specs: `src/splintercam/offset2d/SPEC.md`, to be cut from research 02 with `/research-to-spec` once it is in the repository
-- Research: research 02 (not yet in `docs/research/`; plan 0004 asked for it)
+- Specs: `src/splintercam/offset2d/SPEC.md` (Draft, 2026-10-08, cut from research 02 with `/research-to-spec`)
+- Research: `docs/research/02-offsets-and-booleans.md` (L4, reviewed 2026-10-08; PR 45)
 - Branch: one pull request per step from `main`, never stacked (docs/dev/07)
 - Owner: Peter Burgener; agents: Claude Code sessions
-- Status (2026-10-08): draft. Peter decided the module (DEC-G2D-038), approved its entry and budget and answered both questions (DEC-G2D-040). No steps until research 02 is here.
+- Status (2026-10-08): draft. Peter decided the module (DEC-G2D-038), approved its entry and budget and answered both questions (DEC-G2D-040). Research 02 is in; the SPEC draft and the steps below wait for Peter's review and the four questions of the SPEC's Open questions.
 
 ## The module
 
@@ -34,9 +34,31 @@ Both answered on 2026-10-08 (DEC-G2D-040): 1 as proposed, with the headers named
 
 ## Steps
 
-None yet: they come from the SPEC cut of research 02.
+<!-- Each step has a size estimate (kept code and tests, raw added lines). At 50 % over it, stop and ask, as for a
+     timebox (docs/dev/12, section 3). Every pull request: at most 400 added lines of non-test code. -->
+
+Proposed, to be released with the SPEC (Peter's review). The SPEC's Open questions 1 and 2 decide steps 2 and 3.
+
+- [ ] 1. **SPEC review.** Peter reviews `src/splintercam/offset2d/SPEC.md` and answers its four questions; the requirements become `Reviewed`. Size: docs only.
+- [ ] 2. **foundation: the offset's parameters** (Open question 2). `ToleranceSet.arc_tol_mm`, and `offset_bias_grid_units` and `join_steps_max` in `tolerance_defaults.toml`, with a foundation SPEC change. Size: about 40 + 60.
+- [ ] 3. **geometry2d: the grid interface** (Open question 1, DEC-G2D-040). `frame_of`, `to_grid`, `split_pinches`, `shared_points` and `canonical` move from `kernel/grid.cpp` into `kernel/grid.hpp`, with a geometry2d SPEC change; behaviour unchanged, geometry2d's tests pass as they are. If an include directory is added for offset2d, `_quoted` in `tools/lib/arch_kernels.py` must resolve it (arch-check resolves quoted includes relative to the file only). Size: about 80 + 20.
+- [ ] 4. **The region offset.** Scaffold `src/splintercam/offset2d/` (`tools/new-module` or by hand, as Peter says), `offset_region` with the loop tree and `flatten_loops` (REQ-OFF-021), the one `ClipperOffset` call (022), t = 0 through `build_region` (024), the span refusal (018), the band (025), integer topology (026), `OFFSET_EMPTY`, `OFFSET_FAILED`, `ValueError`, `CANCELLED` (039 to 042, 013, 014). Tests 6, 7, 8, 10, 11, 18 and 9's oracle. A new algorithm: its own pull request. Size: about 380 + 500.
+- [ ] 5. **The orientation guard** (REQ-OFF-023). Test 21. Size: about 120 + 200.
+- [ ] 6. **Source IDs with classes, pinch points, order** (REQ-OFF-034, 036 to 038, 011, 010). Tests 14, 15, 17, 19. Size: about 150 + 350.
+- [ ] 7. **Booleans** (REQ-OFF-030, 031, 033, 035). Tests 1 to 5, Vatti note test 7. The stock update (`remove_machined`, REQ-OFF-032) waits for RR-001 in `docs/research/REQUESTS.md`. Size: about 180 + 350.
+- [ ] 8. **Open chains** (REQ-OFF-027 to 029). Tests 12 and 13. Size: about 260 + 350.
+- [ ] 9. **Golden case and differential.** `pocket-island-touching-wall` (test 16; a person approves the golden files); an ADR draft for shapely as a test-only dependency (Open question 3), then test 20 if Peter accepts it. Size: about 0 + 250.
+
+Total: about 1230 added lines of code (about 1050 NLOC) and 2080 of tests, in nine steps.
 
 ## Progress log
+
+### 2026-10-08, SPEC draft
+
+- Research 02 arrived (PR 45). `src/splintercam/offset2d/SPEC.md` drafted with `/research-to-spec`: REQ-OFF-010, 011, 013, 014 and 018 keep the prototype's numbers cited by the research, the new ones run from 020 to 042; draft REQ-OFF-009 (retry) is dropped, as research 02 says. Steps 1 to 9 proposed above.
+- spec-reviewer round: six major and six minor findings, all applied (the SPEC's change log); REQ-OFF-043 added for trap 9; REQ-OFF-032 blocked by research request RR-001 (stock update margin).
+- Four questions for Peter in the SPEC's Open questions: geometry2d's grid internals into `kernel/grid.hpp`; `arc_tol_mm` and two declared parameters in foundation; shapely for test 20 (an ADR); the function names.
+- Next: Peter's review (step 1).
 
 ### 2026-10-08, draft
 
