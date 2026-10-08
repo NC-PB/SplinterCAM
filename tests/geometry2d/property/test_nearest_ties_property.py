@@ -4,7 +4,7 @@
 
 import numpy as np
 import pytest
-from hypothesis import given, settings
+from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 from numpy.typing import NDArray
 
@@ -30,25 +30,29 @@ def _from_start(
     return np.sqrt(ex * ex + ey * ey)  # correctly rounded, like the kernel's length()
 
 
-def _oracle(q: NDArray[np.float64], loops: Loops, limit: float, eps: float) -> NDArray[np.int64]:
-    """Every (point, segment) with d <= d_min + eps where d_min <= limit, by brute force."""
+def _oracle(
+    q: NDArray[np.float64], loops: Loops, limit: float, eps: float
+) -> tuple[NDArray[np.int64], NDArray[np.float64]]:
+    """Every (point, segment) with d <= d_min + eps where d_min <= limit, by brute force, and
+    d_min per point."""
     a = np.vstack([np.array(one, dtype=np.float64) for one in loops])
     b = np.vstack([np.roll(np.array(one, dtype=np.float64), -1, axis=0) for one in loops])
     d = np.minimum(_from_start(q, a, b), _from_start(q, b, a))
     nearest = d.min(axis=1)
     within = (d <= (nearest + eps)[:, None]) & (nearest <= limit)[:, None]
-    return np.argwhere(within).astype(np.int64)  # by point, then segment
+    return np.argwhere(within).astype(np.int64), nearest  # by point, then segment
 
 
 def _check(q: NDArray[np.float64], loops: Loops, limit: float, eps: float) -> NDArray[np.int64]:
     points = np.vstack([np.array(one, dtype=np.float64) for one in loops])
     starts = np.cumsum([0] + [len(one) for one in loops[:-1]], dtype=np.int64)
     found = nearest_ties(q, points, starts, limit, eps)
-    expected = _oracle(q, loops, limit, eps)
+    expected, nearest = _oracle(q, loops, limit, eps)
     assert found.tolist() == expected.tolist()
     # The nearest distance is polyline_distances', bit for bit (REQ-G2D-239).
     distances = polyline_distances(q, points, starts, limit)
     assert sorted(set(found[:, 0].tolist())) == np.flatnonzero(np.isfinite(distances)).tolist()
+    assert np.array_equal(np.where(nearest <= limit, nearest, np.inf), distances)
     return found
 
 
@@ -96,6 +100,7 @@ def test_mirrored_loops_tie_on_the_mirror_line(
     mirrored = [[(-x, y) for x, y in one] for one in loops]
     q = np.array([(0.0, y) for y in heights], dtype=np.float64)
     found = _check(q, loops + mirrored, limit, eps)
+    assume(found.size > 0)  # a mirror line beyond the limit ties nothing
     half = sum(len(one) for one in loops)
     pairs = {(int(p), int(s)) for p, s in found}
     assert pairs == {(p, (s + half) % (2 * half)) for p, s in pairs}

@@ -88,13 +88,14 @@ def test_no_polylines_and_no_queries_give_no_rows() -> None:
 @pytest.mark.parametrize(
     ("limit", "eps", "word"),
     [
-        (0.0, 0.0, "limit"),
-        (math.inf, 0.0, "limit"),
-        (math.nan, 0.0, "limit"),
-        (1.0, -1e-9, "eps"),
-        (1.0, math.nan, "eps"),
-        (1.0, math.inf, "eps"),
-        (1e308, 1e308, "eps"),  # limit + eps overflows
+        (0.0, 0.0, "limit must"),
+        (-1.0, 0.0, "limit must"),
+        (math.inf, 0.0, "limit must"),
+        (math.nan, 0.0, "limit must"),
+        (1.0, -1e-9, "eps must"),
+        (1.0, math.nan, "eps must"),
+        (1.0, math.inf, "eps must"),
+        (1e308, 1e308, "eps must"),  # limit + eps overflows
     ],
 )
 def test_a_bad_limit_or_eps_is_refused(limit: float, eps: float, word: str) -> None:
@@ -115,3 +116,21 @@ def test_a_non_finite_vertex_is_refused() -> None:
     square[2, 0] = math.nan
     with pytest.raises(ValueError, match="finite"):
         nearest_ties(np.array([(1.0, 2.0)]), square, STARTS, 1.0, 0.0)
+
+
+@pytest.mark.req("REQ-G2D-242")
+def test_a_non_finite_query_point_is_refused() -> None:
+    for bad in (math.nan, math.inf):
+        with pytest.raises(ValueError, match="query point must be finite"):
+            nearest_ties(np.array([(bad, 2.0)]), SQUARE, STARTS, 1.0, 0.0)
+
+
+@pytest.mark.req("REQ-G2D-242")
+def test_a_zero_length_segment_keeps_its_index_and_ties() -> None:
+    # A repeated vertex makes segment 1 of length 0; segments are numbered as in
+    # nearest_segments, so it keeps index 1 and ties like any other segment.
+    points = np.array([(0.0, 0.0), (10.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)])
+    starts = np.array([0], dtype=np.int64)
+    q = np.array([(10.0, 0.0), (12.0, 0.0)])
+    found = nearest_ties(q, points, starts, 5.0, 0.0)
+    assert found.tolist() == [[0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2]]

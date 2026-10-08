@@ -304,6 +304,10 @@ void bind_distances(nb::module_& m) {
                 throw nb::value_error("eps must be >= 0 and limit + eps finite");
             }
             const auto [queries, lines] = std::pair{view(q), loops_of(vertices, loop_starts)};
+            // As `polyline_distances`' Python entry: a NaN query would silently tie nothing.
+            if (!std::ranges::all_of(queries, [](double v) { return std::isfinite(v); })) {
+                throw nb::value_error("every query point must be finite");
+            }
             std::vector<Tie> ties;
             {
                 const nb::gil_scoped_release unlocked;
