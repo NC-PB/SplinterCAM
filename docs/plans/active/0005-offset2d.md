@@ -47,7 +47,7 @@ Released with the SPEC (Peter, 2026-10-08). Steps 2 and 3 follow his answers 2 a
 - [ ] 6. **Source IDs with classes, pinch points, order** (REQ-OFF-034, 036 to 038, 011, 010). Tests 14, 15, 17, 19. Size: about 150 + 350.
 - [ ] 7. **Booleans** (REQ-OFF-030, 031, 033, 035). Tests 1 to 5, Vatti note test 7. The stock update (`remove_machined`, REQ-OFF-032) follows research 02's answer to RR-001 (Booleans, test 22; pull request 47, DEC-OFF-006): REQ-OFF-032 is rewritten and released from it once it is on `main`, and joins this step. Size: about 180 + 350, plus the stock update once released.
 - [ ] 8. **Open chains** (REQ-OFF-027 to 029). Tests 12 and 13. Size: about 260 + 350.
-- [ ] 9. **Golden case and differential.** `pocket-island-touching-wall` (test 16; a person approves the golden files); an ADR that records D-060: shapely and GEOS in a test-only dependency group, never shipped, since GEOS is LGPL (DEC-OFF-003); then test 20. Size: about 0 + 250.
+- [ ] 9. **Golden case and differential.** `pocket-island-touching-wall` (test 16; a person approves the golden files); ADR 0010 (accepted 2026-10-09) applied: the group `test-oracle` with shapely in `pyproject.toml` and `uv.lock`, installed by `tools/bootstrap` (DEC-OFF-003); then test 20. Size: about 0 + 250.
 
 Total: about 1230 added lines of code (about 1050 NLOC) and 2080 of tests, in nine steps.
 
@@ -63,6 +63,7 @@ Total: about 1230 added lines of code (about 1050 NLOC) and 2080 of tests, in ni
 - RR-001 answered in research 02 (Booleans, test 22), pull request 47: REQ-OFF-032 is released from that text after it merges.
 - ADR drafted for DEC-OFF-003: `docs/adr/0010-shapely-geos-test-only.md` (Proposed; shapely/GEOS in a test-only group for test 20, D-060). A person decides before step 9.
 - Test oracles for steps 4 to 9, written in parallel by a test-designer from the SPEC and research only: `tests/support/offset2d_oracles.py` (d to the true lines and arcs within 64·ε·S, inside on the true curves, the definitions of research 02, Booleans, a seeded sampler outside a band, the band widths from a `ToleranceSet`) and `offset2d_strategies.py` (test 7's nested shapes, pockets with islands, bulged pockets, test 21's touching island); self-tests in `tests/offset2d/` (48), untagged until offset2d code exists. Mutated by hand: each broken rule fails a test.
+- 2026-10-09: Peter accepted ADR 0010 (the group `test-oracle`, installed by `tools/bootstrap`, never packaged, no `NOTICE` entry, LGPL only there for `tools/licence-check`); answered question 3 of step 3's review (the tie-breaker in `canonical`, before step 6) and kept the PUBLIC Clipper2 link.
 - Next: step 2 (foundation).
 
 ### 2026-10-08, SPEC draft
