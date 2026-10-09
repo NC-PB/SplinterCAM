@@ -65,19 +65,19 @@ def run_kernel(call: KernelCall, room: int) -> tuple[int, PolygonRegion | None]:
 def outcome(
     status: int,
     region: PolygonRegion | None,
-    dump: dict[str, object],
+    dump: Callable[[], dict[str, object]],
     diagnostics: list[Diagnostic],
     ctx: Context,
 ) -> Result[PolygonRegion]:
-    """The kernel's status as a result: cancelled, refused, failed (the input logged for replay),
-    empty or the region (REQ-OFF-014, 018, 039, 041)."""
+    """The kernel's status as a result: cancelled, refused, failed (the input, built by `dump`
+    only then, logged for replay), empty or the region (REQ-OFF-014, 018, 039, 041)."""
     if ctx.cancel.is_cancelled:
         return Result(None, (*diagnostics, CANCELLED))
     if status == _TOO_LARGE:
         message = f"the input spans {MAX_SPAN_GRID_UNITS:.0f} grid units or more"
         return Result(None, (*diagnostics, Diagnostic("REGION_TOO_LARGE", Severity.ERROR, message)))
     if status != OK or region is None:
-        ctx.logger.error("OFFSET_FAILED, kernel input for replay: %s", json.dumps(dump))
+        ctx.logger.error("OFFSET_FAILED, kernel input for replay: %s", json.dumps(dump()))
         failed = Diagnostic("OFFSET_FAILED", Severity.ERROR, "the call failed; input logged")
         return Result(None, (*diagnostics, failed))
     if region.loop_starts.size == 0:

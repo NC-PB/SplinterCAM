@@ -81,7 +81,7 @@ def offset_region(
         return Result(None, (*diagnostics, CANCELLED))
     else:
         status, region = _kernel_offset(flat, original, classes, delta, ctx)
-    return outcome(status, region, _replay_dump(original, delta, ctx), diagnostics, ctx)
+    return outcome(status, region, lambda: _replay_dump(original, delta, ctx), diagnostics, ctx)
 
 
 def _check_arguments(
