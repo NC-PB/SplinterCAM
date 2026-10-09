@@ -65,7 +65,8 @@ def offset_region(
     if tree.value is None or not tree.ok:
         return Result(None, tuple(diagnostics))
     flat_region = flatten_loops(tree.value, kind, ctx)
-    flat, cleaned = _cleaned(flat_region.region, ctx)
+    original = flat_region.region  # the input edges whose IDs the output takes (DEC-OFF-013)
+    flat, cleaned = _cleaned(original, ctx)
     diagnostics += cleaned
     tol = ctx.tolerances
     # The flattening's extra clearance (0 for lines and arcs) widens t (geometry2d, REQ-G2D-124).
@@ -77,9 +78,9 @@ def offset_region(
     elif ctx.cancel.is_cancelled:
         return Result(None, (*diagnostics, CANCELLED))
     else:
-        per_vertex = classes.classes[np.searchsorted(classes.ids, flat.source_ids)]
-        status, region = _kernel_offset(flat, per_vertex.astype(np.int8), delta, ctx)
-    return _outcome(status, region, (flat, delta), diagnostics, ctx)
+        per_vertex = classes.classes[np.searchsorted(classes.ids, original.source_ids)]
+        status, region = _kernel_offset(flat, original, per_vertex.astype(np.int8), delta, ctx)
+    return _outcome(status, region, (original, delta), diagnostics, ctx)
 
 
 def _outcome(
@@ -119,7 +120,7 @@ def _check_arguments(
 
 def _cleaned(region: PolygonRegion, ctx: Context) -> tuple[PolygonRegion, list[Diagnostic]]:
     """Each flattened loop cleaned (geometry2d's `cleanup`: runs within eps_len merged, spikes
-    dropped), its kept vertices keeping their source IDs (REQ-OFF-043, trap 9)."""
+    dropped), for the geometry only (REQ-OFF-043, trap 9): the IDs come from the loops before."""
     starts_in: list[int] = region.loop_starts.tolist()
     ends = [*starts_in[1:], region.points.shape[0]] if starts_in else []
     kept: list[NDArray[np.int64]] = []
@@ -138,8 +139,14 @@ def _cleaned(region: PolygonRegion, ctx: Context) -> tuple[PolygonRegion, list[D
 
 
 def _kernel_offset(
-    flat: PolygonRegion, vertex_classes: NDArray[np.int8], delta: float, ctx: Context
+    flat: PolygonRegion,
+    original: PolygonRegion,
+    vertex_classes: NDArray[np.int8],
+    delta: float,
+    ctx: Context,
 ) -> tuple[int, PolygonRegion | None]:
+    """The cleaned loops offset, their IDs from the loops before the clean-up, which may drop a
+    collinear joint between two rows (DEC-OFF-013)."""
     tol = ctx.tolerances
     offset = (delta, tol.arc_tol_mm, _BIAS_GRID_UNITS, _MARGIN_GRID_UNITS)
     grid = (tol.grid_unit_mm, _MAX_SPAN_GRID_UNITS, _JOIN_STEPS_MAX, tol.length_eps_mm)
@@ -151,7 +158,8 @@ def _kernel_offset(
         points, starts = np.empty((room, 2)), np.empty(room, dtype=np.int64)
         ids, fixed = np.empty(room, dtype=np.int64), np.empty(room, dtype=np.uint8)
         status, n_points, n_loops = _kernels.offset2d.offset_loops(
-            flat.points, flat.loop_starts, flat.source_ids, vertex_classes, offset, grid,
+            flat.points, flat.loop_starts, original.points, original.loop_starts,
+            original.source_ids, vertex_classes, offset, grid,
             points, starts, ids, fixed,
         )  # fmt: skip
         if max(n_points, n_loops) <= room:

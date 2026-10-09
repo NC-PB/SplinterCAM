@@ -29,6 +29,7 @@ from splintercam.geometry2d import (
     PolygonRegion,
     RegionKind,
     build_region,
+    curve_rows,
     flatten_loops,
     loop_tree,
     point_in_region,
@@ -222,7 +223,8 @@ def test_a_join_needing_more_steps_than_the_limit_fails(ctx: Context) -> None:
     room = 64
     out = (np.empty((room, 2)), np.empty(room, np.int64), np.empty(room, np.int64))
     status = _kernels.offset2d.offset_loops(
-        square, np.array([0], np.int64), np.arange(4, dtype=np.int64), np.zeros(4, np.int8),
+        square, np.array([0], np.int64), square, np.array([0], np.int64),
+        np.arange(4, dtype=np.int64), np.zeros(4, np.int8),
         (5.0 + a + 3 * u, a, 3.0, 6.0), (u, 2.0**26, 8.0, ctx.tolerances.length_eps_mm),
         *out, np.empty(room, np.uint8),
     )[0]  # fmt: skip
@@ -370,38 +372,59 @@ def test_a_failed_offset_logs_its_kernel_input_for_replay(
     assert dump["delta_mm"] < 0.0  # air shrinks
 
 
+def rectangle_with_ids(ids: list[int], ctx: Context) -> CurveRows:
+    """The 60 x 40 rectangle of test 14 with chosen source IDs: right, top, left, bottom."""
+    rows = np.array(box_loop(0.0, 0.0, 60.0, 40.0))
+    built = curve_rows(rows, np.array(ids, dtype=np.int64), np.array([0], np.int64), ctx)
+    assert built.value is not None, built.diagnostics
+    return built.value
+
+
+def ids_by_place(region: PolygonRegion) -> dict[str, set[int]]:
+    """The source IDs of the grown rectangle's edges, by where their midpoints lie."""
+    rows = polygon_rows(region.points, region.loop_starts).rows
+    x, y = (rows[:, 0] + rows[:, 2]) / 2.0, (rows[:, 1] + rows[:, 3]) / 2.0
+    places = {
+        "top-right": (y > 40.0) & (x > 60.0), "top-left": (y > 40.0) & (x < 0.0),
+        "bottom-left": (y < 0.0) & (x < 0.0), "bottom-right": (y < 0.0) & (x > 60.0),
+        "top": (y > 40.0) & (x >= 0.0) & (x <= 60.0),
+        "right": (x > 60.0) & (y >= 0.0) & (y <= 40.0),
+        "left": (x < 0.0) & (y >= 0.0) & (y <= 40.0),
+        "bottom": (y < 0.0) & (x >= 0.0) & (x <= 60.0),
+    }  # fmt: skip
+    return {name: set(region.source_ids[mask].tolist()) for name, mask in places.items()}
+
+
 @pytest.mark.req("REQ-OFF-034")
 def test_edges_carry_their_source_ids_and_ties_go_to_material(ctx: Context) -> None:
-    # Research 02, test 14: a 60 x 40 rectangle of material, its top edge (ID 101) tagged air,
-    # grown by 5. Straight edges carry their own side's ID; the round joins at the top corners
-    # are ties between a side (material) and the top (air), which material wins (D-059); the
-    # bottom joins tie two material edges, which the lower ID wins.
-    loops = to_curve_rows([box_loop(0.0, 0.0, 60.0, 40.0)], ctx)  # IDs 100 right, 101 top, ...
-    assert loops.ids.tolist() == [100, 101, 102, 103]
-    air_top = SourceClasses(
-        np.array([100, 101, 102, 103]),
-        np.array([EdgeClass.MATERIAL, EdgeClass.AIR, EdgeClass.MATERIAL, EdgeClass.MATERIAL],
-                 dtype=np.int8),
-    )  # fmt: skip
-    result = offset_region(loops, MATERIAL, 5.0, air_top, ctx)
-    region = result.value
+    # Research 02, test 14: a 60 x 40 rectangle of material, its top edge tagged air, grown by 5.
+    # Straight edges carry their own side's ID; the round joins at the top corners tie a side
+    # (material) with the top (air), which material wins (D-059) although the top has the lower,
+    # here negative, ID; the bottom joins tie two material edges, which the lower ID wins, here
+    # the bottom's (5), whose segment comes after the left side's (9).
+    m, a = EdgeClass.MATERIAL, EdgeClass.AIR
+    loops = rectangle_with_ids([7, -4, 9, 5], ctx)
+    classes_ = SourceClasses(np.array([-4, 5, 7, 9]), np.array([a, m, m, m], dtype=np.int8))
+    region = offset_region(loops, MATERIAL, 5.0, classes_, ctx).value
     assert region is not None
-    rows = polygon_rows(region.points, region.loop_starts).rows
-    mid_x, mid_y = (rows[:, 0] + rows[:, 2]) / 2.0, (rows[:, 1] + rows[:, 3]) / 2.0
-    expected = np.select(
-        [
-            (mid_y > 40.0) & (mid_x > 60.0),  # top-right join: right (material) vs top (air)
-            (mid_y > 40.0) & (mid_x < 0.0),  # top-left join: top (air) vs left (material)
-            (mid_y < 0.0) & (mid_x < 0.0),  # bottom-left join: left vs bottom, lower ID
-            (mid_y < 0.0) & (mid_x > 60.0),  # bottom-right join: bottom vs right, lower ID
-            mid_y > 40.0,
-            mid_x > 60.0,
-            mid_x < 0.0,
-        ],
-        [100, 102, 102, 100, 101, 100, 102],
-        default=103,
-    )
-    assert region.source_ids.tolist() == expected.tolist()
+    assert ids_by_place(region) == {
+        "top-right": {7}, "top-left": {9}, "bottom-left": {5}, "bottom-right": {5},
+        "top": {-4}, "right": {7}, "left": {9}, "bottom": {5},
+    }  # fmt: skip
+
+
+@pytest.mark.req("REQ-OFF-034")
+def test_cleared_wins_over_air_and_material_over_cleared(ctx: Context) -> None:
+    # The full class order of D-059, each winner with the higher ID: right material (8) against
+    # top cleared (2) at the top-right join, top cleared (2) against left air (1) at the top-left.
+    m, c, a = EdgeClass.MATERIAL, EdgeClass.CLEARED, EdgeClass.AIR
+    loops = rectangle_with_ids([8, 2, 1, 3], ctx)
+    classes_ = SourceClasses(np.array([1, 2, 3, 8]), np.array([a, c, m, m], dtype=np.int8))
+    region = offset_region(loops, MATERIAL, 5.0, classes_, ctx).value
+    assert region is not None
+    places = ids_by_place(region)
+    assert places["top-right"] == {8}
+    assert places["top-left"] == {2}
 
 
 @pytest.mark.req("REQ-OFF-011", "REQ-OFF-038")
@@ -418,9 +441,19 @@ def test_the_same_input_gives_the_same_arrays_in_any_loop_order(
     ]
     first = offset(to_curve_rows([wall, *islands], ctx), kind, 2.5, ctx)
     again = offset(to_curve_rows([wall, *islands], ctx), kind, 2.5, ctx)
-    other = offset(to_curve_rows([islands[1], wall, islands[0]], ctx), kind, 2.5, ctx)
+    turned = [reversed_loop(islands[1]), wall, islands[0]]  # another order, one loop reversed
+    other = offset(to_curve_rows(turned, ctx), kind, 2.5, ctx)
     for a, b in ((first, again), (first, other)):
         assert a.points.tobytes() == b.points.tobytes()
         assert a.loop_starts.tobytes() == b.loop_starts.tobytes()
         assert a.fixed.tobytes() == b.fixed.tobytes()
+    # The IDs follow the input rows, which the other order renumbers: compared for the same input.
     assert first.source_ids.tobytes() == again.source_ids.tobytes()
+    # The canonical order itself: each loop starts at its smallest point, by x then y, and the
+    # loops ascend by that point (REQ-OFF-038; DEC-G2D-036, 042).
+    starts = first.loop_starts.tolist()
+    ends = [*starts[1:], first.points.shape[0]]
+    firsts = [tuple(first.points[a].tolist()) for a in starts]
+    for (a, b), start in zip(zip(starts, ends, strict=True), firsts, strict=True):
+        assert start == min(tuple(p) for p in first.points[a:b].tolist())
+    assert firsts == sorted(firsts)

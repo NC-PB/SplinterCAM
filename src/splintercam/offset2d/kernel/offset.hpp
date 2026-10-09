@@ -30,9 +30,11 @@ struct OffsetLimits {
 };
 
 struct OffsetInput {
-    geometry2d::Polylines loops; // side-correct flattened and normalised (REQ-OFF-021)
-    std::span<const std::int64_t> source_ids;
-    std::span<const std::int8_t> classes; // per vertex: material 0, cleared 1, air 2 (D-059)
+    geometry2d::Polylines
+        loops; // side-correct flattened, normalised and cleaned (REQ-OFF-021, 043)
+    geometry2d::Polylines id_loops; // the same before the clean-up: the input edges of the IDs
+    std::span<const std::int64_t> source_ids; // per vertex of id_loops
+    std::span<const std::int8_t> classes;     // likewise: material 0, cleared 1, air 2 (D-059)
 };
 
 // The offset region, or too_large (REQ-OFF-018) or failed (REQ-OFF-014, DEC-OFF-008). No exception
