@@ -79,9 +79,9 @@ void bind(nb::module_& m) {
                 const nb::gil_scoped_release unlocked;
                 region = offset_loops(
                     {.loops = loops,
-                     .id_loops = id_loops,
-                     .source_ids = view(source_ids),
-                     .classes = view(classes)},
+                     .ids = {.loops = id_loops,
+                             .source_ids = view(source_ids),
+                             .classes = view(classes)}},
                     {.delta = delta,
                      .arc_tol = arc_tol,
                      .bias_units = bias,
