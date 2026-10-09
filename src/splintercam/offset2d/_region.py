@@ -1,0 +1,165 @@
+# SPDX-License-Identifier: Apache-2.0
+"""The region offset (research 02, Definitions and The kernel call): a region of air shrinks, a
+region of material grows by a clearance t, in one Clipper2 call on geometry2d's grid."""
+
+import json
+import math
+
+import numpy as np
+from numpy.typing import NDArray
+
+from splintercam import _kernels
+from splintercam.foundation import (
+    CANCELLED,
+    TOLERANCE_DEFAULTS,
+    Context,
+    Diagnostic,
+    Result,
+    Severity,
+)
+from splintercam.geometry2d import (
+    CurveRows,
+    PolygonRegion,
+    RegionKind,
+    build_region,
+    cleanup,
+    flatten_loops,
+    loop_tree,
+)
+
+from ._classes import SourceClasses, check_classes
+
+# Declared parameters, passed to the kernel as plain values (REQ-OFF-042, D-049).
+_BIAS_GRID_UNITS = TOLERANCE_DEFAULTS["offset_bias_grid_units"].default  # D-132
+_JOIN_STEPS_MAX = TOLERANCE_DEFAULTS["join_steps_max"].default  # research 02, Parameters
+_MAX_SPAN_GRID_UNITS = TOLERANCE_DEFAULTS["grid_max_span_units"].default  # REQ-G2D-034
+_ARC_TOL_FLOOR_GRID_UNITS = TOLERANCE_DEFAULTS["arc_tol_floor_grid_units"].default  # D-132
+_OK, _TOO_LARGE = 0, 1  # GridStatus in geometry2d's kernel/grid.hpp; 2 is a failure
+
+
+def offset_region(
+    loops: CurveRows,
+    kind: RegionKind,
+    clearance_mm: float,
+    classes: SourceClasses,
+    ctx: Context,
+) -> Result[PolygonRegion]:
+    """The region of `loops` offset by the clearance t: a region of air shrunk to the points at
+    least t from every loop, a region of material grown by t (research 02, Definitions). t = 0
+    gives `build_region`'s region. The loop tree's and the clean-up's diagnostics are passed on.
+
+    Implements: REQ-OFF-013, REQ-OFF-014, REQ-OFF-018, REQ-OFF-020 to 022, REQ-OFF-024 to 026,
+    REQ-OFF-039 to 043.
+    """
+    _check_arguments(loops, clearance_mm, classes, ctx)
+    if ctx.cancel.is_cancelled:
+        return Result(None, (CANCELLED,))
+    if clearance_mm == 0.0:
+        built = build_region(loops, kind, ctx)
+        return Result(None if built.value is None else built.value.region, built.diagnostics)
+    tree = loop_tree(loops, ctx)
+    diagnostics = list(tree.diagnostics)
+    if tree.value is None or not tree.ok:
+        return Result(None, tuple(diagnostics))
+    flat, cleaned = _cleaned(flatten_loops(tree.value, kind, ctx).region, ctx)
+    diagnostics += cleaned
+    tol = ctx.tolerances
+    reach = clearance_mm + tol.arc_tol_mm + _BIAS_GRID_UNITS * tol.grid_unit_mm
+    delta = -reach if kind is RegionKind.AIR else reach
+    status, region = _kernel_offset(flat, delta, ctx)
+    return _outcome(status, region, (flat, delta), diagnostics, ctx)
+
+
+def _outcome(
+    status: int,
+    region: PolygonRegion | None,
+    kernel_input: tuple[PolygonRegion, float],
+    diagnostics: list[Diagnostic],
+    ctx: Context,
+) -> Result[PolygonRegion]:
+    """The kernel's status as a result: cancelled, refused, failed (the input logged), empty or
+    the region (REQ-OFF-014, 018, 039, 041)."""
+    if ctx.cancel.is_cancelled:
+        return Result(None, (*diagnostics, CANCELLED))
+    if status == _TOO_LARGE:
+        message = f"the input plus 2·|δ| spans {_MAX_SPAN_GRID_UNITS:.0f} grid units or more"
+        return Result(None, (*diagnostics, Diagnostic("REGION_TOO_LARGE", Severity.ERROR, message)))
+    if status != _OK or region is None:
+        _log_for_replay(*kernel_input, ctx)
+        failed = Diagnostic("OFFSET_FAILED", Severity.ERROR, "the offset failed; input logged")
+        return Result(None, (*diagnostics, failed))
+    if region.loop_starts.size == 0:
+        diagnostics.append(Diagnostic("OFFSET_EMPTY", Severity.INFO, "the region vanishes"))
+    return Result(region, tuple(diagnostics))
+
+
+def _check_arguments(
+    loops: CurveRows, clearance_mm: float, classes: SourceClasses, ctx: Context
+) -> None:
+    if not (math.isfinite(clearance_mm) and clearance_mm >= 0.0):
+        raise ValueError(f"the clearance must be finite and >= 0, got {clearance_mm!r}")
+    check_classes(classes, loops.ids)
+    if ctx.tolerances.arc_tol_mm < _ARC_TOL_FLOOR_GRID_UNITS * ctx.tolerances.grid_unit_mm:
+        raise ValueError("the arc tolerance a must be at least 2 grid units")
+
+
+def _cleaned(region: PolygonRegion, ctx: Context) -> tuple[PolygonRegion, list[Diagnostic]]:
+    """Each flattened loop cleaned (geometry2d's `cleanup`: runs within eps_len merged, spikes
+    dropped), its kept vertices keeping their source IDs (REQ-OFF-043, trap 9)."""
+    ends = [*region.loop_starts.tolist()[1:], region.points.shape[0]]
+    kept: list[NDArray[np.int64]] = []
+    diagnostics: list[Diagnostic] = []
+    for start, end in zip(region.loop_starts.tolist(), ends, strict=True):
+        result = cleanup(region.points[start:end], ctx)
+        diagnostics += result.diagnostics
+        indices: NDArray[np.int64] = (
+            np.arange(start, end, dtype=np.int64) if result.value is None else start + result.value
+        )
+        kept.append(indices)
+    take = np.concatenate(kept) if kept else np.empty(0, dtype=np.int64)
+    starts = np.cumsum([0] + [k.size for k in kept[:-1]], dtype=np.int64)
+    cleaned = PolygonRegion(
+        region.points[take], starts, region.source_ids[take], region.fixed[take]
+    )
+    return cleaned, diagnostics
+
+
+def _kernel_offset(
+    flat: PolygonRegion, delta: float, ctx: Context
+) -> tuple[int, PolygonRegion | None]:
+    tol = ctx.tolerances
+    offset = (delta, tol.arc_tol_mm, _BIAS_GRID_UNITS)
+    grid = (tol.grid_unit_mm, _MAX_SPAN_GRID_UNITS, _JOIN_STEPS_MAX)
+    points_in = np.ascontiguousarray(flat.points)
+    room = 2 * flat.points.shape[0] + 64
+    while True:
+        points, starts = np.empty((room, 2)), np.empty(room, dtype=np.int64)
+        ids, fixed = np.empty(room, dtype=np.int64), np.empty(room, dtype=np.uint8)
+        status, n_points, n_loops = _kernels.offset2d.offset_loops(
+            points_in, flat.loop_starts, flat.source_ids, offset, grid,
+            points, starts, ids, fixed,
+        )  # fmt: skip
+        if max(n_points, n_loops) <= room:
+            break
+        room = max(n_points, n_loops)
+    if status != _OK:
+        return status, None
+    out = PolygonRegion(
+        points[:n_points].copy(), starts[:n_loops].copy(), ids[:n_points].copy(),
+        fixed[:n_points].copy(),
+    )  # fmt: skip
+    for array in (out.points, out.loop_starts, out.source_ids, out.fixed):
+        array.flags.writeable = False
+    return status, out
+
+
+def _log_for_replay(flat: PolygonRegion, delta: float, ctx: Context) -> None:
+    """The kernel's input as JSON, for `tools/replay` once it exists (REQ-OFF-014)."""
+    dump = {
+        "points": flat.points.tolist(),
+        "loop_starts": flat.loop_starts.tolist(),
+        "source_ids": flat.source_ids.tolist(),
+        "delta_mm": delta,
+        "chord_tol_mm": ctx.tolerances.chord_tol_mm,
+    }
+    ctx.logger.error("OFFSET_FAILED, kernel input for replay: %s", json.dumps(dump))

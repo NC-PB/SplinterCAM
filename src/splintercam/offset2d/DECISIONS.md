@@ -67,3 +67,30 @@
 - Rejected: a added to m (it would make the area smaller still, for no safety gain); a research request (the reasoning is complete; research 02 can take the corrected bound at its next review).
 - Where: SPEC, REQ-OFF-032, 044 and Failure modes.
 
+
+## DEC-OFF-008: the inverting hole is refused, and the area check guards the rest
+
+- Date: 2026-10-09; decided by: Peter (the area check as a guard, not a proof; the test of test 21's shape), ours (the refusal of the inverting hole, from the measurement below; plan 0005, step 4)
+- Status: Active, provisional until step 5's guard (REQ-OFF-023)
+- Decision: before the `ClipperOffset` call the kernel finds the path Clipper2 takes as the outer loop, with Clipper2's own rule (the largest y, then the smallest x; the first path on a tie; paths of area 0 skipped; SRC-122, `GetLowestClosedPathInfo`), and returns `OFFSET_FAILED` when that path is a hole. After the call it checks the area: a shrunk region is not larger, a grown one not smaller, than its input, and the result's signed area is not negative, each allowing the bias of 3 grid units per unit of input perimeter; otherwise `OFFSET_FAILED`. The area check is a guard against a whole inverted result, not a proof that the offset is correct.
+- Why: research 02, The kernel call, step 3. Measured 2026-10-09: research 02's test 21 shape as a region of air (an island of radius 5 tangent inside a wall of radius 20 at its top) puts the island's flattening at y = 20.00039 above the wall's 19.99999, and the inverted shrink came back empty, as `OFFSET_EMPTY`. No area check can tell that from a region that really vanishes, and a pocket would have been skipped without an error. As a region of material the same shape is right: the wall's flattening holds the extreme point. Step 5 replaces the refusal with the guard triangle.
+- Rejected: the area check alone (it misses the empty inversion above); a bound from the Steiner formula A + L·t + π·t² (it needs convex input).
+- Where: `kernel/offset.cpp` (`extreme_path_is_hole`, `plausible`); `tests/offset2d/unit/test_offset_region.py`.
+
+## DEC-OFF-009: source IDs until step 6
+
+- Date: 2026-10-09; decided by: ours (plan 0005, step 4)
+- Status: Active, provisional until step 6 (REQ-OFF-034)
+- Decision: each output edge takes the source ID of the flattened input edge nearest to its midpoint, through geometry2d's `nearest_segments` within |δ| + bias·u, the band's top (REQ-OFF-025); on a tie the lower segment index. Step 6 replaces the tie with the class order of REQ-OFF-034 through `nearest_ties`.
+- Why: every output edge lies in the band, so that reach finds its source; the class tie needs `SourceClasses` in the kernel, which is step 6's work.
+- Rejected: IDs of -1 until step 6 (consumers would see an incomplete region).
+- Where: `kernel/offset.cpp`, `fill_region`.
+
+## DEC-OFF-010: the span check of an offset
+
+- Date: 2026-10-09; decided by: ours (plan 0005, step 4)
+- Status: Active
+- Decision: the kernel calls geometry2d's `frame_of` with the span limit reduced by 2·|δ|/u, so the input plus 2·|δ| must span less than 2^26 grid units, before any integer is formed (REQ-OFF-018).
+- Why: the offset paths reach |δ| beyond the input on every side, and the union inside the call runs on them (research 01, resolution chain, stage 3); `frame_of` already refuses before rounding.
+- Rejected: checking the span after `to_grid` (the integers would already be formed).
+- Where: `kernel/offset.cpp`.
