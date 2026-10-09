@@ -2,6 +2,7 @@
 // Python bindings of the offset2d kernel (docs/dev/03: arrays and plain values only). Outputs are
 // arrays the Python side allocates and passes in, so no kernel code owns Python memory.
 #include "boolean.hpp"
+#include "grow.hpp"
 #include "offset.hpp"
 
 #include <algorithm>
@@ -118,6 +119,39 @@ void bind_clip(nb::module_& m) {
         "points, loops), the counts it needed.");
 }
 
+void bind_grow(nb::module_& m) {
+    m.def(
+        "grow_chains",
+        [](const PointRows& chains, const Counts& chain_starts, const PointRows& id_points,
+           const Counts& id_starts, const Counts& source_ids, const Classes& classes,
+           const Triple& offset, const Quad& grid, const PointsOut& points_out,
+           const CountsOut& starts_out, const CountsOut& ids_out, const FlagsOut& fixed_out) {
+            const auto [delta, arc_tol, reach] = offset;
+            const auto [u, span, steps, eps] = grid;
+            if (!finite(offset) || !finite(grid) || !(delta > arc_tol) || !(arc_tol > 0.0) ||
+                !(reach > 0.0) || !(u > 0.0) || !(span > 0.0) || !(steps > 0.0) || !(eps >= 0.0)) {
+                throw nb::value_error("delta > arc_tol > 0; reach, u, span, steps > 0; eps >= 0");
+            }
+            const GrowInput input{.chains = checked_loops(chains, chain_starts, chains.shape(0)),
+                                  .ids = id_source(id_points, id_starts, source_ids, classes)};
+            geometry2d::GridRegion region;
+            {
+                const nb::gil_scoped_release unlocked;
+                region = grow_chains(
+                    input, {.delta = delta, .arc_tol = arc_tol, .bias_units = 0, .margin_units = 0},
+                    {.u = u, .max_span_units = span, .join_steps_max = steps, .eps_len = eps},
+                    {.limit = reach, .eps = eps});
+            }
+            return write_region(region, std::tie(points_out, starts_out, ids_out, fixed_out));
+        },
+        nb::arg("chains"), nb::arg("chain_starts"), nb::arg("id_points"), nb::arg("id_starts"),
+        nb::arg("source_ids"), nb::arg("classes"), nb::arg("offset"), nb::arg("grid"),
+        nb::arg("points_out"), nb::arg("starts_out"), nb::arg("ids_out"), nb::arg("fixed_out"),
+        "Grow open chains by delta with round joins and ends in one Clipper2 call (offset = delta, "
+        "a, the reach of the source IDs in mm; grid = u, the span limit, the join step limit, "
+        "eps_len); return (status, points, loops), the counts it needed.");
+}
+
 } // namespace
 
 void bind(nb::module_& m) {
@@ -156,6 +190,7 @@ void bind(nb::module_& m) {
         "limit, eps_len; classes per vertex as D-059 orders them); return (status, points, "
         "loops), the counts it needed.");
     bind_clip(m);
+    bind_grow(m);
 }
 
 } // namespace splintercam::offset2d
