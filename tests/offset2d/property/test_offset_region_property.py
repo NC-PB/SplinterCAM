@@ -1,9 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Property tests of `offset_region`: research 02's band (test 10) and its offset oracle (test 9),
-on random regions of lines and arcs with islands, at tol 0.01 mm, tol_min and 0.05 mm (D-146).
-
-The touching island of test 21 is left out here: in a region of air it is the case step 5's
-orientation guard handles, which `offset_region` refuses until then (DEC-OFF-008)."""
+on random regions of lines and arcs with islands, the touching island of test 21 among them (the
+orientation guard, REQ-OFF-023), at tol 0.01 mm, tol_min and 0.05 mm (D-146)."""
 
 import dataclasses
 import os
@@ -23,7 +21,7 @@ from offset2d_oracles import (
     sample_outside_band,
     true_curve_band_mm,
 )
-from offset2d_strategies import RegionCase, bulged_pocket, nested_regions, pocket_with_islands
+from offset2d_strategies import RegionCase, regions
 from splintercam.foundation import Context, ToleranceSet
 from splintercam.geometry2d import (
     CurveRows,
@@ -44,7 +42,7 @@ N_POINTS = 10_000  # research 02, tests 9 and 10
 EXAMPLES = 1000 if os.environ.get("HYPOTHESIS_PROFILE") == "thorough" else 10  # tests/conftest.py
 TOLERANCES_MM = [0.01, 0.0022858, 0.05]  # tol, tol_min (a at its floor of 2u), roughing (D-146)
 
-cases = st.one_of(nested_regions(), pocket_with_islands(), bulged_pocket())
+cases = regions()
 
 
 def _with_tol(ctx: Context, tol_mm: float) -> Context:
@@ -89,7 +87,7 @@ def test_every_boundary_point_lies_in_the_band(
     assert d.max() <= t_mm + offset_band_mm(ctx.tolerances)
 
 
-@pytest.mark.req("REQ-OFF-020", "REQ-OFF-026")
+@pytest.mark.req("REQ-OFF-020", "REQ-OFF-023", "REQ-OFF-026")
 @settings(
     suppress_health_check=[HealthCheck.function_scoped_fixture],
     deadline=None,

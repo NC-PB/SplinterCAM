@@ -11,11 +11,26 @@ import numpy as np
 import pytest
 
 from geometry2d_checks import codes, reversed_loop
-from offset2d_oracles import distance_to_curves, offset_band_mm, polygon_rows
+from offset2d_oracles import (
+    DistanceBand,
+    distance_to_curves,
+    in_offset,
+    offset_band_mm,
+    polygon_rows,
+    sample_outside_band,
+    true_curve_band_mm,
+)
 from offset2d_strategies import circle, rounded_box, to_curve_rows
 from splintercam import _kernels
 from splintercam.foundation import CANCELLED, Context, Severity
-from splintercam.geometry2d import CurveRows, PolygonRegion, RegionKind, build_region
+from splintercam.geometry2d import (
+    CurveRows,
+    PointLocation,
+    PolygonRegion,
+    RegionKind,
+    build_region,
+    point_in_region,
+)
 from splintercam.offset2d import EdgeClass, SourceClasses, offset_region
 
 AIR, MATERIAL = RegionKind.AIR, RegionKind.MATERIAL
@@ -219,20 +234,69 @@ def test_the_loops_reach_the_kernel_normalised(ctx: Context) -> None:
     assert drawn.points.tobytes() == turned.points.tobytes()
 
 
-@pytest.mark.req("REQ-OFF-014")
-def test_an_island_holding_the_extreme_point_fails_until_the_guard_exists(ctx: Context) -> None:
-    # Research 02, test 21's shape: an island of radius 5 tangent inside a wall of radius 20 at
-    # its top. In a region of air the island's flattening lies outside the true circle and reaches
-    # above the wall's, so Clipper2 would take the island for the outer loop and invert the whole
-    # offset; measured, the inverted shrink came back empty, which the area check cannot see, so
-    # the kernel refuses the hole itself. Until step 5 adds the guard: never a region,
-    # OFFSET_FAILED (Peter, 2026-10-09; DEC-OFF-008).
+def assert_matches_oracle(
+    loops: CurveRows, kind: RegionKind, t_mm: float, region: PolygonRegion, ctx: Context
+) -> None:
+    """Research 02, test 9's oracle at 10^4 points outside the band of the true curves."""
+    rows = loops.rows
+    corners = np.concatenate([rows[:, 0:2], rows[:, 2:4]])
+    low, high = corners.min(axis=0) - t_mm - 2.0, corners.max(axis=0) + t_mm + 2.0
+    box = (float(low[0]), float(low[1]), float(high[0]), float(high[1]))
+    band = DistanceBand(t_mm, true_curve_band_mm(ctx.tolerances))
+    points = sample_outside_band(loops, band, box, 10_000, 7)
+    located = point_in_region(points, polygon_rows(region.points, region.loop_starts), ctx)
+    assert np.array_equal(located == PointLocation.IN, in_offset(points, loops, kind, t_mm))
+
+
+def assert_no_guard_left(loops: CurveRows, region: PolygonRegion, t_mm: float) -> None:
+    """No loop lies above the input grown by t: the guard triangle is gone (REQ-OFF-023)."""
+    top = float(np.nanmax(np.concatenate([loops.rows[:, 1], loops.rows[:, 3]])))
+    ends = [*region.loop_starts.tolist()[1:], region.points.shape[0]]
+    for a, b in zip(region.loop_starts.tolist(), ends, strict=True):
+        assert region.points[a:b, 1].min() <= top + t_mm + 1.0
+
+
+@pytest.mark.req("REQ-OFF-023", "REQ-OFF-020")
+def test_an_island_holding_the_extreme_point_is_offset_through_the_guard(ctx: Context) -> None:
+    # Research 02, test 21: an island of radius 5 tangent inside a wall of radius 20 at its top.
+    # In a region of air the island's flattening reaches above the wall's, so Clipper2 would take
+    # the island for the outer loop and invert the offset (measured: an empty result); the guard
+    # triangle above the input takes the extreme point instead (DEC-OFF-008, DEC-OFF-011).
     loops = to_curve_rows(
         [circle(0.0, 0.0, 20.0, 0.3, 1), reversed_loop(circle(0.0, 15.0, 5.0, 0.3, 1))], ctx
     )
-    result = offset_region(loops, AIR, 2.0, classes(loops), ctx)
+    region = offset(loops, AIR, 2.0, ctx)
+    assert region.loop_starts.size >= 1
+    assert_matches_oracle(loops, AIR, 2.0, region, ctx)
+    assert_no_guard_left(loops, region, 2.0)
+
+
+@pytest.mark.req("REQ-OFF-023", "REQ-OFF-020")
+@pytest.mark.parametrize("kind", [AIR, MATERIAL])
+def test_a_loop_listed_first_at_the_wall_s_top_left_corner_goes_through_the_guard(
+    kind: RegionKind, ctx: Context
+) -> None:
+    # The loop tree keeps the input order, so an inner loop listed before its wall and touching
+    # the wall's top-left corner wins Clipper2's tie for the extreme point (spec review,
+    # 2026-10-09): the guard must handle it for both kinds, shrinking and growing.
+    inner = reversed_loop(rounded_box(0.0, 30.0, 20.0, 40.0, 0.0))  # its corner at (0, 40)
+    loops = to_curve_rows([inner, box_loop(0.0, 0.0, 60.0, 40.0)], ctx)
+    region = offset(loops, kind, 3.0, ctx)
+    assert_matches_oracle(loops, kind, 3.0, region, ctx)
+    assert_no_guard_left(loops, region, 3.0)
+
+
+@pytest.mark.req("REQ-OFF-018", "REQ-OFF-023")
+def test_the_span_check_counts_the_guard(ctx: Context) -> None:
+    # A tall part grown by 10: 6680 + 2·10 mm fits the 6711 mm limit, but with a hole holding the
+    # extreme point the guard above it adds about 3·|δ| more, and the call is refused.
+    plain = to_curve_rows([box_loop(0.0, 0.0, 10.0, 6680.0)], ctx)
+    assert offset_region(plain, MATERIAL, 10.0, classes(plain), ctx).ok
+    hole = reversed_loop(rounded_box(0.0, 6670.0, 5.0, 6680.0, 0.0))
+    guarded = to_curve_rows([hole, box_loop(0.0, 0.0, 10.0, 6680.0)], ctx)
+    result = offset_region(guarded, MATERIAL, 10.0, classes(guarded), ctx)
     assert result.value is None
-    assert codes(result)[-1] == "OFFSET_FAILED"
+    assert codes(result) == ["REGION_TOO_LARGE"]
 
 
 @pytest.mark.req("REQ-OFF-020")
@@ -278,15 +342,19 @@ def test_a_kind_that_is_not_a_region_kind_is_refused(ctx: Context) -> None:
 
 @pytest.mark.req("REQ-OFF-014")
 def test_a_failed_offset_logs_its_kernel_input_for_replay(
-    ctx: Context, caplog: pytest.LogCaptureFixture
+    ctx: Context, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    loops = to_curve_rows(
-        [circle(0.0, 0.0, 20.0, 0.3, 1), reversed_loop(circle(0.0, 15.0, 5.0, 0.3, 1))], ctx
-    )
+    # With the guard, no input of offset_region is known to fail, so the kernel is replaced by one
+    # that reports a failure (status 2); everything around it runs as usual.
+    def failing(*_: object) -> tuple[int, int, int]:
+        return (2, 0, 0)
+
+    monkeypatch.setattr(_kernels.offset2d, "offset_loops", failing)
+    loops = to_curve_rows([box_loop(0.0, 0.0, 10.0, 10.0)], ctx)
     with caplog.at_level(logging.ERROR, logger=ctx.logger.name):
-        offset_region(loops, AIR, 2.0, classes(loops), ctx)
-    message = caplog.records[-1].getMessage()
-    dump = json.loads(message.split("replay: ", 1)[1])
+        result = offset_region(loops, AIR, 2.0, classes(loops), ctx)
+    assert codes(result) == ["OFFSET_FAILED"]
+    dump = json.loads(caplog.records[-1].getMessage().split("replay: ", 1)[1])
     keys = {"points", "loop_starts", "source_ids", "delta_mm", "arc_tol_mm", "grid_unit_mm"}
     assert keys <= set(dump)
     assert dump["delta_mm"] < 0.0  # air shrinks
