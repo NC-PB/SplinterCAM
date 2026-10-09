@@ -24,8 +24,9 @@ from splintercam.offset2d import EdgeClass, SourceClasses, grow_chain
 
 NAN = math.nan
 LINE = [[0.0, 0.0, 100.0, 0.0, NAN, NAN, 0.0]]
+# A CCW arc: its flattening is inscribed on the left.
 WITH_ARC = [[0.0, 0.0, 20.0, 0.0, NAN, NAN, 0.0], [20.0, 0.0, 30.0, 10.0, 20.0, 10.0, math.pi / 2],
-            [30.0, 10.0, 30.0, 30.0, NAN, NAN, 0.0]]  # fmt: skip  # a CCW arc: inscribed on the left
+            [30.0, 10.0, 30.0, 30.0, NAN, NAN, 0.0]]  # fmt: skip
 WITH_CW_ARC = [[0.0, 0.0, 20.0, 0.0, NAN, NAN, 0.0],
                [20.0, 0.0, 30.0, -10.0, 20.0, -10.0, -math.pi / 2],
                [30.0, -10.0, 30.0, -30.0, NAN, NAN, 0.0]]  # fmt: skip  # CW: circumscribed
