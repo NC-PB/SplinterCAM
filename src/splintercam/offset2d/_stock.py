@@ -21,12 +21,9 @@ from splintercam.geometry2d import (
 )
 
 from ._boolean import BooleanOp, clip
-from ._chain import grow_flat_chains
+from ._chain import flat_chain, grow_flat_chains
 from ._classes import SourceClasses, check_classes
-from ._results import (
-    MARGIN_GRID_UNITS,
-    outcome,
-)
+from ._results import MARGIN_GRID_UNITS, check_arc_tol, outcome
 
 Chain = tuple[NDArray[np.float64], NDArray[np.int64]]  # the rows and IDs of one centre path
 
@@ -48,6 +45,7 @@ def machined_area(
     if not (math.isfinite(tool_radius_mm) and tool_radius_mm > least):
         raise ValueError(f"the tool radius must be finite and > {least} mm, got {tool_radius_mm!r}")
     check_classes(classes, np.concatenate([ids for _, ids in paths] or [np.empty(0, np.int64)]))
+    check_arc_tol(ctx)
     if ctx.cancel.is_cancelled:
         return Result(None, (CANCELLED,))
     flat: list[tuple[NDArray[np.float64], NDArray[np.int64]]] = []
@@ -57,7 +55,7 @@ def machined_area(
         diagnostics += chain.diagnostics
         if chain.value is None:
             return Result(None, tuple(diagnostics))
-        flat.append((chain.value.points, chain.value.source_ids))
+        flat.append(flat_chain(chain.value.points, chain.value.source_ids, ids))
     delta = tool_radius_mm - m_mm
     status, region = grow_flat_chains(flat, delta, delta + margin_mm, classes, ctx)
 

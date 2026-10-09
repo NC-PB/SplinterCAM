@@ -9,7 +9,7 @@ from numpy.typing import NDArray
 
 from splintercam import _kernels
 from splintercam.foundation import CANCELLED, Context, Diagnostic, Result, Severity
-from splintercam.geometry2d import AirSide, PolygonRegion, build_chain
+from splintercam.geometry2d import AirSide, PolygonRegion, build_chain, orient2d
 
 from ._classes import SourceClasses, check_classes
 from ._results import (
@@ -17,6 +17,7 @@ from ._results import (
     JOIN_STEPS_MAX,
     MARGIN_GRID_UNITS,
     MAX_SPAN_GRID_UNITS,
+    check_arc_tol,
     outcome,
     run_kernel,
     vertex_classes,
@@ -39,13 +40,14 @@ def grow_chain(
     if not (math.isfinite(clearance_mm) and clearance_mm > 0.0):
         raise ValueError(f"the clearance must be finite and > 0, got {clearance_mm!r}")
     check_classes(classes, np.asarray(ids, dtype=np.int64))
+    check_arc_tol(ctx)
     if ctx.cancel.is_cancelled:
         return Result(None, (CANCELLED,))
     chain = build_chain(rows, ids, AirSide.LEFT, ctx)  # either side: δ adds t_flat
     if chain.value is None:
         return Result(None, chain.diagnostics)
     points = chain.value.points
-    if points.shape[0] > 1 and bool(np.all(points[0] == points[-1])):  # bit for bit (DEC-OFF-017)
+    if closes(points):
         message = "the chain closes: a loop goes through offset_region"
         return Result(
             None, (*chain.diagnostics, Diagnostic("CHAIN_CLOSED", Severity.ERROR, message))
@@ -55,7 +57,7 @@ def grow_chain(
     # The boundary lies within [t, t + t_flat + a + 6u] of the flattened chain, δ + 3u at most, so
     # δ plus the rounding margin reaches the source edge of every output edge's middle.
     reach = delta + MARGIN_GRID_UNITS * tol.grid_unit_mm
-    flat = [(points, chain.value.source_ids)]
+    flat = [flat_chain(points, chain.value.source_ids, np.asarray(ids, dtype=np.int64))]
     status, region = grow_flat_chains(flat, delta, reach, classes, ctx)
 
     def dump() -> dict[str, object]:
@@ -63,6 +65,30 @@ def grow_chain(
                 "grid_unit_mm": tol.grid_unit_mm}  # fmt: skip
 
     return outcome(status, region, dump, list(chain.diagnostics), ctx)
+
+
+def closes(points: NDArray[np.float64]) -> bool:
+    """Whether a flattened chain is a loop: its ends meet and it encloses an area, so its points
+    are not all on one line (geometry2d's exact `orient2d`). A chain out and back (A to B to A)
+    or of zero length is open (DEC-OFF-017)."""
+    if points.shape[0] < 3 or not bool(np.all(points[0] == points[-1])):
+        return False
+    other = np.flatnonzero(np.any(points != points[0], axis=1))
+    if other.size == 0:
+        return False
+    n = points.shape[0]
+    first, second = np.repeat(points[:1], n, axis=0), np.repeat(points[other[:1]], n, axis=0)
+    return bool(np.any(orient2d(first, second, points) != 0))
+
+
+def flat_chain(
+    points: NDArray[np.float64], source_ids: NDArray[np.int64], row_ids: NDArray[np.int64]
+) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
+    """A flattened chain for `grow_flat_chains`; a chain of zero length (a plunge seen from above,
+    a single point) becomes a segment of length 0 with its row's ID, which grows into a disc."""
+    if points.shape[0] == 1:
+        return np.vstack([points, points]), row_ids[:1].astype(np.int64)
+    return points, source_ids
 
 
 def grow_flat_chains(

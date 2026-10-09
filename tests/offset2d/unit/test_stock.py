@@ -256,3 +256,15 @@ def test_a_raw_layer_with_a_hole_keeps_it(ctx: Context) -> None:
     layer = stock_layer(raw, [], classes_for(raw.ids), ctx).value
     assert layer is not None
     assert layer.loop_starts.size == 2
+
+
+@pytest.mark.req("REQ-OFF-032")
+def test_a_plunge_machines_a_disc(ctx: Context) -> None:
+    # A drilling cycle's feed moves seen from above are a point (DEC-OFF-016): the machined area
+    # is the disc of radius R - m about it, never larger than R.
+    plunge = chain([[30.0, 20.0, 30.0, 20.0, NAN, NAN, 0.0]], 500)
+    result = machined_area([plunge], 4.0, classes_for(plunge[1]), ctx)
+    assert result.value is not None, result.diagnostics
+    d = np.hypot(result.value.points[:, 0] - 30.0, result.value.points[:, 1] - 20.0)
+    assert d.max() <= 4.0 - 3.0 * ctx.tolerances.grid_unit_mm
+    assert set(result.value.source_ids.tolist()) == {500}

@@ -25,7 +25,10 @@ from splintercam.offset2d import EdgeClass, SourceClasses, grow_chain
 NAN = math.nan
 LINE = [[0.0, 0.0, 100.0, 0.0, NAN, NAN, 0.0]]
 WITH_ARC = [[0.0, 0.0, 20.0, 0.0, NAN, NAN, 0.0], [20.0, 0.0, 30.0, 10.0, 20.0, 10.0, math.pi / 2],
-            [30.0, 10.0, 30.0, 30.0, NAN, NAN, 0.0]]  # fmt: skip
+            [30.0, 10.0, 30.0, 30.0, NAN, NAN, 0.0]]  # fmt: skip  # a CCW arc: inscribed on the left
+WITH_CW_ARC = [[0.0, 0.0, 20.0, 0.0, NAN, NAN, 0.0],
+               [20.0, 0.0, 30.0, -10.0, 20.0, -10.0, -math.pi / 2],
+               [30.0, -10.0, 30.0, -30.0, NAN, NAN, 0.0]]  # fmt: skip  # CW: circumscribed
 
 
 def rows_ids(rows: list[list[float]]) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
@@ -72,19 +75,25 @@ def test_a_straight_rapid_grows_into_its_stadium(ctx: Context) -> None:
 
 @pytest.mark.req("REQ-OFF-027")
 @pytest.mark.parametrize("t_mm", [0.5, 6.0])
-def test_every_point_within_t_of_a_chain_with_an_arc_is_inside(t_mm: float, ctx: Context) -> None:
-    # REQ-OFF-027: the flattening of the arc lies up to t_flat inside it on one side; δ adds t_flat,
-    # so every point within t of the true chain lies in the result, on both sides of the arc.
-    region = grown(WITH_ARC, t_mm, ctx)
-    chain = CurveRows(*rows_ids(WITH_ARC), np.array([0]))
-    rng = np.random.default_rng(13)
-    points = rng.uniform((-t_mm - 1.0, -t_mm - 1.0), (31.0 + t_mm, 31.0 + t_mm), size=(40_000, 2))
-    d = distance_to_curves(points, chain)
-    near = points[d <= t_mm - 1e-9]  # within t, but for the oracle's own error
+@pytest.mark.parametrize("rows", [WITH_ARC, WITH_CW_ARC], ids=["ccw", "cw"])
+def test_every_point_within_t_of_a_chain_with_an_arc_is_inside(
+    rows: list[list[float]], t_mm: float, ctx: Context
+) -> None:
+    # REQ-OFF-027: the flattening of the arc lies up to t_flat off it on one side; δ adds t_flat,
+    # so every point within t of the true chain lies in the result, on both sides of the arc. The
+    # points are drawn near the edge of the sweep, within a few t_flat inside t, where it shows.
+    region = grown(rows, t_mm, ctx)
+    chain = CurveRows(*rows_ids(rows), np.array([0]))
+    corners = np.array(rows)[:, 0:4].reshape(-1, 2)
+    low, high = corners.min(axis=0) - t_mm - 1.0, corners.max(axis=0) + t_mm + 1.0
+    candidates = np.random.default_rng(13).uniform(low, high, size=(400_000, 2))
+    d = distance_to_curves(candidates, chain)
+    near = candidates[(d <= t_mm - 1e-9) & (d > t_mm - 4.0 * ctx.tolerances.flatten_tol_mm)]
+    assert near.shape[0] > 20  # the strip is a few t_flat wide: a few dozen points
     located = point_in_region(near, polygon_rows(region.points, region.loop_starts), ctx)
     assert (located == PointLocation.IN).all()
     # The band [t, t + t_flat + a + 6u] is measured from the flattened chain (REQ-OFF-027).
-    flat = build_chain(*rows_ids(WITH_ARC), AirSide.LEFT, ctx).value
+    flat = build_chain(*rows_ids(rows), AirSide.LEFT, ctx).value
     assert flat is not None
     lines = np.full((flat.points.shape[0] - 1, 3), [NAN, NAN, 0.0])  # cx, cy, sweep of a line
     flat_rows = np.column_stack([flat.points[:-1], flat.points[1:], lines])
@@ -92,6 +101,20 @@ def test_every_point_within_t_of_a_chain_with_an_arc_is_inside(t_mm: float, ctx:
     vertices = distance_to_curves(region.points, flat_chain)
     assert vertices.min() >= t_mm
     assert vertices.max() <= band_top(t_mm, ctx)
+
+
+@pytest.mark.req("REQ-OFF-027", "REQ-OFF-029")
+def test_a_chain_out_and_back_is_open_and_a_point_grows_into_a_disc(ctx: Context) -> None:
+    # DEC-OFF-017: a chain whose ends meet but which encloses no area (out and back) is open;
+    # a chain of zero length (a vertical rapid seen from above) grows into a disc of radius t.
+    out_back = [[0.0, 0.0, 10.0, 0.0, NAN, NAN, 0.0], [10.0, 0.0, 0.0, 0.0, NAN, NAN, 0.0]]
+    stadium = grown(out_back, 2.0, ctx)
+    assert stadium.loop_starts.size == 1
+    assert area(stadium) >= 40.0 + 4.0 * math.pi
+    disc = grown([[5.0, 5.0, 5.0, 5.0, NAN, NAN, 0.0]], 2.0, ctx)
+    assert disc.loop_starts.size == 1
+    assert 4.0 * math.pi <= area(disc) <= math.pi * band_top(2.0, ctx) ** 2
+    assert set(disc.source_ids.tolist()) == {100}
 
 
 @pytest.mark.req("REQ-OFF-029")
