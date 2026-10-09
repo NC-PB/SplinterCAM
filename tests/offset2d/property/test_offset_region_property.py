@@ -8,7 +8,7 @@ import os
 
 import numpy as np
 import pytest
-from hypothesis import HealthCheck, given, settings
+from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 
 from geometry2d_checks import codes
@@ -123,3 +123,36 @@ def test_points_outside_the_band_are_classified_as_the_definition_says(
     # the independent oracle. Points outside the band lie far from the result's boundary.
     located = point_in_region(points, polygon_rows(region.points, region.loop_starts), ctx)
     assert np.array_equal(located == PointLocation.IN, expected)
+
+
+@pytest.mark.req("REQ-OFF-010")
+@settings(
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+    deadline=None,
+    max_examples=EXAMPLES,
+)
+@given(case=cases, t_mm=st.floats(0.1, 50.0), tol_mm=st.sampled_from(TOLERANCES_MM))
+def test_a_translated_region_gives_the_translated_result(
+    ctx: Context, case: RegionCase, t_mm: float, tol_mm: float
+) -> None:
+    """Research 02, test 17: moved by (10 000, -10 000) mm and back, the same topology and every
+    vertex within 3u of the other result's boundary, except near a critical distance, where the
+    grid decides the topology (REQ-OFF-026). Measured to the boundary, not vertex to vertex: a
+    round join's steps start where the rounded corner puts them, so the two results can hold a
+    different number of join vertices (DEC-OFF-013)."""
+    ctx = _with_tol(ctx, tol_mm)
+    shift = np.array([10_000.0, -10_000.0])
+    moved_loops = [
+        [[r[0] + shift[0], r[1] + shift[1], r[2] + shift[0], r[3] + shift[1],
+          r[4] + shift[0], r[5] + shift[1], r[6]] for r in loop]
+        for loop in case.loops
+    ]  # fmt: skip
+    _, here = _offset(case, t_mm, ctx)
+    _, there = _offset(RegionCase(moved_loops, case.kind), t_mm, ctx)
+    assume(here.loop_starts.size == there.loop_starts.size)  # else near a critical distance
+    if here.points.shape[0] == 0:
+        return
+    back = there.points - shift
+    limit = 3.0 * ctx.tolerances.grid_unit_mm
+    assert distance_to_curves(here.points, polygon_rows(back, there.loop_starts)).max() <= limit
+    assert distance_to_curves(back, polygon_rows(here.points, here.loop_starts)).max() <= limit

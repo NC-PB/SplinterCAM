@@ -25,6 +25,7 @@ using CountsOut = nb::ndarray<std::int64_t, nb::shape<-1>, nb::c_contig, nb::dev
 using FlagsOut = nb::ndarray<std::uint8_t, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
 using Triple = std::array<double, 3>;
 using Quad = std::array<double, 4>;
+using Classes = nb::ndarray<const std::int8_t, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
 
 template <typename Array> auto view(const Array& array) {
     return std::span{array.data(), array.size()};
@@ -59,25 +60,29 @@ void bind(nb::module_& m) {
     m.def(
         "offset_loops",
         [](const PointRows& points, const Counts& loop_starts, const Counts& source_ids,
-           const Quad& offset, const Triple& grid, const PointsOut& points_out,
-           const CountsOut& starts_out, const CountsOut& ids_out, const FlagsOut& fixed_out) {
+           const Classes& classes, const Quad& offset, const Quad& grid,
+           const PointsOut& points_out, const CountsOut& starts_out, const CountsOut& ids_out,
+           const FlagsOut& fixed_out) {
             const geometry2d::Polylines loops =
                 checked_loops(points, loop_starts, source_ids.shape(0));
             const auto [delta, arc_tol, bias, margin] = offset;
-            const auto [u, span, steps] = grid;
+            const auto [u, span, steps, eps] = grid;
             if (!finite(offset) || std::abs(delta) <= arc_tol || !(arc_tol > 0.0) || !(u > 0.0) ||
-                !(span > 0.0) || !(steps > 0.0) || !finite(grid)) {
-                throw nb::value_error("|delta| > arc_tol > 0, and u, span, steps finite and > 0");
+                !(span > 0.0) || !(steps > 0.0) || !(eps >= 0.0) || !finite(grid) ||
+                classes.shape(0) != source_ids.shape(0)) {
+                throw nb::value_error(
+                    "|delta| > arc_tol > 0; u, span, steps > 0; eps >= 0; one class per vertex");
             }
             geometry2d::GridRegion region;
             {
                 const nb::gil_scoped_release unlocked;
-                region = offset_loops({.loops = loops, .source_ids = view(source_ids)},
-                                      {.delta = delta,
-                                       .arc_tol = arc_tol,
-                                       .bias_units = bias,
-                                       .margin_units = margin},
-                                      {.u = u, .max_span_units = span, .join_steps_max = steps});
+                region = offset_loops(
+                    {.loops = loops, .source_ids = view(source_ids), .classes = view(classes)},
+                    {.delta = delta,
+                     .arc_tol = arc_tol,
+                     .bias_units = bias,
+                     .margin_units = margin},
+                    {.u = u, .max_span_units = span, .join_steps_max = steps, .eps_len = eps});
             }
             for (std::size_t i = 0; i < std::min(region.points.size(), points_out.shape(0)); ++i) {
                 points_out(i, 0) = std::get<0>(region.points.at(i));
@@ -89,13 +94,13 @@ void bind(nb::module_& m) {
             return std::tuple{static_cast<int>(region.status), region.points.size(),
                               region.starts.size()};
         },
-        nb::arg("points"), nb::arg("loop_starts"), nb::arg("source_ids"), nb::arg("offset"),
-        nb::arg("grid"), nb::arg("points_out"), nb::arg("starts_out"), nb::arg("ids_out"),
-        nb::arg("fixed_out"),
+        nb::arg("points"), nb::arg("loop_starts"), nb::arg("source_ids"), nb::arg("classes"),
+        nb::arg("offset"), nb::arg("grid"), nb::arg("points_out"), nb::arg("starts_out"),
+        nb::arg("ids_out"), nb::arg("fixed_out"),
         "Offset flattened, normalised loops in one Clipper2 call (offset = delta, a in mm, the "
         "bias and the rounding margin in grid units; grid = u, the span limit, the join step "
-        "limit); return (status, "
-        "points, loops), the counts it needed.");
+        "limit, eps_len; classes per vertex as D-059 orders them); return (status, points, "
+        "loops), the counts it needed.");
 }
 
 } // namespace splintercam::offset2d

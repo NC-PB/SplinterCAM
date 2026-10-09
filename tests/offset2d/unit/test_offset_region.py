@@ -222,8 +222,9 @@ def test_a_join_needing_more_steps_than_the_limit_fails(ctx: Context) -> None:
     room = 64
     out = (np.empty((room, 2)), np.empty(room, np.int64), np.empty(room, np.int64))
     status = _kernels.offset2d.offset_loops(
-        square, np.array([0], np.int64), np.arange(4, dtype=np.int64),
-        (5.0 + a + 3 * u, a, 3.0, 6.0), (u, 2.0**26, 8.0), *out, np.empty(room, np.uint8),
+        square, np.array([0], np.int64), np.arange(4, dtype=np.int64), np.zeros(4, np.int8),
+        (5.0 + a + 3 * u, a, 3.0, 6.0), (u, 2.0**26, 8.0, ctx.tolerances.length_eps_mm),
+        *out, np.empty(room, np.uint8),
     )[0]  # fmt: skip
     assert status == 2  # failed: 8 steps per turn are fewer than a round join needs
 
@@ -367,3 +368,59 @@ def test_a_failed_offset_logs_its_kernel_input_for_replay(
     keys = {"points", "loop_starts", "source_ids", "delta_mm", "arc_tol_mm", "grid_unit_mm"}
     assert keys <= set(dump)
     assert dump["delta_mm"] < 0.0  # air shrinks
+
+
+@pytest.mark.req("REQ-OFF-034")
+def test_edges_carry_their_source_ids_and_ties_go_to_material(ctx: Context) -> None:
+    # Research 02, test 14: a 60 x 40 rectangle of material, its top edge (ID 101) tagged air,
+    # grown by 5. Straight edges carry their own side's ID; the round joins at the top corners
+    # are ties between a side (material) and the top (air), which material wins (D-059); the
+    # bottom joins tie two material edges, which the lower ID wins.
+    loops = to_curve_rows([box_loop(0.0, 0.0, 60.0, 40.0)], ctx)  # IDs 100 right, 101 top, ...
+    assert loops.ids.tolist() == [100, 101, 102, 103]
+    air_top = SourceClasses(
+        np.array([100, 101, 102, 103]),
+        np.array([EdgeClass.MATERIAL, EdgeClass.AIR, EdgeClass.MATERIAL, EdgeClass.MATERIAL],
+                 dtype=np.int8),
+    )  # fmt: skip
+    result = offset_region(loops, MATERIAL, 5.0, air_top, ctx)
+    region = result.value
+    assert region is not None
+    rows = polygon_rows(region.points, region.loop_starts).rows
+    mid_x, mid_y = (rows[:, 0] + rows[:, 2]) / 2.0, (rows[:, 1] + rows[:, 3]) / 2.0
+    expected = np.select(
+        [
+            (mid_y > 40.0) & (mid_x > 60.0),  # top-right join: right (material) vs top (air)
+            (mid_y > 40.0) & (mid_x < 0.0),  # top-left join: top (air) vs left (material)
+            (mid_y < 0.0) & (mid_x < 0.0),  # bottom-left join: left vs bottom, lower ID
+            (mid_y < 0.0) & (mid_x > 60.0),  # bottom-right join: bottom vs right, lower ID
+            mid_y > 40.0,
+            mid_x > 60.0,
+            mid_x < 0.0,
+        ],
+        [100, 102, 102, 100, 101, 100, 102],
+        default=103,
+    )
+    assert region.source_ids.tolist() == expected.tolist()
+
+
+@pytest.mark.req("REQ-OFF-011", "REQ-OFF-038")
+@pytest.mark.parametrize("kind", [AIR, MATERIAL])
+def test_the_same_input_gives_the_same_arrays_in_any_loop_order(
+    kind: RegionKind, ctx: Context
+) -> None:
+    # Research 02, test 19 on one platform: bit for bit, also with the loops given in another
+    # order and turned round (REQ-OFF-038: the order does not follow Clipper2's).
+    wall = rounded_box(0.0, 0.0, 90.0, 60.0, 8.0)
+    islands = [
+        reversed_loop(circle(25.0, 30.0, 6.0, 0.3, 2)),
+        reversed_loop(box_loop(55.0, 20.0, 70.0, 40.0)),
+    ]
+    first = offset(to_curve_rows([wall, *islands], ctx), kind, 2.5, ctx)
+    again = offset(to_curve_rows([wall, *islands], ctx), kind, 2.5, ctx)
+    other = offset(to_curve_rows([islands[1], wall, islands[0]], ctx), kind, 2.5, ctx)
+    for a, b in ((first, again), (first, other)):
+        assert a.points.tobytes() == b.points.tobytes()
+        assert a.loop_starts.tobytes() == b.loop_starts.tobytes()
+        assert a.fixed.tobytes() == b.fixed.tobytes()
+    assert first.source_ids.tobytes() == again.source_ids.tobytes()

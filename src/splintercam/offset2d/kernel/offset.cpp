@@ -116,7 +116,30 @@ bool remove_guard(Clipper2Lib::Paths64& solution, const Guard& guard, double rea
     return removed == (grows ? 1U : 0U);
 }
 
-// The loops back in mm, with the fixed flags and the provisional source IDs (DEC-OFF-009).
+// The source ID of each output edge: among the input edges within eps_len of the one nearest to its
+// middle, the first class (material, cleared, air), then the lowest ID (REQ-OFF-034, D-059);
+// false when no input edge lies within the reach, as the result is then no offset of the input.
+bool assign_ids(std::span<const double> middles, const OffsetInput& input,
+                geometry2d::TieReach reach, std::vector<std::int64_t>& ids) {
+    const std::vector<geometry2d::Tie> ties = geometry2d::nearest_ties(middles, input.loops, reach);
+    const std::size_t count = middles.size() / 2;
+    ids.assign(count, -1);
+    std::vector<std::int8_t> best(count, INT8_MAX);
+    for (const geometry2d::Tie& tie : ties) {
+        const auto point = static_cast<std::size_t>(tie.point);
+        const auto segment = static_cast<std::size_t>(tie.segment);
+        const std::int8_t edge_class = input.classes.subspan(segment, 1).front();
+        const std::int64_t id = input.source_ids.subspan(segment, 1).front();
+        if (std::pair{edge_class, id} < std::pair{best.at(point), ids.at(point)} ||
+            ids.at(point) < 0) {
+            best.at(point) = edge_class;
+            ids.at(point) = id;
+        }
+    }
+    return std::ranges::none_of(ids, [](std::int64_t id) { return id < 0; });
+}
+
+// The loops back in mm, with the fixed flags and the source IDs.
 void fill_region(const std::vector<Clipper2Lib::Path64>& loops, geometry2d::Frame frame,
                  const OffsetInput& input, const OffsetLimits& limits, double id_reach,
                  GridRegion& result) {
@@ -134,16 +157,9 @@ void fill_region(const std::vector<Clipper2Lib::Path64>& loops, geometry2d::Fram
                                            mm(static_cast<double>(p.y + q.y) / 2, frame.cy)});
         }
     }
-    std::vector<std::int64_t> nearest(result.points.size());
-    geometry2d::nearest_segments(middles, input.loops, id_reach, nearest);
-    for (const std::int64_t segment : nearest) {
-        if (segment < 0) { // no input edge within the band: the result is not an offset of it
-            result = GridRegion{};
-            result.status = GridStatus::failed;
-            return;
-        }
-        result.ids.push_back(
-            input.source_ids.subspan(static_cast<std::size_t>(segment), 1).front());
+    if (!assign_ids(middles, input, {.limit = id_reach, .eps = limits.eps_len}, result.ids)) {
+        result = GridRegion{};
+        result.status = GridStatus::failed;
     }
 }
 
@@ -201,6 +217,9 @@ GridRegion offset_loops(const OffsetInput& input, OffsetParams params, OffsetLim
     for (const Clipper2Lib::Path64& path : solution) {
         geometry2d::split_pinches(path, loops);
     }
+    // A piece of area 0 (a path that runs out and back) is no region (REQ-OFF-037).
+    std::erase_if(loops,
+                  [](const Clipper2Lib::Path64& loop) { return Clipper2Lib::Area(loop) == 0.0; });
     geometry2d::canonical(loops);
     // Every output edge lies in the band [t, t + a + 2·bias·u] of the input, so |δ| + bias·u
     // reaches its source edge (REQ-OFF-025, DEC-OFF-009).

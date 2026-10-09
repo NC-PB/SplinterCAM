@@ -50,7 +50,7 @@ def offset_region(
     gives `build_region`'s region. The loop tree's and the clean-up's diagnostics are passed on.
 
     Implements: REQ-OFF-013, REQ-OFF-014, REQ-OFF-018, REQ-OFF-020 to 022, REQ-OFF-024 to 026,
-    REQ-OFF-039 to 043; REQ-OFF-034 provisionally (the lower index on a tie, DEC-OFF-009).
+    REQ-OFF-034, REQ-OFF-039 to 043.
     """
     _check_arguments(loops, kind, clearance_mm, classes, ctx)
     if ctx.cancel.is_cancelled:
@@ -77,7 +77,8 @@ def offset_region(
     elif ctx.cancel.is_cancelled:
         return Result(None, (*diagnostics, CANCELLED))
     else:
-        status, region = _kernel_offset(flat, delta, ctx)
+        per_vertex = classes.classes[np.searchsorted(classes.ids, flat.source_ids)]
+        status, region = _kernel_offset(flat, per_vertex.astype(np.int8), delta, ctx)
     return _outcome(status, region, (flat, delta), diagnostics, ctx)
 
 
@@ -137,11 +138,11 @@ def _cleaned(region: PolygonRegion, ctx: Context) -> tuple[PolygonRegion, list[D
 
 
 def _kernel_offset(
-    flat: PolygonRegion, delta: float, ctx: Context
+    flat: PolygonRegion, vertex_classes: NDArray[np.int8], delta: float, ctx: Context
 ) -> tuple[int, PolygonRegion | None]:
     tol = ctx.tolerances
     offset = (delta, tol.arc_tol_mm, _BIAS_GRID_UNITS, _MARGIN_GRID_UNITS)
-    grid = (tol.grid_unit_mm, _MAX_SPAN_GRID_UNITS, _JOIN_STEPS_MAX)
+    grid = (tol.grid_unit_mm, _MAX_SPAN_GRID_UNITS, _JOIN_STEPS_MAX, tol.length_eps_mm)
     # Room for the round joins: π / acos(1 - a/|δ|) steps per turn (Clipper2's DoRound), a turn
     # per loop at least; the kernel says when it needed more, and runs again.
     steps = math.pi / math.acos(1.0 - tol.arc_tol_mm / abs(delta))
@@ -150,7 +151,7 @@ def _kernel_offset(
         points, starts = np.empty((room, 2)), np.empty(room, dtype=np.int64)
         ids, fixed = np.empty(room, dtype=np.int64), np.empty(room, dtype=np.uint8)
         status, n_points, n_loops = _kernels.offset2d.offset_loops(
-            flat.points, flat.loop_starts, flat.source_ids, offset, grid,
+            flat.points, flat.loop_starts, flat.source_ids, vertex_classes, offset, grid,
             points, starts, ids, fixed,
         )  # fmt: skip
         if max(n_points, n_loops) <= room:

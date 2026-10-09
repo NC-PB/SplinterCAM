@@ -21,4 +21,5 @@ Layer 1. Implements docs/research/02 (plan 0005, `docs/plans/active/0005-offset2
 ## Known pitfalls
 
 - Clipper2's `ClipperOffset` guesses the orientation from the path holding the extreme point; a hole holding it inverts the whole offset, and a shrink then comes back empty, which no area check sees. The guard triangle of DEC-OFF-011 takes the extreme point; the loop tree keeps the input order, so never assume outer loops come first.
-- Source IDs come from `nearest_segments` (lower index on a tie) until step 6 applies the class tie of REQ-OFF-034 (DEC-OFF-009).
+- Source IDs: the class tie of REQ-OFF-034 over `nearest_ties` (DEC-OFF-013); segment order is not source-ID order, so never take the first candidate.
+- Round joins do not keep their vertices under translation or a changed rounding: compare offsets as boundaries, not vertex to vertex (DEC-OFF-013).
