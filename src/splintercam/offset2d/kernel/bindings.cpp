@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Python bindings of the offset2d kernel (docs/dev/03: arrays and plain values only). Outputs are
 // arrays the Python side allocates and passes in, so no kernel code owns Python memory.
+#include "boolean.hpp"
 #include "offset.hpp"
 
 #include <algorithm>
@@ -82,6 +83,41 @@ IdSource id_source(const PointRows& points, const Counts& starts, const Counts& 
             .classes = view(classes)};
 }
 
+void bind_clip(nb::module_& m) {
+    m.def(
+        "clip_regions",
+        [](const PointRows& subject, const Counts& subject_starts, const PointRows& clip,
+           const Counts& clip_starts, const PointRows& id_points, const Counts& id_starts,
+           const Counts& source_ids, const Classes& classes, int op, const Quad& grid,
+           const PointsOut& points_out, const CountsOut& starts_out, const CountsOut& ids_out,
+           const FlagsOut& fixed_out) {
+            const auto [u, span, eps, reach] = grid;
+            if (op < 0 || op > 2 || !finite(grid) || !(u > 0.0) || !(span > 0.0) || !(eps >= 0.0) ||
+                !(reach > 0.0)) {
+                throw nb::value_error("op 0 to 2; u, span, reach > 0; eps >= 0");
+            }
+            const ClipInput input{.subject =
+                                      checked_loops(subject, subject_starts, subject.shape(0)),
+                                  .clip = checked_loops(clip, clip_starts, clip.shape(0)),
+                                  .ids = id_source(id_points, id_starts, source_ids, classes)};
+            geometry2d::GridRegion region;
+            {
+                const nb::gil_scoped_release unlocked;
+                region =
+                    clip_regions(input, static_cast<ClipOp>(op), {.u = u, .max_span_units = span},
+                                 {.limit = reach, .eps = eps});
+            }
+            return write_region(region, std::tie(points_out, starts_out, ids_out, fixed_out));
+        },
+        nb::arg("subject"), nb::arg("subject_starts"), nb::arg("clip"), nb::arg("clip_starts"),
+        nb::arg("id_points"), nb::arg("id_starts"), nb::arg("source_ids"), nb::arg("classes"),
+        nb::arg("op"), nb::arg("grid"), nb::arg("points_out"), nb::arg("starts_out"),
+        nb::arg("ids_out"), nb::arg("fixed_out"),
+        "The union (0), difference (1) or intersection (2) of closed loops in one Clipper2 call "
+        "(grid = u, the span limit, the tie window, the reach of the source IDs); return (status, "
+        "points, loops), the counts it needed.");
+}
+
 } // namespace
 
 void bind(nb::module_& m) {
@@ -119,6 +155,7 @@ void bind(nb::module_& m) {
         "bias and the rounding margin in grid units; grid = u, the span limit, the join step "
         "limit, eps_len; classes per vertex as D-059 orders them); return (status, points, "
         "loops), the counts it needed.");
+    bind_clip(m);
 }
 
 } // namespace splintercam::offset2d
