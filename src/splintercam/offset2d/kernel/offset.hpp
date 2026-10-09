@@ -20,20 +20,25 @@ struct OffsetParams {
     double margin_units;
 };
 
-// The grid unit u in mm, the span limit and the most steps per turn a round join may take.
+// The grid unit u in mm, the span limit, the most steps per turn a round join may take, and
+// eps_len in mm, within which two input edges are equally near (REQ-OFF-034).
 struct OffsetLimits {
     double u;
     double max_span_units;
     double join_steps_max;
+    double eps_len;
 };
 
 struct OffsetInput {
-    geometry2d::Polylines loops; // side-correct flattened and normalised (REQ-OFF-021)
-    std::span<const std::int64_t> source_ids;
+    geometry2d::Polylines
+        loops; // side-correct flattened, normalised and cleaned (REQ-OFF-021, 043)
+    geometry2d::Polylines id_loops; // the same before the clean-up: the input edges of the IDs
+    std::span<const std::int64_t> source_ids; // per vertex of id_loops
+    std::span<const std::int8_t> classes;     // likewise: material 0, cleared 1, air 2 (D-059)
 };
 
-// The offset region, or too_large (REQ-OFF-018) or failed (REQ-OFF-014, DEC-OFF-008); IDs
-// provisional (DEC-OFF-009). No exception leaves it.
+// The offset region, or too_large (REQ-OFF-018) or failed (REQ-OFF-014, DEC-OFF-008). No exception
+// leaves it.
 [[nodiscard]] geometry2d::GridRegion offset_loops(const OffsetInput& input, OffsetParams params,
                                                   OffsetLimits limits);
 

@@ -21,3 +21,13 @@
 - What is known: `docs/research/02-offsets-and-booleans.md`, Booleans, shrinks the machined area by 3u before the difference. But the shrink is itself a Clipper2 call on an already rounded region, against "offsets are never chained" (same section, D-132), and each of the two calls moves points by up to 2.83u in no fixed direction (SRC-118), so 3u does not cover both. Options seen: a larger margin (at least about 3u + 2·2.83u); or the machined region built from its source paths, grown by t − margin in one call, so nothing is chained.
 - Provisional choice: none; REQ-OFF-032 stays out of plan 0005's steps until answered. The other Booleans do not depend on it.
 - Status: Answered on 2026-10-09, see `docs/research/02-offsets-and-booleans.md`, Booleans (the stock update) and test 22: no chaining; each operation's machined area from its own centre paths grown by R − (t_flat + 6u) in one call, the stock layer as the raw layer minus all machined areas in one Difference call.
+
+## RR-002: Corrections to research 02 found while building offset2d
+
+- Date: 2026-10-09; raised by: plan 0005, steps 4 to 6
+- Question: please take these into research 02 at its next review, each with its evidence in `src/splintercam/offset2d/DECISIONS.md`: (1) The kernel call, step 3, says normalised loops pass outer loops first, but geometry2d's loop tree keeps the input order, so an inner loop listed first can win Clipper2's tie (DEC-OFF-008, 011); (2) test 17 asks for vertices within 3u, but round joins do not keep their vertices under translation (798 against 796 measured), so the check is every vertex within 3u of the other result's boundary (DEC-OFF-013); (3) test 22's bound on the extra stock leaves out the arc tolerance a of the round joins (DEC-OFF-007); (4) Open chains: the grown path needs t_flat added to δ to cover a flattened arc on both sides (DEC-OFF-005); (5) Source IDs: the nearest input edges are those before any clean-up, which may drop the joint between an arc and its tangent side (DEC-OFF-013).
+- Why it matters: the SPEC already follows the corrected readings; the research text should not lead the next reader back to the old ones.
+- What is known: each item is measured or derived in the DEC entries named.
+- Provisional choice: the SPEC's readings (Peter accepted the deviations of the draft, DEC-OFF-005; the rest are box 2 decisions).
+- Status: Open
+
