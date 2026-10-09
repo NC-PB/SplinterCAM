@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Unit tests of `offset_region` (plan 0005, step 4): research 02's tests 6, 7, 8, 11, 14 and 18,
-the clean-up before the kernel, the diagnostics and refusals, and test 21's shape, which the
-kernel refuses until step 5 adds the orientation guard (DEC-OFF-008)."""
+the clean-up before the kernel, the diagnostics and refusals, and the orientation guard: test 21
+and an inner loop that wins Clipper2's tie for the extreme point (DEC-OFF-011)."""
 
 import json
 import logging
@@ -29,6 +29,8 @@ from splintercam.geometry2d import (
     PolygonRegion,
     RegionKind,
     build_region,
+    flatten_loops,
+    loop_tree,
     point_in_region,
 )
 from splintercam.offset2d import EdgeClass, SourceClasses, offset_region
@@ -221,7 +223,7 @@ def test_a_join_needing_more_steps_than_the_limit_fails(ctx: Context) -> None:
     out = (np.empty((room, 2)), np.empty(room, np.int64), np.empty(room, np.int64))
     status = _kernels.offset2d.offset_loops(
         square, np.array([0], np.int64), np.arange(4, dtype=np.int64),
-        (5.0 + a + 3 * u, a, 3.0), (u, 2.0**26, 8.0), *out, np.empty(room, np.uint8),
+        (5.0 + a + 3 * u, a, 3.0, 6.0), (u, 2.0**26, 8.0), *out, np.empty(room, np.uint8),
     )[0]  # fmt: skip
     assert status == 2  # failed: 8 steps per turn are fewer than a round join needs
 
@@ -248,12 +250,16 @@ def assert_matches_oracle(
     assert np.array_equal(located == PointLocation.IN, in_offset(points, loops, kind, t_mm))
 
 
-def assert_no_guard_left(loops: CurveRows, region: PolygonRegion, t_mm: float) -> None:
-    """No loop lies above the input grown by t: the guard triangle is gone (REQ-OFF-023)."""
-    top = float(np.nanmax(np.concatenate([loops.rows[:, 1], loops.rows[:, 3]])))
-    ends = [*region.loop_starts.tolist()[1:], region.points.shape[0]]
-    for a, b in zip(region.loop_starts.tolist(), ends, strict=True):
-        assert region.points[a:b, 1].min() <= top + t_mm + 1.0
+def assert_no_guard_left(
+    loops: CurveRows, kind: RegionKind, region: PolygonRegion, t_mm: float, ctx: Context
+) -> None:
+    """No point lies above the flattened input's top plus the band's top (REQ-OFF-025), so the
+    guard triangle is gone: grown, its lowest point lies above that line (REQ-OFF-023)."""
+    tree = loop_tree(loops, ctx).value
+    assert tree is not None
+    top = float(flatten_loops(tree, kind, ctx).region.points[:, 1].max())
+    if region.points.shape[0] > 0:
+        assert region.points[:, 1].max() <= top + t_mm + offset_band_mm(ctx.tolerances)
 
 
 @pytest.mark.req("REQ-OFF-023", "REQ-OFF-020")
@@ -268,22 +274,23 @@ def test_an_island_holding_the_extreme_point_is_offset_through_the_guard(ctx: Co
     region = offset(loops, AIR, 2.0, ctx)
     assert region.loop_starts.size >= 1
     assert_matches_oracle(loops, AIR, 2.0, region, ctx)
-    assert_no_guard_left(loops, region, 2.0)
+    assert_no_guard_left(loops, AIR, region, 2.0, ctx)
 
 
 @pytest.mark.req("REQ-OFF-023", "REQ-OFF-020")
 @pytest.mark.parametrize("kind", [AIR, MATERIAL])
+@pytest.mark.parametrize("t_mm", [0.5, 3.0, 9.0])
 def test_a_loop_listed_first_at_the_wall_s_top_left_corner_goes_through_the_guard(
-    kind: RegionKind, ctx: Context
+    kind: RegionKind, t_mm: float, ctx: Context
 ) -> None:
     # The loop tree keeps the input order, so an inner loop listed before its wall and touching
     # the wall's top-left corner wins Clipper2's tie for the extreme point (spec review,
     # 2026-10-09): the guard must handle it for both kinds, shrinking and growing.
     inner = reversed_loop(rounded_box(0.0, 30.0, 20.0, 40.0, 0.0))  # its corner at (0, 40)
     loops = to_curve_rows([inner, box_loop(0.0, 0.0, 60.0, 40.0)], ctx)
-    region = offset(loops, kind, 3.0, ctx)
-    assert_matches_oracle(loops, kind, 3.0, region, ctx)
-    assert_no_guard_left(loops, region, 3.0)
+    region = offset(loops, kind, t_mm, ctx)
+    assert_matches_oracle(loops, kind, t_mm, region, ctx)
+    assert_no_guard_left(loops, kind, region, t_mm, ctx)
 
 
 @pytest.mark.req("REQ-OFF-018", "REQ-OFF-023")
@@ -297,6 +304,8 @@ def test_the_span_check_counts_the_guard(ctx: Context) -> None:
     result = offset_region(guarded, MATERIAL, 10.0, classes(guarded), ctx)
     assert result.value is None
     assert codes(result) == ["REGION_TOO_LARGE"]
+    # Grown by 5 the guard still fits: 6680 + 2·5 for the offset, about 3·5 + 1 for the guard.
+    assert offset_region(guarded, MATERIAL, 5.0, classes(guarded), ctx).ok
 
 
 @pytest.mark.req("REQ-OFF-020")

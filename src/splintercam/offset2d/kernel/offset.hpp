@@ -11,11 +11,13 @@
 
 namespace splintercam::offset2d {
 
-// delta = ±(t + a + bias·u) in mm, negative to shrink; arc_tol = a in mm; bias in grid units.
+// delta = ±(t + a + bias·u) in mm, negative to shrink; arc_tol = a in mm; the bias and the rounding
+// margin (twice Clipper2's 2.83 grid units, rounded up; D-132) in grid units.
 struct OffsetParams {
     double delta;
     double arc_tol;
     double bias_units;
+    double margin_units;
 };
 
 // The grid unit u in mm, the span limit and the most steps per turn a round join may take.

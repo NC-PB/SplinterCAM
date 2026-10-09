@@ -60,6 +60,7 @@ Total: about 1230 added lines of code (about 1050 NLOC) and 2080 of tests, in ni
 ### 2026-10-09, step 5 (the orientation guard)
 
 - The guard triangle of research 02, step 3 (REQ-OFF-023, DEC-OFF-011) replaces step 4's refusal: test 21 now matches the offset oracle with the guard gone, and the corner case (an inner loop listed first at its wall's top-left corner, which wins Clipper2's tie because the loop tree keeps the input order) works for air and material; the span check counts the guard. The property tests take the touching island again (test 9 and 10 on every generator).
+- Reviews: spec-reviewer (the geometry holds: Clipper2's rule, the shrink always removes the guard, the grown guard stays apart, no overflow). Fixed: the test of a leftover guard could not fail (now the band's top above the flattened input; a leftover guard fails four tests by mutation); exactly one loop removed when growing, none when shrinking (ours); the gap from the declared rounding margin, not the bias; a check that the guard holds the extreme point. Test audit: the test 21 swap is a reversal the SPEC makes, not a weakening; the replay log through a simulated kernel failure; guard sizes 0.5, 3 and 9 mm; a guard just under the span limit accepted. Open for Peter: REQ-OFF-018's wording, since the guard's share of the span is checked on the grid (DEC-OFF-011, provisional).
 
 ### 2026-10-09, step 4 (the region offset)
 

@@ -61,40 +61,59 @@ bool plausible(const Clipper2Lib::Paths64& input, const Clipper2Lib::Paths64& ou
 
 // The guard of research 02, The kernel call, step 3 (REQ-OFF-023, DEC-OFF-011): a CCW triangle of
 // side s = ⌈|δ|⌉ grid units, so its inradius s/(1 + √5) stays below |δ|/2, its base more than
-// 2·|δ| + 2·bias above the input's top; its apex then holds Clipper2's extreme point.
+// 2·|δ| + 6u (the rounding margin) above the input's top; its apex then holds Clipper2's extreme
+// point. Its x extent may pass the input's right edge; the y span, checked after, always binds.
 struct Guard {
     Clipper2Lib::Path64 triangle;
-    std::int64_t input_top; // the input's largest y, grid units
-    std::int64_t height;    // what the guard adds to the input's span in y
+    std::int64_t input_top;    // the input's largest y, grid units
+    std::int64_t input_bottom; // its smallest y
+    std::int64_t height;       // what the guard adds to the input's span in y
 };
 
-Guard guard_above(const Clipper2Lib::Paths64& paths, double reach_units, double bias_units) {
+Guard guard_above(const Clipper2Lib::Paths64& paths, double reach_units, double margin_units) {
     std::int64_t top = INT64_MIN;
+    std::int64_t bottom = INT64_MAX;
     std::int64_t left = INT64_MAX;
     for (const Clipper2Lib::Path64& path : paths) {
         for (const Clipper2Lib::Point64& p : path) {
             top = std::max(top, p.y);
+            bottom = std::min(bottom, p.y);
             left = std::min(left, p.x);
         }
     }
     const auto side = static_cast<std::int64_t>(std::ceil(reach_units));
-    const auto gap = static_cast<std::int64_t>(std::ceil((2 * reach_units) + (2 * bias_units))) + 1;
+    const auto gap = static_cast<std::int64_t>(std::ceil((2 * reach_units) + margin_units)) + 1;
     const std::int64_t base = top + gap;
     return {.triangle = {{left, base}, {left + side, base}, {left + (side / 2), base + side}},
             .input_top = top,
+            .input_bottom = bottom,
             .height = gap + side};
 }
 
-// Removes the loops left of the guard, those lying above the input's top grown by |δ|; more than
-// one means the guard did not behave as research 02 says (REQ-OFF-023): false.
-bool remove_guard(Clipper2Lib::Paths64& solution, const Guard& guard, double reach_units) {
+// Adds the guard to the paths: too_large when the input's height, the guard's and 2·|δ| reach the
+// span limit (REQ-OFF-018); failed unless Clipper2's rule now picks it, an outer loop.
+GridStatus add_guard(Clipper2Lib::Paths64& paths, const Guard& guard, double reach_units,
+                     double max_span_units) {
+    const auto height = static_cast<double>(guard.input_top - guard.input_bottom + guard.height);
+    if (height + (2 * reach_units) >= max_span_units) {
+        return GridStatus::too_large;
+    }
+    paths.push_back(guard.triangle);
+    return extreme_path(paths) == Extreme::outer ? GridStatus::ok : GridStatus::failed;
+}
+
+// Removes what the guard leaves, the loops lying wholly above the input's top grown by |δ|: one
+// when growing, none when shrinking (research 02 asks for at most one; exactly, ours,
+// DEC-OFF-011). Any other count means the guard merged with the input or misbehaved: false.
+bool remove_guard(Clipper2Lib::Paths64& solution, const Guard& guard, double reach_units,
+                  bool grows) {
     const double above = static_cast<double>(guard.input_top) + reach_units;
     const auto lies_above = [&](const Clipper2Lib::Path64& path) {
         return std::ranges::all_of(
             path, [&](const Clipper2Lib::Point64& p) { return static_cast<double>(p.y) > above; });
     };
     const auto removed = std::erase_if(solution, lies_above);
-    return removed <= 1;
+    return removed == (grows ? 1U : 0U);
 }
 
 // The loops back in mm, with the fixed flags and the provisional source IDs (DEC-OFF-009).
@@ -158,20 +177,11 @@ GridRegion offset_loops(const OffsetInput& input, OffsetParams params, OffsetLim
     Clipper2Lib::Paths64 paths = grid;
     Guard guard{};
     if (extreme == Extreme::hole) {
-        guard = guard_above(grid, reach_units, params.bias_units);
-        std::int64_t bottom = INT64_MAX;
-        for (const Clipper2Lib::Path64& path : grid) {
-            for (const Clipper2Lib::Point64& p : path) {
-                bottom = std::min(bottom, p.y);
-            }
-        }
-        // The guard counts in the span (REQ-OFF-018): the input's height, the guard's and 2·|δ|.
-        const auto height = static_cast<double>(guard.input_top - bottom + guard.height);
-        if (height + (2 * reach_units) >= limits.max_span_units) {
-            result.status = GridStatus::too_large;
+        guard = guard_above(grid, reach_units, params.margin_units);
+        result.status = add_guard(paths, guard, reach_units, limits.max_span_units);
+        if (result.status != GridStatus::ok) {
             return result;
         }
-        paths.push_back(guard.triangle);
     }
     // One call: Clipper2 offsets every path and unites them with the Positive rule inside it, so
     // the region is rounded once (REQ-OFF-022; SRC-122, ExecuteInternal; DEC-G2D-026).
@@ -181,7 +191,8 @@ GridRegion offset_loops(const OffsetInput& input, OffsetParams params, OffsetLim
     offsetter.Execute(params.delta / limits.u, solution);
     // Clipper2 2.0.1 reports no failure here: ErrorCode() is always 0 and the result of its inner
     // union is dropped (SRC-122, ExecuteInternal), so only the area check guards (DEC-OFF-008).
-    const bool guarded = extreme != Extreme::hole || remove_guard(solution, guard, reach_units);
+    const bool guarded =
+        extreme != Extreme::hole || remove_guard(solution, guard, reach_units, params.delta > 0.0);
     if (!guarded || !plausible(grid, solution, params)) {
         result.status = GridStatus::failed;
         return result;

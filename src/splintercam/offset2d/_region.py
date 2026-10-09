@@ -31,6 +31,7 @@ from ._classes import SourceClasses, check_classes
 
 # Declared parameters, passed to the kernel as plain values (REQ-OFF-042, D-049).
 _BIAS_GRID_UNITS = TOLERANCE_DEFAULTS["offset_bias_grid_units"].default  # D-132
+_MARGIN_GRID_UNITS = TOLERANCE_DEFAULTS["rounding_margin_grid_units"].default  # D-132
 _JOIN_STEPS_MAX = TOLERANCE_DEFAULTS["join_steps_max"].default  # research 02, Parameters
 _MAX_SPAN_GRID_UNITS = TOLERANCE_DEFAULTS["grid_max_span_units"].default  # REQ-G2D-034
 _ARC_TOL_FLOOR_GRID_UNITS = TOLERANCE_DEFAULTS["arc_tol_floor_grid_units"].default  # D-132
@@ -139,7 +140,7 @@ def _kernel_offset(
     flat: PolygonRegion, delta: float, ctx: Context
 ) -> tuple[int, PolygonRegion | None]:
     tol = ctx.tolerances
-    offset = (delta, tol.arc_tol_mm, _BIAS_GRID_UNITS)
+    offset = (delta, tol.arc_tol_mm, _BIAS_GRID_UNITS, _MARGIN_GRID_UNITS)
     grid = (tol.grid_unit_mm, _MAX_SPAN_GRID_UNITS, _JOIN_STEPS_MAX)
     # Room for the round joins: π / acos(1 - a/|δ|) steps per turn (Clipper2's DoRound), a turn
     # per loop at least; the kernel says when it needed more, and runs again.
