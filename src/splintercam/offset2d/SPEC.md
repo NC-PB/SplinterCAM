@@ -223,6 +223,7 @@ Box 2, decided in the module when the step comes (DECISIONS.md): when an area is
 - 2026-10-09: plan 0005, step 7, part 2: `boolean` (REQ-OFF-030, 031, 035, 036, 039; DEC-OFF-014), research 02's tests 1 to 5 and 15 and the Vatti note's test 7. Test 15's hole touching the middle of an outer edge is checked as a touch, not a fixed node, which research 02's Open items and Later parts leave to the arc fit.
 - 2026-10-09: plan 0005, step 7, part 3: `machined_area` and `stock_layer` (REQ-OFF-031, 032, 044; DEC-OFF-015), research 02's test 22 with a closed pocket pass and an open profile with an arc, both operation orders; the grown chains in `kernel/grow.cpp`, which step 8's `grow_chain` will use.
 - 2026-10-09: step 7, part 3 reviews: REQ-OFF-032's band corrected to [R − m − a − 3u − t_flat, R − 3u] from the true path (the flattening lies on either side) and its refusal to R ≤ m + a, since δ must exceed a; the callers' duties of the stock update in Scope (DEC-OFF-015; DEC-OFF-016, Peter, 2026-10-10, with drilling cycles and the warning).
+- 2026-10-10: plan 0005, step 8, part 1: `grow_chain` (REQ-OFF-027, 029, 031; DEC-OFF-017), research 02's test 13 and a chain with an arc; the region tests split into `test_offset_region.py` and `test_offset_region_ids.py`.
 
 [r02]: ../../../docs/research/02-offsets-and-booleans.md
 [tests]: ../../../docs/research/02-offsets-and-booleans.md#tests

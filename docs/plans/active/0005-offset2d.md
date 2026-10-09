@@ -57,6 +57,10 @@ Total: about 1230 added lines of code (about 1050 NLOC) and 2080 of tests, in ni
 
 ## Progress log
 
+### 2026-10-10, step 8, part 1 (the grown chain)
+
+- `grow_chain` (REQ-OFF-027, 029, 031; DEC-OFF-017) through the grow call of the stock update, moved into `_chain.py`: research 02's test 13 (the stadium, its area between radius t and the band's top), a chain with an arc (every point within t of the true chain inside, the vertices in the band of the flattened chain), `CHAIN_CLOSED` by bit-exact closure, the refusals, cancellation, the span. Mutation: growing by t alone fails three tests; dropping t_flat from δ is caught by none, since a ≥ t_flat at every tolerance (measured, DEC-OFF-017). `tests/offset2d/unit/test_offset_region.py` split (363 and 125 lines).
+
 ### 2026-10-09, step 7, part 3 (the stock update)
 
 - `machined_area` (REQ-OFF-032, 031) and `stock_layer` (REQ-OFF-044; DEC-OFF-015): each operation's centre paths flattened by `build_chain` and grown together by R − (t_flat + 6u) with round joins and ends (`kernel/grow.cpp`, for step 8 too), the IDs over each chain there and back; the raw layer minus all machined areas in one Difference call. Research 02's test 22 (a closed pocket pass and an open profile with an arc; never less stock than the exact geometry leaves, too much only within 2·t_flat + a + 12u; both orders give the same arrays), the band of straight, arc and closed paths, R ≤ m refused, the span with 2·δ. Mutations: growing by R fails three tests, a union instead of the difference fails test 22. Reviews: the spec review found test 22 could not see a wrong m and REQ-OFF-032's band wrong on the centre side of an arc (corrected, DEC-OFF-015; the tests now sample near R and the raw boundary, at tol 0.01 and 0.05, both arc directions); the cnc review found every approximation errs toward more stock and named two callers' duties, which Peter accepted on 2026-10-10 with drilling cycles counted as their expanded feed moves and a warning on a failed stock layer (DEC-OFF-016); the test audit's untested branches all have tests now. Step 7 done in three pull requests (the shared code, the Booleans, the stock update).

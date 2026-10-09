@@ -156,3 +156,13 @@
 - Why: the cnc review (2026-10-09): a move above the layer's bottom, or the full R of a tool that sweeps less at that depth, would mark material as removed that is still there, and a link planned over it could hit it; reading a failure as "no stock" does the same everywhere. Both choices err toward more stock, which only makes links and air-pass skipping more cautious (research 02, Booleans).
 - Rejected: leaving the inputs to the strategies unstated (the module would then promise "never less stock" on inputs it cannot check); the canned cycle itself as input (`machined_area` sees paths, not cycles).
 - Where: SPEC, Scope (duties of the callers); the strategies of topic 04, the drilling of topic 22 and the link planner of topic 10 when they are built.
+
+## DEC-OFF-017: the grown chain
+
+- Date: 2026-10-10; decided by: ours (plan 0005, step 8)
+- Status: Active
+- Decision: `grow_chain` flattens the chain with `build_chain` on the left and grows it through the same call as `machined_area` (`grow_flat_chains` in `_chain.py`, `kernel/grow.cpp`) by δ = t + t_flat + a + 3u (REQ-OFF-027), the IDs within δ + 6u. A chain closes when its last flattened point equals its first bit for bit, the rule geometry2d's `build_chain` uses for continuity, so the two cannot disagree; it is refused with `CHAIN_CLOSED`.
+- Why: one grow path for link checks and the stock update. Measured 2026-10-10: the budget keeps a ≥ t_flat at every tolerance (tol_min: a 0.0002, t_flat 0.0000113 mm; tol 0.01: 0.0005, 0.000397; tol 0.05: 0.0025, 0.002397; tol 1: 0.05, 0.049897), so a + 3u already covers the flattening of an arc on its convex side; the t_flat in δ (DEC-OFF-005) is a second margin, and a mutation that drops it is caught by no test, which is expected. Growing by t alone fails three tests.
+- Rejected: within eps_len as the closing rule (a chain `build_chain` accepts as open could then be refused as closed).
+- Where: `_chain.py`; `tests/offset2d/unit/test_grow_chain.py`.
+
