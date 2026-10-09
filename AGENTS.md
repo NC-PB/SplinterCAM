@@ -4,11 +4,11 @@
      Add a Gotcha when an agent makes the same mistake twice. Placeholders are in <angle brackets>. -->
 
 SplinterCAM is an open-source CAM system for CNC milling and turning, licensed Apache-2.0.
-Status: early start of release 1 (D-156): `foundation` done; `geometry2d` slices 1 and 2 (topic 01: exact predicates, lines and arcs, flattening, area, point in region, cleanup; the loop tree, the machining region and open chains) done and reviewed; `offset2d`: SPEC reviewed by Peter (plan 0005); `offset_region` implemented (step 4). The stack test app runs in a separate repository. Stack: a Python application (PySide6 GUI, OCCT through OCP) with C++20 compute kernels built with nanobind (docs/adr/0004-tech-stack.md).
+Status: early start of release 1 (D-156): `foundation` done; `geometry2d` slices 1 and 2 (topic 01: exact predicates, lines and arcs, flattening, area, point in region, cleanup; the loop tree, the machining region and open chains) done and reviewed; `offset2d`: SPEC reviewed by Peter (plan 0005); `offset_region` implemented (steps 4 to 6). The stack test app runs in a separate repository. Stack: a Python application (PySide6 GUI, OCCT through OCP) with C++20 compute kernels built with nanobind (docs/adr/0004-tech-stack.md).
 
 ## Start here
 
-- Current work: `docs/plans/active/0005-offset2d.md`, step 7 (Booleans and the stock update), after step 6's pull request. `offset_region` is complete (steps 4 to 6); the rest of `src/splintercam/offset2d/SPEC.md` follows in steps 5 to 9. Work continues in local sessions. Records of the finished slices: `docs/plans/completed/0003-geometry2d-slice-1.md` and `docs/plans/completed/0004-geometry2d-slice-2.md` (Handover).
+- Current work: `docs/plans/active/0005-offset2d.md`, step 7 (Booleans and the stock update), after step 6's pull request. `offset_region` is complete (steps 4 to 6); the rest of `src/splintercam/offset2d/SPEC.md` follows in steps 7 to 9. Work continues in local sessions. Records of the finished slices: `docs/plans/completed/0003-geometry2d-slice-1.md` and `docs/plans/completed/0004-geometry2d-slice-2.md` (Handover).
 - Work one plan step at a time. At the end of each step, tick it, write a progress-log entry in the plan, run `tools/check`, and commit. One pull request per session, with small code changes included; a new algorithm or a change over about 100 lines of non-test code gets its own (docs/dev/07, Branches, commits and pull requests). The plan says where to stop for the user's review.
 - Decisions (D-nnn) and sources (SRC-nnn) are registered in Project Spike until the handover; `docs/spike/` holds dated snapshots. Never edit them. If a decision seems wrong or missing, stop and write the question in the progress log.
 

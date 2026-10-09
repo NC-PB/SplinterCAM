@@ -110,3 +110,12 @@ Total: about 1230 added lines of code (about 1050 NLOC) and 2080 of tests, in ni
 
 - Written on Peter's answer to plan 0004 (DEC-G2D-038): the module entry and budget proposed, two questions open.
 - Peter's answers: entry approved (layer 1, budget 1500 as an estimate) and applied, with the layer rule settled (same-layer dependencies when named in `depends_on`); questions 1 and 2 as proposed; geometry2d's SPEC names its kernel interface (DEC-G2D-040). Next: research 02, then `/research-to-spec`; the first step moves `frame_of` and `to_grid` into `kernel/grid.hpp` as an interface change.
+
+## Backlog
+
+<!-- Nice-to-have review findings and later work: recorded here, not coded in the change that found them. -->
+
+- After step 7: revisit a shared helper for the duplicated code between geometry2d and offset2d, with the Booleans as the third caller (Peter, 2026-10-09): the tail of `grid_region` (back to mm, fixed nodes, source IDs; `src/splintercam/geometry2d/kernel/grid.cpp` and `fill_region` in `src/splintercam/offset2d/kernel/offset.cpp`) and the output-buffer retry (`region_with_fill_rule` in `src/splintercam/geometry2d/_grid.py` and `_kernel_offset` in `src/splintercam/offset2d/_region.py`), about 40 lines. The copies already differ (offset2d's IDs use the class tie), so a shared helper needs parameters for both. Sharing changes geometry2d's kernel interface (DEC-G2D-040): Peter's.
+- Performance: the ID search grows with t (growing a finely flattened rounded box at tol_min: 25 ms at t = 1 mm, 89 ms at t = 50 mm), and Clipper2's inward offset past an arc's radius is slow on dense input (640 ms for 2100 vertices shrunk by 10 mm); research 02's target is 10^4 segments in 50 ms, with dense input reduced first.
+- RR-002 (`docs/research/REQUESTS.md`): five corrections to research 02, for Project Spike.
+

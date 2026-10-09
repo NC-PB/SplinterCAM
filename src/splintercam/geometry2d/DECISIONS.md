@@ -398,3 +398,13 @@
 - Rejected: a stable sort that keeps Clipper2's order (that order is the problem); the input order as the tie (the output must not depend on it).
 - Spec review (2026-10-09): the comparator is a strict weak ordering (Clipper2's area of an integer path is finite); the first two keys are now computed once per loop; the header states the precondition (loops not empty, no point twice). The tests assert the expected order itself (second points ascending), so without the tie-breaker three of the four cases fail on any standard library, not only where its sort happens to reorder.
 - Where: `kernel/grid.cpp`, `canonical`; `tests/geometry2d/unit/test_grid_union.py` (the fan in shuffled orders, and pairs in both orders).
+
+## DEC-G2D-043: the module budget of 4000 NLOC
+
+- Date: 2026-10-09; decided by: Peter (answer after pull request 52)
+- Status: Active
+- Decision: geometry2d's budget in `architecture/modules.yaml` is 4000 NLOC (was 3600, DEC-G2D-038). The next geometry2d slice states its size estimate in its plan and sets the budget from it up front.
+- Why: the module measured 3700 NLOC after the kernel interface for offset2d was added in plan 0005, step 3: `nearest_ties` (REQ-G2D-242), the grid steps declared in `kernel/grid.hpp`, and the point-by-point tie-breaker of `canonical` (DEC-G2D-041, 042). The reported overrun would otherwise show on every `tools/size-check`.
+- Rejected: cuts to stay under 3600 (the additions are interface offset2d uses); leaving the overrun reported (it hides a real overrun of the next slice).
+- Where: `architecture/modules.yaml`; SPEC, Size estimate.
+
