@@ -30,11 +30,8 @@ struct OffsetInput {
     std::span<const std::int64_t> source_ids;
 };
 
-// The offset region: too_large when the input plus 2·|delta| spans the limit (REQ-OFF-018);
-// failed when Clipper2 fails, a join needs more steps than the limit, or the area is implausible
-// (REQ-OFF-014, DEC-OFF-008); otherwise its loops with pinch points split and fixed, in the
-// canonical order, each vertex with the source ID of the input edge nearest to the middle of the
-// output edge starting there (provisional, DEC-OFF-009). No exception leaves it.
+// The offset region, or too_large (REQ-OFF-018) or failed (REQ-OFF-014, DEC-OFF-008); IDs
+// provisional (DEC-OFF-009). No exception leaves it.
 [[nodiscard]] geometry2d::GridRegion offset_loops(const OffsetInput& input, OffsetParams params,
                                                   OffsetLimits limits);
 

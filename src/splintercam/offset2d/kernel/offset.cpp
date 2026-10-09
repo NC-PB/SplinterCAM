@@ -17,34 +17,9 @@ using geometry2d::GridStatus;
 // Clipper2's default miter limit; it has no effect with round joins (SRC-122, ClipperOffset).
 constexpr double miter_limit = 2.0;
 
-// Steps per turn of a round join: Clipper2's DoRound takes min(π / acos(1 − a/|δ|), π·|δ|) in
-// grid units. With |δ| ≥ a ≥ 2u the second term never binds (research 02, The kernel call,
-// step 5), so the first alone is checked against the limit (REQ-OFF-014).
-double join_steps(double arc_tol, double reach) {
-    return std::numbers::pi / std::acos(1.0 - (arc_tol / reach));
-}
-
-double perimeter(const Clipper2Lib::Paths64& paths) {
-    double total = 0.0;
-    for (const Clipper2Lib::Path64& path : paths) {
-        for (std::size_t k = 0; k < path.size(); ++k) {
-            const Clipper2Lib::Point64& p = path.at(k);
-            const Clipper2Lib::Point64& q = path.at((k + 1) % path.size());
-            const auto dx = static_cast<double>(q.x - p.x);
-            const auto dy = static_cast<double>(q.y - p.y);
-            total += std::sqrt((dx * dx) + (dy * dy));
-        }
-    }
-    return total;
-}
-
-// Whether Clipper2 would take a hole for the outer loop: the path holding the largest y, then the
-// smallest x (the first on a tie; paths of area 0 skipped) is taken as an outer loop, and when its
-// area is negative the whole input is offset as reversed (SRC-122: GetLowestClosedPathInfo, the
-// Group constructor; research 02, The kernel call, step 3). Replicated rule for rule. Until the
-// guard of REQ-OFF-023 (plan 0005, step 5) the kernel refuses such input (DEC-OFF-008): measured
-// 2026-10-09, the inverted shrink of research 02's test 21 came back empty, which no area check
-// can tell from a region that really vanishes.
+// Whether Clipper2 takes a hole for the outer loop, rule for rule: the path holding the largest y,
+// then the smallest x (the first on a tie; area 0 skipped); a negative area reverses the whole
+// offset (SRC-122: GetLowestClosedPathInfo; research 02, The kernel call, step 3; DEC-OFF-008).
 bool extreme_path_is_hole(const Clipper2Lib::Paths64& paths) {
     Clipper2Lib::Point64 extreme(INT64_MAX, INT64_MIN);
     bool hole = false;
@@ -70,7 +45,11 @@ bool plausible(const Clipper2Lib::Paths64& input, const Clipper2Lib::Paths64& ou
                OffsetParams params) {
     const double before = Clipper2Lib::Area(input);
     const double after = Clipper2Lib::Area(output);
-    const double slack = params.bias_units * perimeter(input);
+    double perimeter = 0.0;
+    for (const Clipper2Lib::Path64& path : input) {
+        perimeter += Clipper2Lib::Length(path, true);
+    }
+    const double slack = params.bias_units * perimeter;
     const bool sized = params.delta < 0.0 ? after <= before + slack : after >= before - slack;
     return sized && after >= -slack; // an inverted result also turns its loops round
 }
@@ -107,10 +86,6 @@ void fill_region(const std::vector<Clipper2Lib::Path64>& loops, geometry2d::Fram
 GridRegion offset_loops(const OffsetInput& input, OffsetParams params, OffsetLimits limits) {
     GridRegion result;
     const double reach = std::abs(params.delta);
-    if (!(join_steps(params.arc_tol, reach) <= limits.join_steps_max)) {
-        result.status = GridStatus::failed;
-        return result;
-    }
     // The input plus 2·|δ| must span less than the limit: the offset paths reach |δ| beyond the
     // input on every side, and the union and pinch tests run on them (REQ-OFF-018, DEC-OFF-010).
     geometry2d::Frame frame{};
@@ -120,8 +95,11 @@ GridRegion offset_loops(const OffsetInput& input, OffsetParams params, OffsetLim
         result.status = GridStatus::too_large;
         return result;
     }
+    // Steps per turn of a round join, DoRound's π / acos(1 − a/|δ|); its other term, π·|δ|, never
+    // binds with |δ| ≥ a ≥ 2u (research 02, The kernel call, step 5; REQ-OFF-014).
+    const double steps = std::numbers::pi / std::acos(1.0 - (params.arc_tol / reach));
     const Clipper2Lib::Paths64 grid = geometry2d::to_grid(input.loops, frame, limits.u);
-    if (extreme_path_is_hole(grid)) {
+    if (!(steps <= limits.join_steps_max) || extreme_path_is_hole(grid)) {
         result.status = GridStatus::failed;
         return result;
     }

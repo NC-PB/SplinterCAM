@@ -112,10 +112,8 @@ def _cleaned(region: PolygonRegion, ctx: Context) -> tuple[PolygonRegion, list[D
     for start, end in zip(region.loop_starts.tolist(), ends, strict=True):
         result = cleanup(region.points[start:end], ctx)
         diagnostics += result.diagnostics
-        indices: NDArray[np.int64] = (
-            np.arange(start, end, dtype=np.int64) if result.value is None else start + result.value
-        )
-        kept.append(indices)
+        assert result.value is not None  # cleanup always returns the kept indices
+        kept.append(start + result.value)
     take = np.concatenate(kept) if kept else np.empty(0, dtype=np.int64)
     starts = np.cumsum([0] + [k.size for k in kept[:-1]], dtype=np.int64)
     cleaned = PolygonRegion(
@@ -130,13 +128,12 @@ def _kernel_offset(
     tol = ctx.tolerances
     offset = (delta, tol.arc_tol_mm, _BIAS_GRID_UNITS)
     grid = (tol.grid_unit_mm, _MAX_SPAN_GRID_UNITS, _JOIN_STEPS_MAX)
-    points_in = np.ascontiguousarray(flat.points)
     room = 2 * flat.points.shape[0] + 64
     while True:
         points, starts = np.empty((room, 2)), np.empty(room, dtype=np.int64)
         ids, fixed = np.empty(room, dtype=np.int64), np.empty(room, dtype=np.uint8)
         status, n_points, n_loops = _kernels.offset2d.offset_loops(
-            points_in, flat.loop_starts, flat.source_ids, offset, grid,
+            flat.points, flat.loop_starts, flat.source_ids, offset, grid,
             points, starts, ids, fixed,
         )  # fmt: skip
         if max(n_points, n_loops) <= room:
@@ -160,6 +157,10 @@ def _log_for_replay(flat: PolygonRegion, delta: float, ctx: Context) -> None:
         "loop_starts": flat.loop_starts.tolist(),
         "source_ids": flat.source_ids.tolist(),
         "delta_mm": delta,
-        "chord_tol_mm": ctx.tolerances.chord_tol_mm,
+        "arc_tol_mm": ctx.tolerances.arc_tol_mm,
+        "bias_grid_units": _BIAS_GRID_UNITS,
+        "grid_unit_mm": ctx.tolerances.grid_unit_mm,
+        "max_span_grid_units": _MAX_SPAN_GRID_UNITS,
+        "join_steps_max": _JOIN_STEPS_MAX,
     }
     ctx.logger.error("OFFSET_FAILED, kernel input for replay: %s", json.dumps(dump))
