@@ -26,9 +26,9 @@
 
 - Date: 2026-10-08; decided by: Peter (answer 3)
 - Status: Active
-- Decision: an ADR records D-060: shapely and GEOS in a test-only dependency group, never shipped, because GEOS is LGPL. It is drafted in plan 0005's last step, followed by test 20. The oracle tests 2 and 9 come first.
+- Decision: ADR 0010 (`docs/adr/0010-shapely-geos-test-only.md`, accepted by Peter on 2026-10-09) records D-060: shapely and GEOS in the dependency group `test-oracle`, installed by `tools/bootstrap`, never packaged, no `NOTICE` entry since GEOS is not distributed; `tools/licence-check` accepts LGPL only in that group. The group is added in plan 0005's last step, followed by test 20. The oracle tests 2 and 9 come first.
 - Why: an independent reference for the offsets as point sets (D-060), without a licence risk for what ships.
-- Rejected: shapely as a runtime or default development dependency.
+- Rejected: shapely as a runtime dependency; the group optional with test 20 skipping outside CI (Peter, 2026-10-09).
 - Where: SPEC, Open questions 3 and Test plan; plan 0005, step 9.
 
 ## DEC-OFF-004: the interface of release 1; the side follows from the kind; closed chains refused
@@ -57,3 +57,13 @@
 - Why: the 3u shrink of the earlier research text was itself a second Clipper2 call on a rounded region and did not cover two roundings (RR-001).
 - Rejected: shrinking a rounded machined region by 3u; updating a layer by successive differences.
 - Where: SPEC, REQ-OFF-032; `docs/research/REQUESTS.md`, RR-001.
+
+## DEC-OFF-007: the details of the stock update
+
+- Date: 2026-10-09; decided by: ours (plan 0005, the release of REQ-OFF-032 and 044 after pull request 47; spec review)
+- Status: Active
+- Decision: `machined_area` flattens each centre path with geometry2d's `build_chain`, which also takes a closed pass, on either air side, and offsets all paths of the operation in one `ClipperOffset` call with JoinType Round and ArcTolerance a; it raises `ValueError` when R ≤ m = t_flat + 6u. Test 22's upper bound on the extra stock is 2·t_flat + a + 12u, not research 02's 2·t_flat + 12u.
+- Why: research 02 names EndType Round and δ but not the joins; a miter or square join would make the machined area larger than the swept area, and the stock would lose material that is really there. Round joins with ArcTolerance a put their chords up to a inside the circle, so the machined area is up to a smaller: still the safe side, but the extra stock grows by up to a, which research 02's bound leaves out. Either air side works for the flattening, since m pays for t_flat on the side it falls. With R ≤ m, δ would be 0 or negative and the area meaningless.
+- Rejected: a added to m (it would make the area smaller still, for no safety gain); a research request (the reasoning is complete; research 02 can take the corrected bound at its next review).
+- Where: SPEC, REQ-OFF-032, 044 and Failure modes.
+

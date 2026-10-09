@@ -296,6 +296,34 @@ void bind_distances(nb::module_& m) {
         nb::arg("q"), nb::arg("points"), nb::arg("loop_starts"), nb::arg("limit"), nb::arg("out"),
         "Write per point its distance to the closed polylines where at most limit, else inf.");
     m.def(
+        "nearest_ties",
+        [](const PointRows& q, const PointRows& vertices, const Counts& loop_starts, double limit,
+           double eps, const CyclesOut& out) {
+            check_limit(limit);
+            if (!(eps >= 0.0) || !std::isfinite(limit + eps)) { // also NaN
+                throw nb::value_error("eps must be >= 0 and limit + eps finite");
+            }
+            const auto [queries, lines] = std::pair{view(q), loops_of(vertices, loop_starts)};
+            // As `polyline_distances`' Python entry: a NaN query would silently tie nothing.
+            if (!std::ranges::all_of(queries, [](double v) { return std::isfinite(v); })) {
+                throw nb::value_error("every query point must be finite");
+            }
+            std::vector<Tie> ties;
+            {
+                const nb::gil_scoped_release unlocked;
+                ties = nearest_ties(queries, lines, {.limit = limit, .eps = eps});
+            }
+            for (std::size_t i = 0; i < std::min(ties.size(), out.shape(0)); ++i) {
+                out(i, 0) = ties.at(i).point;
+                out(i, 1) = ties.at(i).segment;
+            }
+            return ties.size();
+        },
+        nb::arg("q"), nb::arg("points"), nb::arg("loop_starts"), nb::arg("limit"), nb::arg("eps"),
+        nb::arg("out"),
+        "Write per point every segment within eps of its nearest, if that is within limit, as "
+        "(point, segment) rows; return their count (out may be short; REQ-G2D-242).");
+    m.def(
         "basic_sin_cos",
         [](const Values& angles, const DoubleOut& sines, const DoubleOut& cosines) {
             check_rows(angles.shape(0), {sines.shape(0), cosines.shape(0)});

@@ -88,6 +88,11 @@ def polyline_distances(q: Annotated[NDArray[numpy.float64], dict(shape=(None, 2)
     Write per point its distance to the closed polylines where at most limit, else inf.
     """
 
+def nearest_ties(q: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], points: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], loop_starts: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu', writable=False)], limit: float, eps: float, out: Annotated[NDArray[numpy.int64], dict(shape=(None, 2), order='C', device='cpu')]) -> int:
+    """
+    Write per point every segment within eps of its nearest, if that is within limit, as (point, segment) rows; return their count (out may be short; REQ-G2D-242).
+    """
+
 def basic_sin_cos(angles: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu', writable=False)], sines: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu')], cosines: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu')]) -> None:
     """
     The sine and cosine the topology flattening turns with, for tests (REQ-G2D-152).

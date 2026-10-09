@@ -32,6 +32,10 @@ Both answered on 2026-10-08 (DEC-G2D-040): 1 as proposed, with the headers named
 1. **How does offset2d's kernel reach geometry2d's grid bridge and exact predicates?** The rule kernels-private lets only a module's own Python call its kernel. Proposal: offset2d's C++ includes geometry2d's kernel headers (`grid.hpp`, `exact.hpp`) and links its sources, listed as a kernel dependency in `modules.yaml`; the alternative, moving the grid bridge into offset2d, would leave geometry2d's region and fallback calling another module's kernel.
 2. **Where does the region's Clipper2 call live?** `build_region` (geometry2d) makes the PolyTree today. DEC-G2D-026 prefers building it inside the offset call. Proposal: geometry2d keeps `build_region` for the region itself; offset2d takes the flattened loops and builds its PolyTree in its own call, so geometry2d does not depend on offset2d.
 
+Answered on 2026-10-09 (Peter): yes, as proposed, before step 6 (DEC-G2D-042, done in step 3's pull request); the PUBLIC Clipper2 link kept.
+
+3. **`canonical` has no final tie-breaker** (`src/splintercam/geometry2d/kernel/grid.cpp`, older code, now part of offset2d's interface). It sorts loops by their smallest grid point, then signed area, with an unstable sort. Two loops that touch at their smallest point with equal areas (two mirror-image triangles meeting at a corner) then come out in Clipper2's order, which depends on the input order, against DEC-G2D-036's "bit for bit in both orders" and REQ-OFF-038. On the machine the region is the same; only the order of the loops, and so of the passes topic 04 makes from them, could differ between two runs of the same part drawn in another order. Proposal: a final tie-breaker that compares the rotated loops point by point, with a test in both input orders, as a small geometry2d change of its own before step 6 (an interface change under DEC-G2D-040, so yours).
+
 ## Steps
 
 <!-- Each step has a size estimate (kept code and tests, raw added lines). At 50 % over it, stop and ask, as for a
@@ -41,17 +45,27 @@ Released with the SPEC (Peter, 2026-10-08). Steps 2 and 3 follow his answers 2 a
 
 - [x] 1. **SPEC review.** Peter reviews `src/splintercam/offset2d/SPEC.md` and answers its four questions; the requirements become `Reviewed`. Size: docs only.
 - [x] 2. **foundation: the offset's parameters** (Open question 2). `ToleranceSet.arc_tol_mm`, `offset_bias_grid_units` and `join_steps_max` in `tolerance_defaults.toml`, and the diagnostic code `CANCELLED` (warning), with a foundation SPEC change (DEC-OFF-002). Size: about 50 + 70.
-- [ ] 3. **geometry2d: the grid interface** (Open question 1, DEC-G2D-040). `frame_of`, `to_grid`, `split_pinches`, `shared_points` and `canonical` move from `kernel/grid.cpp` into `kernel/grid.hpp`, and `kernel/distance.hpp` gains the segments within eps_len of the nearest distance (DEC-OFF-001), with a geometry2d SPEC change; behaviour unchanged, geometry2d's tests pass as they are, new tests for the new entry. If an include directory is added for offset2d, `_quoted` in `tools/lib/arch_kernels.py` must resolve it (arch-check resolves quoted includes relative to the file only). Size: about 120 + 120.
+- [x] 3. **geometry2d: the grid interface** (Open question 1, DEC-G2D-040). `frame_of`, `to_grid`, `split_pinches`, `shared_points` and `canonical` move from `kernel/grid.cpp` into `kernel/grid.hpp`, and `kernel/distance.hpp` gains the segments within eps_len of the nearest distance (DEC-OFF-001), with a geometry2d SPEC change; behaviour unchanged, geometry2d's tests pass as they are, new tests for the new entry. If an include directory is added for offset2d, `_quoted` in `tools/lib/arch_kernels.py` must resolve it (arch-check resolves quoted includes relative to the file only). Size: about 120 + 120.
 - [ ] 4. **The region offset.** Scaffold `src/splintercam/offset2d/` (`tools/new-module` or by hand, as Peter says), `offset_region` with the loop tree and `flatten_loops` (REQ-OFF-021), the one `ClipperOffset` call (022), t = 0 through `build_region` (024), the span refusal (018), the band (025), integer topology (026), `OFFSET_EMPTY`, `OFFSET_FAILED`, `ValueError`, `CANCELLED` (039 to 042, 013, 014). Tests 6, 7, 8, 10, 11, 18 and 9's oracle. A new algorithm: its own pull request. Size: about 380 + 500.
 - [ ] 5. **The orientation guard** (REQ-OFF-023). Test 21. Size: about 120 + 200.
 - [ ] 6. **Source IDs with classes, pinch points, order** (REQ-OFF-034, 036 to 038, 011, 010). Tests 14, 15, 17, 19. Size: about 150 + 350.
-- [ ] 7. **Booleans** (REQ-OFF-030, 031, 033, 035). Tests 1 to 5, Vatti note test 7. The stock update (`remove_machined`, REQ-OFF-032) follows research 02's answer to RR-001 (Booleans, test 22; pull request 47, DEC-OFF-006): REQ-OFF-032 is rewritten and released from it once it is on `main`, and joins this step. Size: about 180 + 350, plus the stock update once released.
+- [ ] 7. **Booleans** (REQ-OFF-030, 031, 033, 035). Tests 1 to 5, Vatti note test 7. The stock update: `machined_area` and `stock_layer` (REQ-OFF-032, 044; research 02's answer to RR-001, released 2026-10-09). Test 22. Size: about 200 + 400.
 - [ ] 8. **Open chains** (REQ-OFF-027 to 029). Tests 12 and 13. Size: about 260 + 350.
-- [ ] 9. **Golden case and differential.** `pocket-island-touching-wall` (test 16; a person approves the golden files); an ADR that records D-060: shapely and GEOS in a test-only dependency group, never shipped, since GEOS is LGPL (DEC-OFF-003); then test 20. Size: about 0 + 250.
+- [ ] 9. **Golden case and differential.** `pocket-island-touching-wall` (test 16; a person approves the golden files); ADR 0010 (accepted 2026-10-09) applied: the group `test-oracle` with shapely in `pyproject.toml` and `uv.lock`, installed by `tools/bootstrap` (DEC-OFF-003); then test 20. Size: about 0 + 250.
 
 Total: about 1230 added lines of code (about 1050 NLOC) and 2080 of tests, in nine steps.
 
 ## Progress log
+
+### 2026-10-08, step 3 (geometry2d's kernel interface)
+
+- `Frame`, `frame_of`, `to_grid`, `split_pinches`, `canonical` and `shared_points` declared in `src/splintercam/geometry2d/kernel/grid.hpp` with Clipper2's header; `CMakeLists.txt` links Clipper2 PUBLIC so the bindings find it. `nearest_ties` in `kernel/distance.hpp` (every segment within eps of the nearest, as (point, segment) pairs) and its kernel binding: REQ-G2D-242, DEC-G2D-041. geometry2d's tests pass unchanged; new tests `tests/geometry2d/unit/test_nearest_ties.py` and `tests/geometry2d/property/test_nearest_ties_property.py` (an O(n·m) oracle, bit for bit, exact ties by construction).
+- No include directory added: `_quoted` in `tools/lib/arch_kernels.py` needs no change for this step. geometry2d measures 3675 NLOC (3610 before; budget 3600, fails above 4320).
+- Reviews: two test audits and two spec reviews. Applied: the binding refuses a non-finite query point (a NaN reached a float-to-int cast, undefined behaviour); one scan per query instead of `nearest` plus a second search; `!(best <= limit)` so a NaN never passes; the C++ preconditions written in `distance.hpp` (offset2d must check them itself) and `frame_of`'s and `to_grid`'s in `grid.hpp`; DEC-G2D-041 no longer claims that segment order gives the lowest source ID; tests: distances bit for bit against `polyline_distances`, exact refusal messages, a negative limit, a zero-length segment, the mirror test requires a tie, a fine mesh, and a grid-size regression (mutated by hand: it fails with a grid for the limit alone). Open: question 3 above.
+- For step 6: offset2d takes the lowest source ID among the first class's candidates itself; its limit must cover t plus the band of REQ-OFF-025, or an edge gets no ID; the tie is measured to the flattened segments, so an arc edge's ties depend on t_flat (record it in offset2d's DECISIONS.md then). Measure the cost of `nearest_ties` on finely flattened input with a large t.
+- 2026-10-09: PR 47 merged; REQ-OFF-032 rewritten from research 02 (Booleans, test 22) as `machined_area`, with `stock_layer` as new REQ-OFF-044, both `Reviewed` (Peter's instruction with his RR-001 answer); they join step 7.
+- 2026-10-09: question 3 answered: `canonical` breaks its last tie point by point (DEC-G2D-042). Reproduced first: a pair of tied triangles did not show it (a short sort is an insertion sort), a fan of twenty equal triangles did, for shuffled input; both are tests now. `.claude/worktrees/` (agent worktrees) ignored in `.gitignore` (Peter).
+- Next: step 4, once steps 2 and 3 are on `main`.
 
 ### 2026-10-08, step 2
 
@@ -63,6 +77,7 @@ Total: about 1230 added lines of code (about 1050 NLOC) and 2080 of tests, in ni
 - RR-001 answered in research 02 (Booleans, test 22), pull request 47: REQ-OFF-032 is released from that text after it merges.
 - ADR drafted for DEC-OFF-003: `docs/adr/0010-shapely-geos-test-only.md` (Proposed; shapely/GEOS in a test-only group for test 20, D-060). A person decides before step 9.
 - Test oracles for steps 4 to 9, written in parallel by a test-designer from the SPEC and research only: `tests/support/offset2d_oracles.py` (d to the true lines and arcs within 64·ε·S, inside on the true curves, the definitions of research 02, Booleans, a seeded sampler outside a band, the band widths from a `ToleranceSet`) and `offset2d_strategies.py` (test 7's nested shapes, pockets with islands, bulged pockets, test 21's touching island); self-tests in `tests/offset2d/` (48), untagged until offset2d code exists. Mutated by hand: each broken rule fails a test.
+- 2026-10-09: Peter accepted ADR 0010 (the group `test-oracle`, installed by `tools/bootstrap`, never packaged, no `NOTICE` entry, LGPL only there for `tools/licence-check`); answered question 3 of step 3's review (the tie-breaker in `canonical`, before step 6) and kept the PUBLIC Clipper2 link.
 - Next: step 2 (foundation).
 
 ### 2026-10-08, SPEC draft

@@ -121,7 +121,9 @@ if(SPLINTERCAM_KERNEL_SOURCES)
   add_library(splintercam_kernel_code STATIC ${SPLINTERCAM_KERNEL_SOURCES})
   set_target_properties(splintercam_kernel_code PROPERTIES POSITION_INDEPENDENT_CODE ON)
   target_compile_options(splintercam_kernel_code PRIVATE ${SPLINTERCAM_CXX_OPTIONS})
-  target_link_libraries(splintercam_kernel_code PRIVATE Clipper2)
+  # PUBLIC: geometry2d's kernel/grid.hpp declares Clipper2 types (DEC-G2D-041), so every target
+  # that includes it, the bindings among them, needs Clipper2's headers.
+  target_link_libraries(splintercam_kernel_code PUBLIC Clipper2)
   target_link_libraries(_kernels PRIVATE splintercam_kernel_code)
 endif()
 
