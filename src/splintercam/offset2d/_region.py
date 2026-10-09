@@ -2,7 +2,6 @@
 """The region offset (research 02, Definitions and The kernel call): a region of air shrinks, a
 region of material grows by a clearance t, in one Clipper2 call on geometry2d's grid."""
 
-import json
 import math
 
 import numpy as np
@@ -15,7 +14,6 @@ from splintercam.foundation import (
     Context,
     Diagnostic,
     Result,
-    Severity,
 )
 from splintercam.geometry2d import (
     CurveRows,
@@ -28,14 +26,18 @@ from splintercam.geometry2d import (
 )
 
 from ._classes import SourceClasses, check_classes
+from ._results import (
+    BIAS_GRID_UNITS,
+    JOIN_STEPS_MAX,
+    MARGIN_GRID_UNITS,
+    MAX_SPAN_GRID_UNITS,
+    OK,
+    outcome,
+    run_kernel,
+    vertex_classes,
+)
 
-# Declared parameters, passed to the kernel as plain values (REQ-OFF-042, D-049).
-_BIAS_GRID_UNITS = TOLERANCE_DEFAULTS["offset_bias_grid_units"].default  # D-132
-_MARGIN_GRID_UNITS = TOLERANCE_DEFAULTS["rounding_margin_grid_units"].default  # D-132
-_JOIN_STEPS_MAX = TOLERANCE_DEFAULTS["join_steps_max"].default  # research 02, Parameters
-_MAX_SPAN_GRID_UNITS = TOLERANCE_DEFAULTS["grid_max_span_units"].default  # REQ-G2D-034
 _ARC_TOL_FLOOR_GRID_UNITS = TOLERANCE_DEFAULTS["arc_tol_floor_grid_units"].default  # D-132
-_OK, _TOO_LARGE = 0, 1  # GridStatus in geometry2d's kernel/grid.hpp; 2 is a failure
 
 
 def offset_region(
@@ -71,39 +73,15 @@ def offset_region(
     tol = ctx.tolerances
     # The flattening's extra clearance (0 for lines and arcs) widens t (geometry2d, REQ-G2D-124).
     t_mm = clearance_mm + flat_region.extra_clearance_mm
-    reach = t_mm + tol.arc_tol_mm + _BIAS_GRID_UNITS * tol.grid_unit_mm
+    reach = t_mm + tol.arc_tol_mm + BIAS_GRID_UNITS * tol.grid_unit_mm
     delta = -reach if kind is RegionKind.AIR else reach
     if flat.loop_starts.size == 0:  # every loop dropped by the loop tree
-        status, region = _OK, flat
+        status, region = OK, flat
     elif ctx.cancel.is_cancelled:
         return Result(None, (*diagnostics, CANCELLED))
     else:
-        per_vertex = classes.classes[np.searchsorted(classes.ids, original.source_ids)]
-        status, region = _kernel_offset(flat, original, per_vertex.astype(np.int8), delta, ctx)
-    return _outcome(status, region, (original, delta), diagnostics, ctx)
-
-
-def _outcome(
-    status: int,
-    region: PolygonRegion | None,
-    kernel_input: tuple[PolygonRegion, float],
-    diagnostics: list[Diagnostic],
-    ctx: Context,
-) -> Result[PolygonRegion]:
-    """The kernel's status as a result: cancelled, refused, failed (the input logged), empty or
-    the region (REQ-OFF-014, 018, 039, 041)."""
-    if ctx.cancel.is_cancelled:
-        return Result(None, (*diagnostics, CANCELLED))
-    if status == _TOO_LARGE:
-        message = f"the input plus 2·|δ| spans {_MAX_SPAN_GRID_UNITS:.0f} grid units or more"
-        return Result(None, (*diagnostics, Diagnostic("REGION_TOO_LARGE", Severity.ERROR, message)))
-    if status != _OK or region is None:
-        _log_for_replay(*kernel_input, ctx)
-        failed = Diagnostic("OFFSET_FAILED", Severity.ERROR, "the offset failed; input logged")
-        return Result(None, (*diagnostics, failed))
-    if region.loop_starts.size == 0:
-        diagnostics.append(Diagnostic("OFFSET_EMPTY", Severity.INFO, "the region vanishes"))
-    return Result(region, tuple(diagnostics))
+        status, region = _kernel_offset(flat, original, classes, delta, ctx)
+    return outcome(status, region, _replay_dump(original, delta, ctx), diagnostics, ctx)
 
 
 def _check_arguments(
@@ -141,52 +119,45 @@ def _cleaned(region: PolygonRegion, ctx: Context) -> tuple[PolygonRegion, list[D
 def _kernel_offset(
     flat: PolygonRegion,
     original: PolygonRegion,
-    vertex_classes: NDArray[np.int8],
+    classes: SourceClasses,
     delta: float,
     ctx: Context,
 ) -> tuple[int, PolygonRegion | None]:
     """The cleaned loops offset, their IDs from the loops before the clean-up, which may drop a
     collinear joint between two rows (DEC-OFF-013)."""
     tol = ctx.tolerances
-    offset = (delta, tol.arc_tol_mm, _BIAS_GRID_UNITS, _MARGIN_GRID_UNITS)
-    grid = (tol.grid_unit_mm, _MAX_SPAN_GRID_UNITS, _JOIN_STEPS_MAX, tol.length_eps_mm)
+    offset = (delta, tol.arc_tol_mm, BIAS_GRID_UNITS, MARGIN_GRID_UNITS)
+    grid = (tol.grid_unit_mm, MAX_SPAN_GRID_UNITS, JOIN_STEPS_MAX, tol.length_eps_mm)
+    per_vertex = vertex_classes(classes, original.source_ids)
     # Room for the round joins: π / acos(1 - a/|δ|) steps per turn (Clipper2's DoRound), a turn
     # per loop at least; the kernel says when it needed more, and runs again.
     steps = math.pi / math.acos(1.0 - tol.arc_tol_mm / abs(delta))
     room = 2 * flat.points.shape[0] + math.ceil(steps) * (flat.loop_starts.size + 1) + 64
-    while True:
-        points, starts = np.empty((room, 2)), np.empty(room, dtype=np.int64)
-        ids, fixed = np.empty(room, dtype=np.int64), np.empty(room, dtype=np.uint8)
-        status, n_points, n_loops = _kernels.offset2d.offset_loops(
+
+    def call(
+        points: NDArray[np.float64],
+        starts: NDArray[np.int64],
+        ids: NDArray[np.int64],
+        fixed: NDArray[np.uint8],
+    ) -> tuple[int, int, int]:
+        return _kernels.offset2d.offset_loops(
             flat.points, flat.loop_starts, original.points, original.loop_starts,
-            original.source_ids, vertex_classes, offset, grid,
-            points, starts, ids, fixed,
+            original.source_ids, per_vertex, offset, grid, points, starts, ids, fixed,
         )  # fmt: skip
-        if max(n_points, n_loops) <= room:
-            break
-        room = max(n_points, n_loops)
-    if status != _OK:
-        return status, None
-    out = PolygonRegion(
-        points[:n_points].copy(), starts[:n_loops].copy(), ids[:n_points].copy(),
-        fixed[:n_points].copy(),
-    )  # fmt: skip
-    for array in (out.points, out.loop_starts, out.source_ids, out.fixed):
-        array.flags.writeable = False
-    return status, out
+
+    return run_kernel(call, room)
 
 
-def _log_for_replay(flat: PolygonRegion, delta: float, ctx: Context) -> None:
-    """The kernel's input as JSON, for `tools/replay` once it exists (REQ-OFF-014)."""
-    dump = {
+def _replay_dump(flat: PolygonRegion, delta: float, ctx: Context) -> dict[str, object]:
+    """The kernel's input as JSON-ready values, for `tools/replay` once it exists (REQ-OFF-014)."""
+    return {
         "points": flat.points.tolist(),
         "loop_starts": flat.loop_starts.tolist(),
         "source_ids": flat.source_ids.tolist(),
         "delta_mm": delta,
         "arc_tol_mm": ctx.tolerances.arc_tol_mm,
-        "bias_grid_units": _BIAS_GRID_UNITS,
+        "bias_grid_units": BIAS_GRID_UNITS,
         "grid_unit_mm": ctx.tolerances.grid_unit_mm,
-        "max_span_grid_units": _MAX_SPAN_GRID_UNITS,
-        "join_steps_max": _JOIN_STEPS_MAX,
+        "max_span_grid_units": MAX_SPAN_GRID_UNITS,
+        "join_steps_max": JOIN_STEPS_MAX,
     }
-    ctx.logger.error("OFFSET_FAILED, kernel input for replay: %s", json.dumps(dump))

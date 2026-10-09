@@ -54,6 +54,34 @@ template <typename T, typename Out> void copy_out(const std::vector<T>& from, co
     }
 }
 
+using RegionOut = std::tuple<const PointsOut&, const CountsOut&, const CountsOut&, const FlagsOut&>;
+
+// A region into the arrays the caller allocated, as far as they reach; (status, points, loops),
+// the counts it needed.
+std::tuple<int, std::size_t, std::size_t> write_region(const geometry2d::GridRegion& region,
+                                                       RegionOut out) {
+    const auto& [points_out, starts_out, ids_out, fixed_out] = out;
+    for (std::size_t i = 0; i < std::min(region.points.size(), points_out.shape(0)); ++i) {
+        points_out(i, 0) = std::get<0>(region.points.at(i));
+        points_out(i, 1) = std::get<1>(region.points.at(i));
+    }
+    copy_out(region.starts, starts_out);
+    copy_out(region.ids, ids_out);
+    copy_out(region.fixed, fixed_out);
+    return {static_cast<int>(region.status), region.points.size(), region.starts.size()};
+}
+
+// The input edges of the source IDs, with one class per vertex (REQ-OFF-013, 034).
+IdSource id_source(const PointRows& points, const Counts& starts, const Counts& source_ids,
+                   const Classes& classes) {
+    if (classes.shape(0) != source_ids.shape(0)) {
+        throw nb::value_error("one class per vertex");
+    }
+    return {.loops = checked_loops(points, starts, source_ids.shape(0)),
+            .source_ids = view(source_ids),
+            .classes = view(classes)};
+}
+
 } // namespace
 
 void bind(nb::module_& m) {
@@ -64,39 +92,25 @@ void bind(nb::module_& m) {
            const Quad& offset, const Quad& grid, const PointsOut& points_out,
            const CountsOut& starts_out, const CountsOut& ids_out, const FlagsOut& fixed_out) {
             const geometry2d::Polylines loops = checked_loops(points, loop_starts, points.shape(0));
-            const geometry2d::Polylines id_loops =
-                checked_loops(id_points, id_starts, source_ids.shape(0));
+            const IdSource ids = id_source(id_points, id_starts, source_ids, classes);
             const auto [delta, arc_tol, bias, margin] = offset;
             const auto [u, span, steps, eps] = grid;
             if (!finite(offset) || std::abs(delta) <= arc_tol || !(arc_tol > 0.0) || !(u > 0.0) ||
-                !(span > 0.0) || !(steps > 0.0) || !(eps >= 0.0) || !finite(grid) ||
-                classes.shape(0) != source_ids.shape(0)) {
-                throw nb::value_error(
-                    "|delta| > arc_tol > 0; u, span, steps > 0; eps >= 0; one class per vertex");
+                !(span > 0.0) || !(steps > 0.0) || !(eps >= 0.0) || !finite(grid)) {
+                throw nb::value_error("|delta| > arc_tol > 0; u, span, steps > 0; eps >= 0");
             }
             geometry2d::GridRegion region;
             {
                 const nb::gil_scoped_release unlocked;
                 region = offset_loops(
-                    {.loops = loops,
-                     .id_loops = id_loops,
-                     .source_ids = view(source_ids),
-                     .classes = view(classes)},
+                    {.loops = loops, .ids = ids},
                     {.delta = delta,
                      .arc_tol = arc_tol,
                      .bias_units = bias,
                      .margin_units = margin},
                     {.u = u, .max_span_units = span, .join_steps_max = steps, .eps_len = eps});
             }
-            for (std::size_t i = 0; i < std::min(region.points.size(), points_out.shape(0)); ++i) {
-                points_out(i, 0) = std::get<0>(region.points.at(i));
-                points_out(i, 1) = std::get<1>(region.points.at(i));
-            }
-            copy_out(region.starts, starts_out);
-            copy_out(region.ids, ids_out);
-            copy_out(region.fixed, fixed_out);
-            return std::tuple{static_cast<int>(region.status), region.points.size(),
-                              region.starts.size()};
+            return write_region(region, std::tie(points_out, starts_out, ids_out, fixed_out));
         },
         nb::arg("points"), nb::arg("loop_starts"), nb::arg("id_points"), nb::arg("id_starts"),
         nb::arg("source_ids"), nb::arg("classes"), nb::arg("offset"), nb::arg("grid"),

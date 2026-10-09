@@ -17,6 +17,7 @@ Layer 1. Implements docs/research/02 (plan 0005, `docs/plans/active/0005-offset2
 - The kernel includes geometry2d's headers by relative path (`../../geometry2d/kernel/grid.hpp`); `tools/arch-check` resolves quoted includes relative to the file and allows only geometry2d's `kernel_interface`.
 - Only this module's Python code calls `splintercam._kernels.offset2d`. Kernel outputs are arrays the Python side allocates and passes in.
 - The side follows from the region's kind: air shrinks, material grows (DEC-OFF-004).
+- Every Clipper2 call ends in `kernel/result.cpp` (`finish_region`) and, on the Python side, in `_results.py` (`run_kernel`, `outcome`): pinch split, canonical order and IDs stay the same for offsets and Booleans.
 
 ## Known pitfalls
 

@@ -57,6 +57,10 @@ Total: about 1230 added lines of code (about 1050 NLOC) and 2080 of tests, in ni
 
 ## Progress log
 
+### 2026-10-09, step 7, part 1 (shared code)
+
+- Before the Booleans: the output stage of every Clipper2 call moved from `kernel/offset.cpp` into `kernel/result.cpp` (`finish_region`, `IdSource`: pinch split, area-0 drop, canonical order, mm, class-tie IDs), and the Python side's output arrays with their retry, the status as diagnostics and the replay log into `_results.py`; the binding shares `write_region` and `id_source`. Behaviour unchanged (all offset2d tests pass as they are). Its own pull request, since moved lines count as added: with the Booleans the step measured 474 lines; the Booleans and the stock update follow in their own pull requests.
+
 ### 2026-10-09, step 6 (source IDs, order, translation)
 
 - Source IDs by the class tie (REQ-OFF-034, DEC-OFF-013): `nearest_ties` within eps_len, then material, cleared, air, then the lowest ID; research 02's test 14 (failed first: the top-left join took the air ID; a mutation back to the first candidate fails it again). Pieces of area 0 dropped (037; code only, no input known to produce one). The cleared class tested too. Bit-identical arrays twice and in another loop order (038, 011). Translation, test 17, as a property test: every vertex within 3u of the other result's boundary; vertex to vertex differed by 0.1 mm, because round joins do not keep their vertices (DEC-OFF-013, REQ-OFF-010 reworded, ours).
