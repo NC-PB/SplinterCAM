@@ -24,6 +24,7 @@ using Counts = nb::ndarray<const std::int64_t, nb::shape<-1>, nb::c_contig, nb::
 using CountsOut = nb::ndarray<std::int64_t, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
 using FlagsOut = nb::ndarray<std::uint8_t, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
 using Triple = std::array<double, 3>;
+using Quad = std::array<double, 4>;
 
 template <typename Array> auto view(const Array& array) {
     return std::span{array.data(), array.size()};
@@ -58,11 +59,11 @@ void bind(nb::module_& m) {
     m.def(
         "offset_loops",
         [](const PointRows& points, const Counts& loop_starts, const Counts& source_ids,
-           const Triple& offset, const Triple& grid, const PointsOut& points_out,
+           const Quad& offset, const Triple& grid, const PointsOut& points_out,
            const CountsOut& starts_out, const CountsOut& ids_out, const FlagsOut& fixed_out) {
             const geometry2d::Polylines loops =
                 checked_loops(points, loop_starts, source_ids.shape(0));
-            const auto [delta, arc_tol, bias] = offset;
+            const auto [delta, arc_tol, bias, margin] = offset;
             const auto [u, span, steps] = grid;
             if (!finite(offset) || std::abs(delta) <= arc_tol || !(arc_tol > 0.0) || !(u > 0.0) ||
                 !(span > 0.0) || !(steps > 0.0) || !finite(grid)) {
@@ -72,7 +73,10 @@ void bind(nb::module_& m) {
             {
                 const nb::gil_scoped_release unlocked;
                 region = offset_loops({.loops = loops, .source_ids = view(source_ids)},
-                                      {.delta = delta, .arc_tol = arc_tol, .bias_units = bias},
+                                      {.delta = delta,
+                                       .arc_tol = arc_tol,
+                                       .bias_units = bias,
+                                       .margin_units = margin},
                                       {.u = u, .max_span_units = span, .join_steps_max = steps});
             }
             for (std::size_t i = 0; i < std::min(region.points.size(), points_out.shape(0)); ++i) {
@@ -89,7 +93,8 @@ void bind(nb::module_& m) {
         nb::arg("grid"), nb::arg("points_out"), nb::arg("starts_out"), nb::arg("ids_out"),
         nb::arg("fixed_out"),
         "Offset flattened, normalised loops in one Clipper2 call (offset = delta, a in mm, the "
-        "bias in grid units; grid = u, the span limit, the join step limit); return (status, "
+        "bias and the rounding margin in grid units; grid = u, the span limit, the join step "
+        "limit); return (status, "
         "points, loops), the counts it needed.");
 }
 

@@ -47,7 +47,7 @@ Released with the SPEC (Peter, 2026-10-08). Steps 2 and 3 follow his answers 2 a
 - [x] 2. **foundation: the offset's parameters** (Open question 2). `ToleranceSet.arc_tol_mm`, `offset_bias_grid_units` and `join_steps_max` in `tolerance_defaults.toml`, and the diagnostic code `CANCELLED` (warning), with a foundation SPEC change (DEC-OFF-002). Size: about 50 + 70.
 - [x] 3. **geometry2d: the grid interface** (Open question 1, DEC-G2D-040). `frame_of`, `to_grid`, `split_pinches`, `shared_points` and `canonical` move from `kernel/grid.cpp` into `kernel/grid.hpp`, and `kernel/distance.hpp` gains the segments within eps_len of the nearest distance (DEC-OFF-001), with a geometry2d SPEC change; behaviour unchanged, geometry2d's tests pass as they are, new tests for the new entry. If an include directory is added for offset2d, `_quoted` in `tools/lib/arch_kernels.py` must resolve it (arch-check resolves quoted includes relative to the file only). Size: about 120 + 120.
 - [x] 4. **The region offset.** Scaffold `src/splintercam/offset2d/` (`tools/new-module` or by hand, as Peter says), `offset_region` with the loop tree and `flatten_loops` (REQ-OFF-021), the one `ClipperOffset` call (022), t = 0 through `build_region` (024), the span refusal (018), the band (025), integer topology (026), `OFFSET_EMPTY`, `OFFSET_FAILED`, `ValueError`, `CANCELLED` (039 to 042, 013, 014). Tests 6, 7, 8, 10, 11, 18 and 9's oracle. A new algorithm: its own pull request. Size: about 380 + 500.
-- [ ] 5. **The orientation guard** (REQ-OFF-023). Test 21. It replaces step 4's refusal of a hole holding the extreme point (DEC-OFF-008), and `test_an_island_holding_the_extreme_point_fails_until_the_guard_exists` becomes test 21 proper. Size: about 120 + 200.
+- [x] 5. **The orientation guard** (REQ-OFF-023). Test 21. It replaces step 4's refusal of a hole holding the extreme point (DEC-OFF-008), and `test_an_island_holding_the_extreme_point_fails_until_the_guard_exists` becomes test 21 proper. Size: about 120 + 200.
 - [ ] 6. **Source IDs with classes, pinch points, order** (REQ-OFF-034, 036 to 038, 011, 010). Tests 14, 15, 17, 19. Size: about 150 + 350.
 - [ ] 7. **Booleans** (REQ-OFF-030, 031, 033, 035). Tests 1 to 5, Vatti note test 7. The stock update: `machined_area` and `stock_layer` (REQ-OFF-032, 044; research 02's answer to RR-001, released 2026-10-09). Test 22. Size: about 200 + 400.
 - [ ] 8. **Open chains** (REQ-OFF-027 to 029). Tests 12 and 13. Size: about 260 + 350.
@@ -56,6 +56,11 @@ Released with the SPEC (Peter, 2026-10-08). Steps 2 and 3 follow his answers 2 a
 Total: about 1230 added lines of code (about 1050 NLOC) and 2080 of tests, in nine steps.
 
 ## Progress log
+
+### 2026-10-09, step 5 (the orientation guard)
+
+- The guard triangle of research 02, step 3 (REQ-OFF-023, DEC-OFF-011) replaces step 4's refusal: test 21 now matches the offset oracle with the guard gone, and the corner case (an inner loop listed first at its wall's top-left corner, which wins Clipper2's tie because the loop tree keeps the input order) works for air and material; the span check counts the guard. The property tests take the touching island again (test 9 and 10 on every generator).
+- Reviews: spec-reviewer (the geometry holds: Clipper2's rule, the shrink always removes the guard, the grown guard stays apart, no overflow). Fixed: the test of a leftover guard could not fail (now the band's top above the flattened input; a leftover guard fails four tests by mutation); exactly one loop removed when growing, none when shrinking (ours); the gap from the declared rounding margin, not the bias; a check that the guard holds the extreme point. Test audit: the test 21 swap is a reversal the SPEC makes, not a weakening; the replay log through a simulated kernel failure; guard sizes 0.5, 3 and 9 mm; a guard just under the span limit accepted. Open for Peter: REQ-OFF-018's wording, since the guard's share of the span is checked on the grid (DEC-OFF-011, provisional).
 
 ### 2026-10-09, step 4 (the region offset)
 
