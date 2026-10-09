@@ -26,6 +26,7 @@ BIAS_GRID_UNITS = TOLERANCE_DEFAULTS["offset_bias_grid_units"].default  # D-132
 MARGIN_GRID_UNITS = TOLERANCE_DEFAULTS["rounding_margin_grid_units"].default  # D-132
 JOIN_STEPS_MAX = TOLERANCE_DEFAULTS["join_steps_max"].default  # research 02, Parameters
 MAX_SPAN_GRID_UNITS = TOLERANCE_DEFAULTS["grid_max_span_units"].default  # REQ-G2D-034
+_ARC_TOL_FLOOR_GRID_UNITS = TOLERANCE_DEFAULTS["arc_tol_floor_grid_units"].default  # D-132
 OK, _TOO_LARGE = 0, 1  # GridStatus in geometry2d's kernel/grid.hpp; 2 is a failure
 
 # A kernel entry with its inputs bound: it writes into (points, starts, ids, fixed) as far as they
@@ -34,6 +35,13 @@ KernelCall = Callable[
     [NDArray[np.float64], NDArray[np.int64], NDArray[np.int64], NDArray[np.uint8]],
     tuple[int, int, int],
 ]
+
+
+def check_arc_tol(ctx: Context) -> None:
+    """a at least 2u, which the band and the rounding margin assume (REQ-OFF-013). foundation's
+    `arc_tol_mm` keeps it so, so this guards against a changed `ToleranceSet` only."""
+    if ctx.tolerances.arc_tol_mm < _ARC_TOL_FLOOR_GRID_UNITS * ctx.tolerances.grid_unit_mm:
+        raise ValueError("the arc tolerance a must be at least 2 grid units")
 
 
 def vertex_classes(classes: SourceClasses, source_ids: NDArray[np.int64]) -> NDArray[np.int8]:

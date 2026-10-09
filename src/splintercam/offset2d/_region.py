@@ -10,7 +10,6 @@ from numpy.typing import NDArray
 from splintercam import _kernels
 from splintercam.foundation import (
     CANCELLED,
-    TOLERANCE_DEFAULTS,
     Context,
     Diagnostic,
     Result,
@@ -32,12 +31,11 @@ from ._results import (
     MARGIN_GRID_UNITS,
     MAX_SPAN_GRID_UNITS,
     OK,
+    check_arc_tol,
     outcome,
     run_kernel,
     vertex_classes,
 )
-
-_ARC_TOL_FLOOR_GRID_UNITS = TOLERANCE_DEFAULTS["arc_tol_floor_grid_units"].default  # D-132
 
 
 def offset_region(
@@ -92,8 +90,7 @@ def _check_arguments(
     if not (math.isfinite(clearance_mm) and clearance_mm >= 0.0):
         raise ValueError(f"the clearance must be finite and >= 0, got {clearance_mm!r}")
     check_classes(classes, loops.ids)
-    if ctx.tolerances.arc_tol_mm < _ARC_TOL_FLOOR_GRID_UNITS * ctx.tolerances.grid_unit_mm:
-        raise ValueError("the arc tolerance a must be at least 2 grid units")
+    check_arc_tol(ctx)
 
 
 def _cleaned(region: PolygonRegion, ctx: Context) -> tuple[PolygonRegion, list[Diagnostic]]:

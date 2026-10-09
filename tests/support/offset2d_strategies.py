@@ -33,6 +33,15 @@ _MAX_BULGE = 0.3  # sagitta <= 0.15·chord <= 4.3 mm, so inward arcs stay 9.7 mm
 # A line, or an arc that bulges by at least 1/40 of its chord either way: a nearly flat arc has a
 # centre far beyond the drawing, which a CAD file holds as a line.
 _MIN_BULGE = 0.05
+
+
+def _floats(low: float, high: float) -> st.SearchStrategy[float]:
+    """Floats on a 2^-20 grid, as geometry2d's property tests draw them: a tiny draw (an angle near
+    0) would put a coordinate below 2^-142, outside the exact predicates' range (geometry2d's
+    AGENTS.md, Known pitfalls)."""
+    return st.floats(low, high).map(lambda v: min(high, max(low, round(v * 2**20) / 2**20)))
+
+
 _BULGES = st.one_of(
     st.just(0.0), st.floats(_MIN_BULGE, _MAX_BULGE), st.floats(-_MAX_BULGE, -_MIN_BULGE)
 )
@@ -138,11 +147,11 @@ def nested_regions(draw: st.DrawFn) -> RegionCase:
         rho = draw(st.sampled_from([0.0, 1.0, 4.0, 7.5]))
         for _ in range(draw(st.integers(1, 4))):
             loops.append(rounded_box(x0, y0, x1, y1, rho))
-            gap = draw(st.floats(MIN_GAP_MM, 3.0))
+            gap = draw(_floats(MIN_GAP_MM, 3.0))
             x0, y0, x1, y1, rho = x0 + gap, y0 + gap, x1 - gap, y1 - gap, max(rho - gap, 0.0)
         if draw(st.booleans()):  # a circle inside the innermost box
-            r = (x1 - x0) / 2.0 - draw(st.floats(MIN_GAP_MM, 2.0))
-            start = draw(st.floats(0.0, math.tau))
+            r = (x1 - x0) / 2.0 - draw(_floats(MIN_GAP_MM, 2.0))
+            start = draw(_floats(0.0, math.tau))
             loops.append(circle((x0 + x1) / 2.0, 15.0, r, start, draw(st.integers(1, 3))))
     return RegionCase(_arranged(draw, loops), draw(_KINDS))
 
@@ -157,12 +166,12 @@ def pocket_with_islands(draw: st.DrawFn) -> RegionCase:
         x, y = 30.0 * (cell % 3), 30.0 * (cell // 3)
         shape = draw(st.sampled_from(["none", "circle", "box"]))
         if shape == "circle":
-            r = draw(st.floats(2.0, 11.0))
-            start = draw(st.floats(0.0, math.tau))
+            r = draw(_floats(2.0, 11.0))
+            start = draw(_floats(0.0, math.tau))
             loops.append(circle(x + 15.0, y + 15.0, r, start, draw(st.integers(1, 3))))
         elif shape == "box":
-            m = draw(st.floats(4.0, 10.0))
-            rho = draw(st.floats(0.0, (30.0 - 2.0 * m) / 2.0))
+            m = draw(_floats(4.0, 10.0))
+            rho = draw(_floats(0.0, (30.0 - 2.0 * m) / 2.0))
             loops.append(rounded_box(x + m, y + m, x + 30.0 - m, y + 30.0 - m, rho))
     return RegionCase(_arranged(draw, loops), draw(_KINDS))
 
@@ -172,14 +181,14 @@ def bulged_pocket(draw: st.DrawFn) -> RegionCase:
     """A loop of 6 to 12 lines and arcs bulging either way around a circular island about the
     origin (geometry2d's flatten_loops property test)."""
     n = draw(st.integers(6, 12))
-    jitter = draw(st.lists(st.floats(-0.2, 0.2), min_size=n, max_size=n))
+    jitter = draw(st.lists(_floats(-0.2, 0.2), min_size=n, max_size=n))
     angles = [(k + j) * math.tau / n for k, j in enumerate(jitter)]
     points = [(_BULGED_RADIUS_MM * math.cos(a), _BULGED_RADIUS_MM * math.sin(a)) for a in angles]
     bulges = draw(st.lists(_BULGES, min_size=n, max_size=n))
     outer = [
         bulge_row(p, q, b) for p, q, b in zip(points, points[1:] + points[:1], bulges, strict=True)
     ]
-    island = circle(0.0, 0.0, draw(st.floats(0.5, 8.0)), draw(st.floats(0.0, math.tau)), 2)
+    island = circle(0.0, 0.0, draw(_floats(0.5, 8.0)), draw(_floats(0.0, math.tau)), 2)
     return RegionCase(_arranged(draw, [outer, island]), draw(_KINDS))
 
 
@@ -190,17 +199,17 @@ def touching_island(draw: st.DrawFn, gaps: st.SearchStrategy[float] | None = Non
     the arcs do not start at the touching point, the island's side-correct flattening reaches past
     the wall's (research 01, rule 7)."""
     gap = 0.0 if gaps is None else draw(gaps)
-    island_r = draw(st.floats(2.0, 8.0))
-    island_start = draw(st.floats(0.0, math.tau))
+    island_r = draw(_floats(2.0, 8.0))
+    island_start = draw(_floats(0.0, math.tau))
     if draw(st.booleans()):  # a circular wall
-        wall_r = draw(st.floats(2.5 * island_r, 30.0))
-        at = draw(st.floats(0.0, math.tau))
+        wall_r = draw(_floats(2.5 * island_r, 30.0))
+        at = draw(_floats(0.0, math.tau))
         reach = wall_r - island_r - gap
-        wall = circle(0.0, 0.0, wall_r, draw(st.floats(0.0, math.tau)), draw(st.integers(1, 3)))
+        wall = circle(0.0, 0.0, wall_r, draw(_floats(0.0, math.tau)), draw(st.integers(1, 3)))
         centre = (reach * math.cos(at), reach * math.sin(at))
     else:  # the top side of the box [0, 60] x [0, 40]
         wall = rounded_box(0.0, 0.0, 60.0, 40.0, draw(st.sampled_from([0.0, 5.0])))
-        centre = (draw(st.floats(island_r + 6.0, 54.0 - island_r)), 40.0 - island_r - gap)
+        centre = (draw(_floats(island_r + 6.0, 54.0 - island_r)), 40.0 - island_r - gap)
     island = circle(*centre, island_r, island_start, draw(st.integers(1, 3)))
     return RegionCase(_arranged(draw, [wall, island]), draw(_KINDS))
 
@@ -212,4 +221,4 @@ def regions() -> st.SearchStrategy[RegionCase]:
 
 def clearances() -> st.SearchStrategy[float]:
     """Research 02's test 10: t from 0.1 to 50 mm."""
-    return st.floats(0.1, 50.0)
+    return _floats(0.1, 50.0)
