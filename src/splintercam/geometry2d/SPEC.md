@@ -402,7 +402,7 @@ The budget is foundation's (REQ-FND-009). Slice 1 spends none of it: `flatten` t
 
 ## Size estimate
 
-Slice 1: about 800 NLOC of Python and 900 of C++ (`predicates.c` not counted), 1561 NLOC measured on 2026-10-03, and 2500 lines of tests. Slice 2: about 1300 NLOC (Clipper2 not counted) and 2550 lines of tests in eight steps of plan 0004. Slice 2 measured 3529 NLOC for the module on 2026-10-08 (about 1970 for slice 2, against its estimate of 1300). Budget in `architecture/modules.yaml`: 3600 NLOC (Peter, 2026-10-08, DEC-G2D-038; 3000 by DEC-G2D-022, 1700 for slice 1, DEC-G2D-017).
+Slice 1: about 800 NLOC of Python and 900 of C++ (`predicates.c` not counted), 1561 NLOC measured on 2026-10-03, and 2500 lines of tests. Slice 2: about 1300 NLOC (Clipper2 not counted) and 2550 lines of tests in eight steps of plan 0004. Slice 2 measured 3529 NLOC for the module on 2026-10-08 (about 1970 for slice 2, against its estimate of 1300). The offset interface of plan 0005, step 3 (`nearest_ties`, the grid steps, the `canonical` tie-breaker) brought it to 3700 NLOC (2026-10-09). Budget in `architecture/modules.yaml`: 4000 NLOC (Peter, 2026-10-09, DEC-G2D-043; 3600 by DEC-G2D-038, 3000 by DEC-G2D-022, 1700 for slice 1, DEC-G2D-017).
 
 ## Open questions
 
@@ -439,6 +439,7 @@ No requirements; each line names the work and where its drafted requirements and
 - 2026-10-07: Peter's answers to the four questions of the slice 2 cut: crossings count only when a loop reaches more than t_topo into the other on both sides (new REQ-G2D-237 for pairs, 238 for a loop with itself; 161 and 163 follow); the PolyTree uses the Positive fill rule (176, 177 released); the PolyTree's rounding goes to plan 0005; REQ-G2D-030, 119, 178 and 179 approved. Research 01, rules 4 and 7 and tests 7 and 21, updated in the same pull request. DEC-G2D-024 to 027.
 - 2026-10-08: plan 0005, step 3, on Peter's answer DEC-OFF-001: `Frame`, `frame_of`, `to_grid`, `split_pinches`, `canonical` and `shared_points` declared in `kernel/grid.hpp` (behaviour unchanged), with Clipper2's header; `nearest_ties` in `kernel/distance.hpp` and its kernel binding, new REQ-G2D-242 (DEC-G2D-041).
 - 2026-10-09: the canonical order of the grid's loops breaks its last tie point by point, so loops tied on start point and area no longer keep Clipper2's order (Peter, DEC-G2D-042; REQ-G2D-181, 231); the PUBLIC Clipper2 link of DEC-G2D-041 kept (Peter).
+- 2026-10-09: the module budget raised to 4000 NLOC (Peter, DEC-G2D-043); the next slice sets its budget from its plan's estimate.
 
 [r01]: ../../../docs/research/01-foundations.md
 [signs]: ../../../docs/research/01-foundations.md#vectors-and-exact-signs
