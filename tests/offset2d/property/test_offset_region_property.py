@@ -86,7 +86,7 @@ def test_every_boundary_point_lies_in_the_band(
     probes = np.concatenate([region.points, (rows.rows[:, 0:2] + rows.rows[:, 2:4]) / 2.0])
     d = distance_to_curves(probes, polygon_rows(flat.points, flat.loop_starts))
     assert d.min() >= t_mm - 1e-9 * max(1.0, t_mm)  # the oracle's own error bound, far below u
-    assert d.max() <= t_mm + offset_band_mm(ctx.tolerances) + 1e-9 * max(1.0, t_mm)
+    assert d.max() <= t_mm + offset_band_mm(ctx.tolerances)
 
 
 @pytest.mark.req("REQ-OFF-020", "REQ-OFF-026")

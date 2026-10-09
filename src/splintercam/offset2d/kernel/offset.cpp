@@ -17,12 +17,15 @@ using geometry2d::GridStatus;
 // Clipper2's default miter limit; it has no effect with round joins (SRC-122, ClipperOffset).
 constexpr double miter_limit = 2.0;
 
-// Whether Clipper2 takes a hole for the outer loop, rule for rule: the path holding the largest y,
-// then the smallest x (the first on a tie; area 0 skipped); a negative area reverses the whole
-// offset (SRC-122: GetLowestClosedPathInfo; research 02, The kernel call, step 3; DEC-OFF-008).
-bool extreme_path_is_hole(const Clipper2Lib::Paths64& paths) {
+enum class Extreme : std::uint8_t { none, outer, hole };
+
+// The path Clipper2 takes for the outer loop, rule for rule: the one holding the largest y, then
+// the smallest x (the first on a tie; area 0 skipped); a hole there reverses the whole offset, and
+// with no path left Clipper2 makes δ positive (SRC-122: GetLowestClosedPathInfo, ExecuteInternal;
+// research 02, The kernel call, step 3; DEC-OFF-008).
+Extreme extreme_path(const Clipper2Lib::Paths64& paths) {
     Clipper2Lib::Point64 extreme(INT64_MAX, INT64_MIN);
-    bool hole = false;
+    Extreme found = Extreme::none;
     for (const Clipper2Lib::Path64& path : paths) {
         const double area = Clipper2Lib::Area(path);
         if (area == 0.0) {
@@ -31,11 +34,11 @@ bool extreme_path_is_hole(const Clipper2Lib::Paths64& paths) {
         for (const Clipper2Lib::Point64& p : path) {
             if (p.y > extreme.y || (p.y == extreme.y && p.x < extreme.x)) {
                 extreme = p;
-                hole = area < 0.0;
+                found = area < 0.0 ? Extreme::hole : Extreme::outer;
             }
         }
     }
-    return hole;
+    return found;
 }
 
 // A guard against a whole inverted result, such as Clipper2's orientation guess gives (research
@@ -75,9 +78,13 @@ void fill_region(const std::vector<Clipper2Lib::Path64>& loops, geometry2d::Fram
     std::vector<std::int64_t> nearest(result.points.size());
     geometry2d::nearest_segments(middles, input.loops, id_reach, nearest);
     for (const std::int64_t segment : nearest) {
+        if (segment < 0) { // no input edge within the band: the result is not an offset of it
+            result = GridRegion{};
+            result.status = GridStatus::failed;
+            return;
+        }
         result.ids.push_back(
-            segment < 0 ? -1
-                        : input.source_ids.subspan(static_cast<std::size_t>(segment), 1).front());
+            input.source_ids.subspan(static_cast<std::size_t>(segment), 1).front());
     }
 }
 
@@ -99,7 +106,11 @@ GridRegion offset_loops(const OffsetInput& input, OffsetParams params, OffsetLim
     // binds with |δ| ≥ a ≥ 2u (research 02, The kernel call, step 5; REQ-OFF-014).
     const double steps = std::numbers::pi / std::acos(1.0 - (params.arc_tol / reach));
     const Clipper2Lib::Paths64 grid = geometry2d::to_grid(input.loops, frame, limits.u);
-    if (!(steps <= limits.join_steps_max) || extreme_path_is_hole(grid)) {
+    const Extreme extreme = extreme_path(grid);
+    if (extreme == Extreme::none) {
+        return result; // every path has area 0 on the grid: nothing to offset, an empty region
+    }
+    if (!(steps <= limits.join_steps_max) || extreme == Extreme::hole) {
         result.status = GridStatus::failed;
         return result;
     }
@@ -109,7 +120,9 @@ GridRegion offset_loops(const OffsetInput& input, OffsetParams params, OffsetLim
     offsetter.AddPaths(grid, Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Polygon);
     Clipper2Lib::Paths64 solution;
     offsetter.Execute(params.delta / limits.u, solution);
-    if (offsetter.ErrorCode() != 0 || !plausible(grid, solution, params)) {
+    // Clipper2 2.0.1 reports no failure here: ErrorCode() is always 0 and the result of its inner
+    // union is dropped (SRC-122, ExecuteInternal), so only the area check guards (DEC-OFF-008).
+    if (!plausible(grid, solution, params)) {
         result.status = GridStatus::failed;
         return result;
     }

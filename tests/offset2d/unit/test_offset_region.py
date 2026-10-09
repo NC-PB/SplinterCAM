@@ -1,8 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """Unit tests of `offset_region` (plan 0005, step 4): research 02's tests 6, 7, 8, 11, 14 and 18,
-the clean-up before the kernel, the diagnostics and refusals, and test 21's shape, which fails
-through the area check until step 5 adds the orientation guard."""
+the clean-up before the kernel, the diagnostics and refusals, and test 21's shape, which the
+kernel refuses until step 5 adds the orientation guard (DEC-OFF-008)."""
 
+import json
+import logging
 import math
 
 import numpy as np
@@ -217,13 +219,14 @@ def test_the_loops_reach_the_kernel_normalised(ctx: Context) -> None:
     assert drawn.points.tobytes() == turned.points.tobytes()
 
 
-@pytest.mark.req("REQ-OFF-014", "REQ-OFF-023")
+@pytest.mark.req("REQ-OFF-014")
 def test_an_island_holding_the_extreme_point_fails_until_the_guard_exists(ctx: Context) -> None:
     # Research 02, test 21's shape: an island of radius 5 tangent inside a wall of radius 20 at
     # its top. In a region of air the island's flattening lies outside the true circle and reaches
     # above the wall's, so Clipper2 would take the island for the outer loop and invert the whole
-    # offset; measured, the inverted shrink came back empty. Until step 5 adds the guard: never a
-    # region, OFFSET_FAILED (Peter, 2026-10-09; DEC-OFF-008).
+    # offset; measured, the inverted shrink came back empty, which the area check cannot see, so
+    # the kernel refuses the hole itself. Until step 5 adds the guard: never a region,
+    # OFFSET_FAILED (Peter, 2026-10-09; DEC-OFF-008).
     loops = to_curve_rows(
         [circle(0.0, 0.0, 20.0, 0.3, 1), reversed_loop(circle(0.0, 15.0, 5.0, 0.3, 1))], ctx
     )
@@ -252,3 +255,38 @@ def test_every_vertex_carries_an_input_id(ctx: Context) -> None:
     region = offset(loops, AIR, 3.0, ctx)
     assert set(region.source_ids.tolist()) <= set(loops.ids.tolist())
     assert polygon_rows(region.points, region.loop_starts).rows.shape[0] == region.points.shape[0]
+
+
+@pytest.mark.req("REQ-OFF-039", "REQ-OFF-040")
+def test_a_region_whose_loops_are_all_dropped_is_empty(ctx: Context) -> None:
+    # A sliver the loop tree drops (LOOP_DEGENERATE, a warning) leaves nothing to offset.
+    sliver = [[0.0, 0.0, 10.0, 0.0, NAN, NAN, 0.0], [10.0, 0.0, 0.0, 1e-9, NAN, NAN, 0.0],
+              [0.0, 1e-9, 0.0, 0.0, NAN, NAN, 0.0]]  # fmt: skip
+    loops = to_curve_rows([sliver], ctx)
+    result = offset_region(loops, AIR, 1.0, classes(loops), ctx)
+    assert result.value is not None
+    assert result.value.loop_starts.size == 0
+    assert codes(result) == ["LOOP_DEGENERATE", "OFFSET_EMPTY"]
+
+
+@pytest.mark.req("REQ-OFF-013")
+def test_a_kind_that_is_not_a_region_kind_is_refused(ctx: Context) -> None:
+    loops = to_curve_rows([box_loop(0.0, 0.0, 10.0, 10.0)], ctx)
+    with pytest.raises(ValueError, match="RegionKind"):
+        offset_region(loops, "AIR", 1.0, classes(loops), ctx)  # pyright: ignore[reportArgumentType]
+
+
+@pytest.mark.req("REQ-OFF-014")
+def test_a_failed_offset_logs_its_kernel_input_for_replay(
+    ctx: Context, caplog: pytest.LogCaptureFixture
+) -> None:
+    loops = to_curve_rows(
+        [circle(0.0, 0.0, 20.0, 0.3, 1), reversed_loop(circle(0.0, 15.0, 5.0, 0.3, 1))], ctx
+    )
+    with caplog.at_level(logging.ERROR, logger=ctx.logger.name):
+        offset_region(loops, AIR, 2.0, classes(loops), ctx)
+    message = caplog.records[-1].getMessage()
+    dump = json.loads(message.split("replay: ", 1)[1])
+    keys = {"points", "loop_starts", "source_ids", "delta_mm", "arc_tol_mm", "grid_unit_mm"}
+    assert keys <= set(dump)
+    assert dump["delta_mm"] < 0.0  # air shrinks
