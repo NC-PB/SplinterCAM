@@ -16,3 +16,8 @@ def clip_regions(subject: Annotated[NDArray[numpy.float64], dict(shape=(None, 2)
     """
     The union (0), difference (1) or intersection (2) of closed loops in one Clipper2 call (grid = u, the span limit, the tie window, the reach of the source IDs); return (status, points, loops), the counts it needed.
     """
+
+def grow_chains(chains: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], chain_starts: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu', writable=False)], id_points: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], id_starts: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu', writable=False)], source_ids: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu', writable=False)], classes: Annotated[NDArray[numpy.int8], dict(shape=(None,), order='C', device='cpu', writable=False)], offset: Sequence[float], grid: Sequence[float], points_out: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu')], starts_out: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu')], ids_out: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu')], fixed_out: Annotated[NDArray[numpy.uint8], dict(shape=(None,), order='C', device='cpu')]) -> tuple[int, int, int]:
+    """
+    Grow open chains by delta with round joins and ends in one Clipper2 call (offset = delta, a, the reach of the source IDs in mm; grid = u, the span limit, the join step limit, eps_len); return (status, points, loops), the counts it needed.
+    """

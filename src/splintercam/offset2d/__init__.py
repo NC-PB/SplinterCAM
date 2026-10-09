@@ -4,5 +4,14 @@
 from ._boolean import BooleanOp, boolean
 from ._classes import EdgeClass, SourceClasses
 from ._region import offset_region
+from ._stock import machined_area, stock_layer
 
-__all__ = ["BooleanOp", "EdgeClass", "SourceClasses", "boolean", "offset_region"]
+__all__ = [
+    "BooleanOp",
+    "EdgeClass",
+    "SourceClasses",
+    "boolean",
+    "machined_area",
+    "offset_region",
+    "stock_layer",
+]

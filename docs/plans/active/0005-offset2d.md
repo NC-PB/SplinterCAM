@@ -49,13 +49,17 @@ Released with the SPEC (Peter, 2026-10-08). Steps 2 and 3 follow his answers 2 a
 - [x] 4. **The region offset.** Scaffold `src/splintercam/offset2d/` (`tools/new-module` or by hand, as Peter says), `offset_region` with the loop tree and `flatten_loops` (REQ-OFF-021), the one `ClipperOffset` call (022), t = 0 through `build_region` (024), the span refusal (018), the band (025), integer topology (026), `OFFSET_EMPTY`, `OFFSET_FAILED`, `ValueError`, `CANCELLED` (039 to 042, 013, 014). Tests 6, 7, 8, 10, 11, 18 and 9's oracle. A new algorithm: its own pull request. Size: about 380 + 500.
 - [x] 5. **The orientation guard** (REQ-OFF-023). Test 21. It replaces step 4's refusal of a hole holding the extreme point (DEC-OFF-008), and `test_an_island_holding_the_extreme_point_fails_until_the_guard_exists` becomes test 21 proper. Size: about 120 + 200.
 - [x] 6. **Source IDs with classes, pinch points, order** (REQ-OFF-034, 037, 038, 011, 010). Tests 14, 17, 19. Size: about 150 + 350.
-- [ ] 7. **Booleans** (REQ-OFF-030, 031, 033, 035, and the pinch tests of 036). Tests 1 to 5 and 15, Vatti note test 7. The stock update: `machined_area` and `stock_layer` (REQ-OFF-032, 044; research 02's answer to RR-001, released 2026-10-09). Test 22. Size: about 200 + 400.
+- [x] 7. **Booleans** (REQ-OFF-030, 031, 033, 035, and the pinch tests of 036). Tests 1 to 5 and 15, Vatti note test 7. The stock update: `machined_area` and `stock_layer` (REQ-OFF-032, 044; research 02's answer to RR-001, released 2026-10-09). Test 22. Size: about 200 + 400.
 - [ ] 8. **Open chains** (REQ-OFF-027 to 029). Tests 12 and 13. Size: about 260 + 350.
 - [ ] 9. **Golden case and differential.** `pocket-island-touching-wall` (test 16; a person approves the golden files); ADR 0010 (accepted 2026-10-09) applied: the group `test-oracle` with shapely in `pyproject.toml` and `uv.lock`, installed by `tools/bootstrap` (DEC-OFF-003); then test 20. Size: about 0 + 250.
 
 Total: about 1230 added lines of code (about 1050 NLOC) and 2080 of tests, in nine steps.
 
 ## Progress log
+
+### 2026-10-09, step 7, part 3 (the stock update)
+
+- `machined_area` (REQ-OFF-032, 031) and `stock_layer` (REQ-OFF-044; DEC-OFF-015): each operation's centre paths flattened by `build_chain` and grown together by R − (t_flat + 6u) with round joins and ends (`kernel/grow.cpp`, for step 8 too), the IDs over each chain there and back; the raw layer minus all machined areas in one Difference call. Research 02's test 22 (a closed pocket pass and an open profile with an arc; never less stock than the exact geometry leaves, too much only within 2·t_flat + a + 12u; both orders give the same arrays), the band of straight, arc and closed paths, R ≤ m refused, the span with 2·δ. Mutations: growing by R fails three tests, a union instead of the difference fails test 22. Reviews: the spec review found test 22 could not see a wrong m and REQ-OFF-032's band wrong on the centre side of an arc (corrected, DEC-OFF-015; the tests now sample near R and the raw boundary, at tol 0.01 and 0.05, both arc directions); the cnc review found every approximation errs toward more stock and named two callers' duties, which Peter accepted on 2026-10-10 with drilling cycles counted as their expanded feed moves and a warning on a failed stock layer (DEC-OFF-016); the test audit's untested branches all have tests now. Step 7 done in three pull requests (the shared code, the Booleans, the stock update).
 
 ### 2026-10-09, step 7, part 2 (Booleans)
 
