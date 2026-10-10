@@ -9,6 +9,7 @@ at one point (test 16) or lies a drawn gap from it. Rows are [x0, y0, x1, y1, cx
 P1 on the circle up to float rounding.
 """
 
+import itertools
 import math
 from dataclasses import dataclass
 
@@ -16,8 +17,8 @@ import numpy as np
 from hypothesis import strategies as st
 
 from geometry2d_checks import reversed_loop
-from splintercam.foundation import Context
-from splintercam.geometry2d import CurveRows, RegionKind, curve_rows
+from splintercam.foundation import TOLERANCE_DEFAULTS, Context
+from splintercam.geometry2d import AirSide, CurveRows, RegionKind, curve_rows
 
 type Rows = list[list[float]]
 type BoxMM = tuple[float, float, float, float]
@@ -222,3 +223,96 @@ def regions() -> st.SearchStrategy[RegionCase]:
 def clearances() -> st.SearchStrategy[float]:
     """Research 02's test 10: t from 0.1 to 50 mm."""
     return _floats(0.1, 50.0)
+
+
+# Open chains for `offset_chain_side` (plan 0005, backlog of step 8). Turns at vertices of at most
+# 1.5 rad between chords and bulges of at most 0.4 (an end tangent 0.76 rad off its chord) keep
+# every turn of the flattened chain below π - 0.1, so a drawn walk never folds; it may still touch
+# or cross itself, which the test decides with its own oracle.
+_CHAIN_TURN = 1.5
+_CHAIN_BULGE = 0.4
+# A stub from 0.1u to 0.9·t_topo, which `offset_chain_side` merges away (`keep_chain`, DEC-OFF-021);
+# above build_chain's eps_len, so it reaches offset2d.
+_U_MM = TOLERANCE_DEFAULTS["grid_unit_mm"].default
+_STUB_MIN_MM = 0.1 * _U_MM
+_T_TOPO_MM = TOLERANCE_DEFAULTS["topology_tol_grid_units"].default * _U_MM
+_STUB_MAX_MM = 0.9 * _T_TOPO_MM
+# A contact line touches, crosses by 0.5 mm, or stops short of the earlier line by t_topo/4 (to be
+# refused) or 3·t_topo (to be offset): the two sides of the test's window round t_topo.
+_CONTACT_BEYOND_MM = (0.0, 0.5, -0.25 * _T_TOPO_MM, -3.0 * _T_TOPO_MM)
+_ARC_MIN_CHORD_MM = 0.5  # a row shorter than this (a stub) stays a line
+
+
+def _on_grid(p: tuple[float, float]) -> tuple[float, float]:
+    return (round(p[0] * 2**20) / 2**20, round(p[1] * 2**20) / 2**20)
+
+
+@dataclass(frozen=True, slots=True)
+class ChainCase:
+    """The rows of one open chain, the tool's side, and how its last row was drawn: "walk", "fold"
+    (running back over the line before it) or "contact" (onto or across an earlier line); the
+    property test decides simplicity with its own oracle, these only say what to expect."""
+
+    rows: Rows
+    side: AirSide
+    ending: str
+
+
+def _walk(draw: st.DrawFn, segments: int) -> list[tuple[float, float]]:
+    heading = draw(_floats(0.0, math.tau))
+    points = [(0.0, 0.0)]
+    for _ in range(segments):
+        length = draw(_floats(1.0, 20.0))
+        x, y = points[-1]
+        step = (x + length * math.cos(heading), y + length * math.sin(heading))
+        points.append(_on_grid(step))
+        heading += draw(_floats(-_CHAIN_TURN, _CHAIN_TURN))
+    return points
+
+
+@st.composite
+def open_chains(draw: st.DrawFn) -> ChainCase:
+    """A random walk of 1 to 8 lines and arcs on the 2^-20 grid, sometimes with a stub shorter than
+    t_topo at a vertex or an end. Its last row may run back over the line before it by a drawn
+    fraction (a fold), or from the walk's end to an earlier line, touching it, crossing it or
+    stopping just short of it (a contact), both exact up to the grid."""
+    points = _walk(draw, draw(st.integers(1, 8)))
+    ending = draw(st.sampled_from(["walk", "fold", "contact"]))
+    if draw(st.booleans()):  # never after the last point of a fold: the fold must stay long
+        k = draw(st.integers(0, len(points) - (2 if ending == "fold" else 1)))
+        length, angle = draw(_floats(_STUB_MIN_MM, _STUB_MAX_MM)), draw(_floats(0.0, math.tau))
+        x, y = points[k]
+        points.insert(k + 1, _on_grid((x + length * math.cos(angle), y + length * math.sin(angle))))
+    if ending == "contact" and len(points) < 3:
+        ending = "walk"  # one segment has no earlier line to reach
+    target = draw(st.integers(0, len(points) - 3)) if ending == "contact" else -1
+    bulges = st.one_of(
+        st.just(0.0),
+        st.floats(_MIN_BULGE, _CHAIN_BULGE),
+        st.floats(-_CHAIN_BULGE, -_MIN_BULGE),
+    )
+    rows = [
+        bulge_row(
+            p, q, draw(bulges) if math.dist(p, q) >= _ARC_MIN_CHORD_MM and n != target else 0.0
+        )
+        for n, (p, q) in enumerate(itertools.pairwise(points))
+    ]
+    if ending == "fold":
+        p, q = points[-2], points[-1]
+        rows[-1] = bulge_row(p, q, 0.0)
+        f = draw(_floats(0.2, 0.8))
+        back = (q[0] + f * (p[0] - q[0]), q[1] + f * (p[1] - q[1]))
+        rows.append(bulge_row(q, _on_grid(back), 0.0))
+    elif ending == "contact":
+        (ax, ay), (bx, by), end = points[target], points[target + 1], points[-1]
+        f = draw(_floats(0.2, 0.8))
+        hit = (ax + f * (bx - ax), ay + f * (by - ay))
+        beyond = draw(st.sampled_from(_CONTACT_BEYOND_MM))
+        reach = max(math.dist(end, hit), _U_MM)  # the walk's end on that line: a contact anyway
+        tip = (
+            hit[0] + beyond * (hit[0] - end[0]) / reach,
+            hit[1] + beyond * (hit[1] - end[1]) / reach,
+        )
+        rows.append(bulge_row(end, _on_grid(tip), 0.0))
+    side = draw(st.sampled_from([AirSide.LEFT, AirSide.RIGHT]))
+    return ChainCase(rows, side, ending)
