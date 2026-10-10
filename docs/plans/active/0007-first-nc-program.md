@@ -31,7 +31,7 @@ Answered 2026-10-11: all as recommended. For question 2, step 1 checks the three
 
 <!-- Each step has a size estimate (kept code + tests). At 50 % over it, stop and ask (docs/dev/12, section 3). -->
 
-- [ ] 1. **Research pull** (Project Spike): topics 21 (DXF part), 22 (outside profile), 10 (clearance-height links only), 26 (the record subset: rapid, linear, arc, feed, spindle, tool, work offset, comment) and 27 (the NCX words for that subset, and how `ncx` is called) at L4 for these parts, moved to `docs/research/`. Size: docs only.
+- [x] 1. **Research pull** (Project Spike): topics 21 (DXF part), 22 (outside profile), 10 (clearance-height links only), 26 (the record subset: rapid, linear, arc, feed, spindle, tool, work offset, comment) and 27 (the NCX words for that subset, and how `ncx` is called) at L4 for these parts, moved to `docs/research/`. Size: docs only.
 - [ ] 2. **`io`: DXF to curve rows.** ezdxf; closed chains of lines, arcs and bulges in millimetres; a file without units refused with a diagnostic (D-033); part size reported. Size: about 200 + 250.
 - [ ] 3. **`model`: the slice's job data.** Tool (flat end mill, measurement point), stock box, setup (work offset, frame), operation parameters as declarations (D-018), held in memory. Size: about 200 + 200.
 - [ ] 4. **`cl`: the toolpath record subset** of topic 26: moves, feeds, spindle, tool, work offset, comments, operation name and note (feature map, section 6). Size: about 150 + 200.
@@ -44,12 +44,19 @@ Stop after each step for Peter's review of its pull request.
 
 ## Decisions
 
+- 2026-10-11: the slice's machine is the Heidenhain iTNC 530 (`machines/heidenhain-itnc530.toml` in NCXchange), Peter's pick after step 1 showed that all three shipped mill files compile the slice's program (question 2). Peter's dry run (step 8) is on that control.
+- 2026-10-11: the writer always emits `OFFSET:LEN` with the tool number in the tool-change block, although the iTNC 530 applies the length with `TOOL CALL` anyway: the NCX stays the same for every controller (D-148), and on the Fanuc file a tool change without it never activates `G43` (research 26, Checked against NCXchange; NCXchange request R1-13).
 - 2026-10-11: plan approved; Peter's answers to questions 1 to 5 as recommended (outside profile first; the machine picked from those that compile cleanly; `ncx` built in CI from a pinned NCXchange commit, skipped locally with a message when absent; clearance-height retract between depth passes, feed down outside the stock; Peter's dry run as the last check).
 
 ## Progress log
+
+### 2026-10-11, step 1 (Project Spike)
+
+- Research moved (PR 66): `docs/research/26-toolpath-record.md` and `27-machines-and-controllers.md` whole, with the plan 0007 subset at L4; `21-geometry-input.md` (DXF import), `22-2d-operations.md` (outside profile) and `10-linking.md` (clearance-height links) new, with only what this plan uses.
+- NCXchange `main` at f74559c built and run on the slice's sample program: `format --check`, `check --strict` and `compile --strict` pass on all three mill files when `OFFSET:LEN` is written, the program name has no spaces and coordinates have at most three decimals; with more decimals `compile` warns `CMP020` until NCXchange implements its D363, so `compile` runs without `--strict` and accepts only `CMP020` (research 27, The ncx call in plan 0007).
+- Next: step 2, `io`: DXF to curve rows (research 21).
 
 ## Backlog
 
 ## Blockers
 
-- Step 2 waits for step 1's research on `main`.
