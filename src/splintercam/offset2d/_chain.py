@@ -156,8 +156,8 @@ def offset_chain_side(  # noqa: PLR0913 (the SPEC's reviewed interface, DEC-OFF-
     chain flattened with the tool's side as the air side of every arc, grown with round ends by
     δ = t + a + 3u, and of that area's boundary the edges on the tool side, the round caps at the
     chain's ends left out (research 02, Open chains; DEC-OFF-018). A closed chain is refused with
-    `CHAIN_CLOSED`, one that runs back over itself with `CHAIN_FOLDS`; an empty result carries
-    `OFFSET_EMPTY`.
+    `CHAIN_CLOSED`, one that runs back over itself with `CHAIN_FOLDS`, one that touches or crosses
+    itself with `CHAIN_SELF_CONTACT`; an empty result carries `OFFSET_EMPTY`.
 
     Implements: REQ-OFF-013, REQ-OFF-018, REQ-OFF-028, REQ-OFF-029.
     """
@@ -174,11 +174,12 @@ def offset_chain_side(  # noqa: PLR0913 (the SPEC's reviewed interface, DEC-OFF-
         return Result(None, chain.diagnostics)
     diagnostics = list(chain.diagnostics)
     tol = ctx.tolerances
-    # Below the grid unit the grown area cannot show a segment, so the labels must not see it;
-    # a merge moves the chain by up to u, which δ then covers (DEC-OFF-018).
-    u = tol.grid_unit_mm
-    points, source_ids = merge_short(chain.value.points, chain.value.source_ids, u)
-    refusal = _refusal(chain.value.points, points, u)
+    # Within t_topo points count as touching (research 01), and below the grid unit the grown
+    # area cannot show a segment, so the labels must not see one; a merge moves the chain by up
+    # to t_topo, which δ then covers (DEC-OFF-018, DEC-OFF-021).
+    t_topo = tol.topology_tol_mm
+    points, source_ids = merge_short(chain.value.points, chain.value.source_ids, t_topo)
+    refusal = _refusal(chain.value.points, points, t_topo)
     if refusal is not None:
         return Result(None, (*diagnostics, refusal))
     if points.shape[0] < 2:
@@ -187,8 +188,8 @@ def offset_chain_side(  # noqa: PLR0913 (the SPEC's reviewed interface, DEC-OFF-
         n64 = np.empty(0, np.int64)
         region = PolygonRegion(np.empty((0, 2)), n64, n64, np.empty(0, np.uint8))
         return Result(_paths(region, np.empty(0, np.uint8)), (*diagnostics, empty))
-    merged = u if points.shape[0] < chain.value.points.shape[0] else 0.0
-    delta = clearance_mm + tol.arc_tol_mm + BIAS_GRID_UNITS * u + merged
+    merged = t_topo if points.shape[0] < chain.value.points.shape[0] else 0.0
+    delta = clearance_mm + tol.arc_tol_mm + BIAS_GRID_UNITS * tol.grid_unit_mm + merged
     side = _Side(points, source_ids, 1 if tool_side is AirSide.LEFT else -1, delta)
     return _offset_side(side, classes, diagnostics, ctx)
 
@@ -217,17 +218,25 @@ def merge_short(
     return points[kept], source_ids[first]
 
 
-def _refusal(flat: NDArray[np.float64], merged: NDArray[np.float64], u: float) -> Diagnostic | None:
-    # CHAIN_CLOSED for a loop; CHAIN_FOLDS where the merged chain runs back over itself, which
-    # leaves it no side there (DEC-OFF-018, provisional).
+def _refusal(
+    flat: NDArray[np.float64], merged: NDArray[np.float64], t_topo: float
+) -> Diagnostic | None:
+    # CHAIN_CLOSED for a loop; an open chain must be simple (Held, SRC-030, p. 19, Def. 5.3):
+    # CHAIN_FOLDS where it runs back over the segment before it, CHAIN_SELF_CONTACT where parts
+    # not next to each other touch, cross or overlap within t_topo (DEC-OFF-018, DEC-OFF-021).
     if closes(flat):
         message = "the chain closes: a loop goes through offset_region"
         return Diagnostic("CHAIN_CLOSED", Severity.ERROR, message)
-    fold = _kernels.offset2d.find_fold(merged, u)
-    if fold is None:
+    found = _kernels.offset2d.find_contact(merged, t_topo)
+    if found is None:
         return None
-    message = "the chain runs back over itself, so it has no side there"
-    return Diagnostic("CHAIN_FOLDS", Severity.ERROR, message, f"({fold[0]:.4f}, {fold[1]:.4f}) mm")
+    x, y, fold = found
+    location = f"({x:.4f}, {y:.4f}) mm"
+    if fold:
+        message = "the chain runs back over itself, so it has no side there"
+        return Diagnostic("CHAIN_FOLDS", Severity.ERROR, message, location)
+    message = "the chain touches or crosses itself, so its sides meet there"
+    return Diagnostic("CHAIN_SELF_CONTACT", Severity.ERROR, message, location)
 
 
 @dataclass(frozen=True, slots=True)

@@ -36,7 +36,7 @@
 
 - Date: 2026-10-10; raised by: plan 0005, step 8 (second spec review of `offset_chain_side`)
 - Question: how should one side of an open chain treat a spike wider than the grid unit, two segments meeting at a turn of nearly but not exactly 180° (for example (5, 0) to (5, -0.5) to (4.99, 0) inside a wall along y = 0, the tool above), where the spike's tool side wraps round its tip on the far side of the main wall? Do CAM systems refuse such chains, clean them (from what angle or width), or machine them, and is there a published rule?
-- Why it matters: DEC-OFF-018 refuses folds within u (`CHAIN_FOLDS`), spikes narrower than u among them; a near turn-back gives a short piece round the spike's tip, up to t on the material side of the main wall, which a profile would cut.
-- What is known: the second spec review's cases in `src/splintercam/offset2d/DECISIONS.md` (DEC-OFF-018, Not handled); a 135° turn is ordinary geometry and must stay, so a fixed angle limit needs a source.
-- Provisional choice: none beyond DEC-OFF-018; such chains are passed through as drawn. The strategy's review of pieces (topic 22) should look for short open pieces between two "other" runs.
-- Status: Open
+- Why it matters: DEC-OFF-018 refused folds within u only; a near turn-back gave a short piece round the spike's tip, up to t on the material side of the main wall.
+- What is known: the second spec review's cases in `src/splintercam/offset2d/DECISIONS.md` (DEC-OFF-018); a 135° turn is ordinary geometry, so a fixed angle limit needs a source.
+- Provisional choice: none.
+- Status: Answered on 2026-10-10 by Peter, see `docs/research/02-offsets-and-booleans.md`, Open chains, and DEC-OFF-021: no angle or width limit; an open chain must be simple (Held, SRC-030, p. 19, Def. 5.3; research 01's loop tree rule 4 with t_topo): where parts not next to each other come within t_topo, it is refused with the position (`CHAIN_SELF_CONTACT`). The example is refused, since (4.99, 0) lies on the incoming wall. A turn-back that touches nothing else is valid and offset as drawn; gouging the real part is the profile's check against the part model (topic 22).
