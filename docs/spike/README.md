@@ -140,3 +140,16 @@ Every file came from the stack test app's repository (scaffold, `foundation` cod
 | `docs/research/02-offsets-and-booleans.md` | project_spike research/02-offsets-and-booleans.md, brought to L4 on 2026-10-08 for plan 0005 |
 
 Scanned for references to proprietary sources (names of the proprietary system and its maker, its source register entry, private and inbox folders): none. The topic cites public literature (SRC-004, SRC-005, SRC-030, SRC-032), the prototype's measurements (SRC-118) and Clipper2's source read for its behaviour (SRC-122). `sources-snapshot.md` gains SRC-004, SRC-005 and SRC-030 (without local file locations, as before), `decisions-snapshot.md` gains D-062 and D-136.
+
+## Files moved on 2026-10-11 (plan 0007, step 1)
+
+| File | From |
+| --- | --- |
+| `docs/research/26-toolpath-record.md` | project_spike research/26-toolpath-record.md, whole topic, with the plan 0007 subset at L4 and the NCXchange check of 2026-10-11 |
+| `docs/research/27-machines-and-controllers.md` | project_spike research/27-machines-and-controllers.md, whole topic, with the plan 0007 ncx call at L4 |
+| `docs/research/21-geometry-input.md` | new: the DXF import part of project_spike's topic 21, written for plan 0007; the rest of topic 21 stays in Project Spike |
+| `docs/research/22-2d-operations.md` | new: the outside profile part of topic 22, for plan 0007; the rest stays in Project Spike |
+| `docs/research/10-linking.md` | new: the clearance-height links of topic 10, for plan 0007; the rest stays in Project Spike |
+
+Scanned for references to proprietary sources (the names of the proprietary system and its maker, its source register entry, private and inbox folders, research 18 and 19): none. `decisions-snapshot.md` gains the decisions these topics cite; `sources-snapshot.md` gains SRC-031, SRC-048 to SRC-052, SRC-070 to SRC-072, SRC-084, SRC-085, SRC-098 and SRC-112 to SRC-117, without local file locations.
+
