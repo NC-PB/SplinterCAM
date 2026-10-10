@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <ranges>
 #include <span>
 #include <tuple>
@@ -18,11 +19,10 @@ namespace {
 
 using geometry2d::Point2;
 
-// In order of precedence when segments tie: tool side, cap, other.
 enum class Side : std::uint8_t { tool, cap, other };
 
 struct Chain {
-    std::span<const double> points; // the flattened chain, x and y, no segment shorter than eps
+    std::span<const double> points; // the flattened chain, x and y, merged within u
     std::size_t segments;
     int tool;         // +1 left, -1 right
     double cap_reach; // rounding at a cap's tangent point: 3u
@@ -73,9 +73,8 @@ Side side_of(const Chain& chain, std::size_t j, Point2 q) {
 
 struct Labelled {
     std::vector<Side> sides;
-    std::vector<double> forward; // the edge's length along its nearest segment, signed
-    std::vector<double> place;   // where along the chain its middle lies: segment + parameter
-    bool complete = true;        // every edge had a segment within the reach
+    std::vector<double> place;  // where along the chain its middle lies: segment + parameter
+    std::optional<Point2> fold; // the middle of an edge two tied segments put on both sides
 };
 
 std::size_t loop_end(const geometry2d::GridRegion& region, std::size_t loop) {
@@ -84,12 +83,12 @@ std::size_t loop_end(const geometry2d::GridRegion& region, std::size_t loop) {
 }
 
 // Every edge's label from all segments within eps of its middle's nearest (the chain given there
-// and back: k < n is segment k, k >= n segment 2n - 1 - k): tool side if any says so, else a cap
-// if any says so, so a chain run out and back keeps both legs' sides (DEC-OFF-018).
+// and back: k < n is segment k, k >= n segment 2n - 1 - k). A cap if any says so; where one says
+// tool side and another the other side, the chain folds back over itself and has no side there
+// (DEC-OFF-018). `finish_region` has failed already if an edge had no segment within the reach.
 Labelled label(const geometry2d::GridRegion& region, const Chain& chain, const GrowInput& input,
                geometry2d::TieReach reach) {
     std::vector<double> middles;
-    std::vector<std::pair<Point2, Point2>> ends;
     for (std::size_t loop = 0; loop < region.starts.size(); ++loop) {
         const auto first = static_cast<std::size_t>(region.starts.at(loop));
         const std::size_t end = loop_end(region, loop);
@@ -98,31 +97,30 @@ Labelled label(const geometry2d::GridRegion& region, const Chain& chain, const G
             const Point2 q = region.points.at(k + 1 < end ? k + 1 : first);
             middles.insert(middles.end(), {(geometry2d::x(p) + geometry2d::x(q)) / 2,
                                            (geometry2d::y(p) + geometry2d::y(q)) / 2});
-            ends.emplace_back(p, q);
         }
     }
-    const std::vector<geometry2d::Tie> ties =
-        geometry2d::nearest_ties(middles, input.ids.loops, reach);
     Labelled out;
-    out.sides.assign(ends.size(), Side::other);
-    out.forward.assign(ends.size(), 0.0);
-    out.place.assign(ends.size(), 0.0);
-    std::vector<bool> seen(ends.size(), false);
-    for (const geometry2d::Tie& tie : ties) {
+    out.sides.assign(middles.size() / 2, Side::other);
+    out.place.assign(middles.size() / 2, 0.0);
+    std::vector<bool> seen(middles.size() / 2, false);
+    for (const geometry2d::Tie& tie : geometry2d::nearest_ties(middles, input.ids.loops, reach)) {
         const auto e = static_cast<std::size_t>(tie.point);
         const auto k = static_cast<std::size_t>(tie.segment);
         const std::size_t j = k < chain.segments ? k : (2 * chain.segments) - 1 - k;
-        const Side side = side_of(chain, j, geometry2d::point(middles, e));
-        if (!seen.at(e) || side < out.sides.at(e)) {
-            const auto [from, length] = along(chain, j, ends.at(e).first);
-            const double to = along(chain, j, ends.at(e).second).first;
-            out.sides.at(e) = side;
-            out.forward.at(e) = (to - from) * length;
-            out.place.at(e) = static_cast<double>(j) + std::clamp((from + to) / 2, 0.0, 1.0);
+        const Point2 q = geometry2d::point(middles, e);
+        const Side side = side_of(chain, j, q);
+        Side& label = out.sides.at(e);
+        if (!seen.at(e)) {
+            label = side;
+            out.place.at(e) =
+                static_cast<double>(j) + std::clamp(along(chain, j, q).first, 0.0, 1.0);
+        } else if (side == Side::cap) {
+            label = side;
+        } else if (label != Side::cap && side != label && !out.fold) {
+            out.fold = q;
         }
         seen.at(e) = true;
     }
-    out.complete = std::ranges::all_of(seen, [](bool s) { return s; });
     return out;
 }
 
@@ -164,11 +162,12 @@ Piece make_piece(const geometry2d::GridRegion& region, std::pair<std::size_t, st
 }
 
 // The runs of tool-side edges of one loop: the whole loop as a closed piece, or each maximal run
-// as an open piece. Each is turned round when it runs against the chain (by the summed length of
-// its edges along their segments; on a tie, by where its ends lie along the chain), so every
-// piece has the chain on the same side and one milling direction (DEC-OFF-020, Peter).
+// as an open piece. The grown area lies left of every boundary edge (outer loops counter-clockwise,
+// holes clockwise), so with the tool left every piece is turned round to run with the chain: every
+// piece has the chain on the side away from the tool and one milling direction (DEC-OFF-020).
 void pieces_of_loop(std::vector<Piece>& out, const geometry2d::GridRegion& region,
-                    const Labelled& labels, std::size_t loop) {
+                    const Labelled& labels, std::pair<std::size_t, bool> loop_backwards) {
+    const auto [loop, backwards] = loop_backwards;
     const auto base = static_cast<std::size_t>(region.starts.at(loop));
     const std::size_t size = loop_end(region, loop) - base;
     const auto edge = [&](std::size_t i) { return base + (i % size); };
@@ -179,14 +178,11 @@ void pieces_of_loop(std::vector<Piece>& out, const geometry2d::GridRegion& regio
             continue;
         }
         std::size_t count = 0;
-        double forward = 0.0;
         while (count < size && tool(i + count)) {
-            forward += labels.forward.at(edge(i + count));
             ++count;
         }
         const double from = labels.place.at(edge(i));
         const double to = labels.place.at(edge(i + count - 1));
-        const bool backwards = forward < 0.0 || (forward == 0.0 && to < from);
         out.push_back(make_piece(region, {base, size}, {i, count, closed}, backwards));
         out.back().loop = loop;
         out.back().place = std::min(from, to);
@@ -211,13 +207,13 @@ SidePieces chain_side(const GrowInput& input, int tool_side, OffsetParams params
                       .tool = tool_side,
                       .cap_reach = params.bias_units * limits.u};
     const Labelled labels = label(region, chain, input, reach);
-    if (!labels.complete) { // an edge with no segment within the reach: no offset of the chain
-        out.region.status = geometry2d::GridStatus::failed;
+    if (labels.fold) {
+        out.fold = labels.fold;
         return out;
     }
     std::vector<Piece> pieces;
     for (std::size_t loop = 0; loop < region.starts.size(); ++loop) {
-        pieces_of_loop(pieces, region, labels, loop);
+        pieces_of_loop(pieces, region, labels, {loop, tool_side > 0});
     }
     // Open pieces first, along the chain, then closed ones; ties by the first vertex (REQ-OFF-038).
     std::ranges::stable_sort(pieces, [](const Piece& a, const Piece& b) {
@@ -237,6 +233,33 @@ SidePieces chain_side(const GrowInput& input, int tool_side, OffsetParams params
         out.region.fixed.insert(out.region.fixed.end(), piece.fixed.begin(), piece.fixed.end());
     }
     return out;
+}
+
+std::vector<std::uint8_t> keep_chain(std::span<const double> points, double threshold) {
+    const std::size_t n = points.size() / 2;
+    std::vector<std::uint8_t> keep(n, 0);
+    const auto apart = [&](std::size_t i, std::size_t j) {
+        const double dx = geometry2d::x(geometry2d::point(points, i)) -
+                          geometry2d::x(geometry2d::point(points, j));
+        const double dy = geometry2d::y(geometry2d::point(points, i)) -
+                          geometry2d::y(geometry2d::point(points, j));
+        return std::sqrt((dx * dx) + (dy * dy)) > threshold;
+    };
+    std::size_t last = 0;
+    keep.at(0) = n > 0 ? 1 : 0;
+    for (std::size_t i = 1; i + 1 < n; ++i) {
+        if (apart(i, last)) {
+            keep.at(i) = 1;
+            last = i;
+        }
+    }
+    if (n > 1) {
+        if (last > 0 && !apart(n - 1, last)) {
+            keep.at(last) = 0; // the end stays
+        }
+        keep.at(n - 1) = 1;
+    }
+    return keep;
 }
 
 } // namespace splintercam::offset2d

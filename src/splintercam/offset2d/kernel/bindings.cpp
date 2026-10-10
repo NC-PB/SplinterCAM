@@ -12,6 +12,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/array.h>
+#include <nanobind/stl/optional.h>
 #include <nanobind/stl/tuple.h>
 #include <span>
 #include <tuple>
@@ -172,11 +173,9 @@ void bind_side(nb::module_& m) {
             const std::array<std::int64_t, 1> one_chain{0};
             const GrowInput input{.chains = checked_loops(chain, one_chain, chain.shape(0)),
                                   .ids = id_source(id_points, id_starts, source_ids, classes)};
-            for (std::size_t i = 0; i + 1 < chain.shape(0); ++i) {
-                if (!(std::hypot(chain(i + 1, 0) - chain(i, 0), chain(i + 1, 1) - chain(i, 1)) >
-                      eps)) {
-                    throw nb::value_error("no chain segment of eps_len or shorter");
-                }
+            const std::vector<std::uint8_t> kept = keep_chain(view(chain), eps);
+            if (!std::ranges::all_of(kept, [](std::uint8_t k) { return k != 0; })) {
+                throw nb::value_error("no chain segment of eps_len or shorter");
             }
             SidePieces pieces;
             {
@@ -188,8 +187,13 @@ void bind_side(nb::module_& m) {
                     {.limit = reach, .eps = eps});
             }
             copy_out(pieces.flags, flags_out);
-            return write_region(pieces.region,
-                                std::tie(points_out, starts_out, ids_out, fixed_out));
+            const auto [status, n_points, n_pieces] =
+                write_region(pieces.region, std::tie(points_out, starts_out, ids_out, fixed_out));
+            std::optional<std::array<double, 2>> fold;
+            if (pieces.fold) {
+                fold = {std::get<0>(*pieces.fold), std::get<1>(*pieces.fold)};
+            }
+            return std::tuple{status, n_points, n_pieces, fold};
         },
         nb::arg("chain"), nb::arg("id_points"), nb::arg("id_starts"), nb::arg("source_ids"),
         nb::arg("classes"), nb::arg("tool_side"), nb::arg("offset"), nb::arg("grid"),
@@ -198,8 +202,20 @@ void bind_side(nb::module_& m) {
         "The tool side of one open chain offset with round ends, the caps left out (tool_side +1 "
         "left, -1 right; offset = delta, a, the reach of the source IDs; grid = u, the span "
         "limit, the join step limit, eps_len); flags per piece: 1 closed, 2 enclosed; return "
-        "(status, points, pieces), the counts it needed; an open piece has one ID fewer than "
-        "vertices.");
+        "(status, points, pieces, fold), the counts it needed and where the chain folds back "
+        "over itself (no pieces then); an open piece has one ID fewer than vertices.");
+    m.def(
+        "keep_chain",
+        [](const PointRows& points, double threshold, const FlagsOut& keep_out) {
+            if (!finite(view(points)) || !std::isfinite(threshold) || !(threshold >= 0.0) ||
+                keep_out.shape(0) != points.shape(0)) {
+                throw nb::value_error("finite points and threshold >= 0, one flag per point");
+            }
+            copy_out(keep_chain(view(points), threshold), keep_out);
+        },
+        nb::arg("points"), nb::arg("threshold"), nb::arg("keep_out"),
+        "Which points of a chain to keep so that no segment is threshold or shorter: the first, "
+        "each more than threshold from the last kept one, and the last.");
 }
 
 } // namespace

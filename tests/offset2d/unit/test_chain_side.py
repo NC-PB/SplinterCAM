@@ -235,20 +235,56 @@ def test_an_inside_corner_on_the_left_rounds_nothing(ctx: Context) -> None:
     assert np.linalg.norm(piece[1] - [8.0, 2.0]) <= 2 * slack
 
 
+FOLDS = {
+    "out and back": [(0.0, 0.0), (10.0, 0.0), (0.0, 0.0)],
+    "back part way": [(0.0, 0.0), (10.0, 0.0), (2.0, 0.0)],
+    "round past the start": [(5.0, 0.0), (10.0, 0.0), (0.0, 0.0), (5.0, 0.0)],
+    "a stub of 5u at the start": [(0.0, 0.0), (-5e-4, 0.0), (10.0, 0.0)],
+    "a spike": [(0.0, 0.0), (5.0, 0.0), (5.0, -0.01), (5.0, 0.0), (10.0, 0.0)],
+    "back 1e-9 above": [(0.0, 0.0), (10.0, 0.0), (10.0, 1e-9), (2.0, 1e-9)],
+    "back over itself": [(0.0, 0.0), (10.0, 0.0), (10.0, 5.0), (5.0, 5.0), (5.0, 0.0), (2.0, 0.0)],
+}
+
+
 @pytest.mark.req("REQ-OFF-028")
+@pytest.mark.parametrize("name", list(FOLDS))
 @pytest.mark.parametrize("side", [LEFT, RIGHT])
-def test_a_chain_out_and_back_keeps_both_legs_sides(side: AirSide, ctx: Context) -> None:
-    # (0, 0) to (10, 0) and back: the tool's side of the way out is the other side of the way
-    # back. Both legs tie at every edge; the side is the tool's if either leg says so
-    # (DEC-OFF-018): one piece round the turn, starting on the way out.
-    paths = run(polyline([(0.0, 0.0), (10.0, 0.0), (0.0, 0.0)]), side, 2.0, ctx)
+def test_a_chain_running_back_over_itself_has_no_side(
+    name: str, side: AirSide, ctx: Context
+) -> None:
+    # Spec reviews: where the chain runs back over itself, one segment calls a place the tool's
+    # side and another the material's, so there is no side to cut: refused with CHAIN_FOLDS at
+    # the fold (DEC-OFF-018, provisional). Found at a vertex that turns back exactly, or, for the
+    # last two, where tied segments disagree (the 1e-9 step merges away first).
+    r, ids = np.array(polyline(FOLDS[name])), 100 + np.arange(len(FOLDS[name]) - 1, dtype=np.int64)
+    classes = SourceClasses(ids, np.zeros(ids.size, dtype=np.int8))
+    result = offset_chain_side(r, ids, side, 2.0, classes, ctx)
+    assert result.value is None
+    assert codes(result) == ["CHAIN_FOLDS"]
+    assert result.diagnostics[-1].location is not None
+
+
+@pytest.mark.req("REQ-OFF-028")
+@pytest.mark.parametrize(
+    "stub",
+    [
+        [(0.0, 0.0), (-5e-5, 0.0), (10.0, 0.0)],
+        [(0.0, 0.0), (10.0, 0.0), (10.0 - 5e-5, 0.0)],
+        [(0.0, 0.0), (-3.5e-5, 3.5e-5), (10.0, 3.5e-5)],
+    ],
+    ids=["back at the start", "back at the end", "slanted at the start"],
+)
+def test_a_stub_shorter_than_the_grid_unit_merges_away(
+    stub: list[tuple[float, float]], ctx: Context
+) -> None:
+    # Spec review, blocker: a stub of 0.5u, which the grid cannot show, turned the round end into
+    # tool side and wrapped the path round the start onto the material side. Merged within u, the
+    # chain gives the side of the plain line, on its tool side only.
+    paths = run(polyline(stub), LEFT, 2.0, ctx)
+    plain = run(polyline([(0.0, 0.0), (10.0, 0.0)]), LEFT, 2.0, ctx)
     assert paths.closed.tolist() == [False]
-    piece = pieces(paths)[0]
-    slack = band_top(2.0, ctx) - 2.0
-    y = 2.0 if side is LEFT else -2.0
-    assert np.linalg.norm(piece[0] - [0.0, y]) <= slack  # from the start of the way out
-    assert piece[:, 0].max() >= 12.0  # round the turn at (10, 0)
-    assert np.linalg.norm(piece[-1] - [0.0, -y]) <= slack  # to the end of the way back
+    assert np.abs(paths.points - plain.points).max() <= band_top(2.0, ctx) - 2.0
+    assert (paths.points[:, 1] > 2.0).all()
 
 
 @pytest.mark.req("REQ-OFF-028")
@@ -319,6 +355,20 @@ def test_a_chain_spanning_the_limit_is_refused(ctx: Context) -> None:
 
 
 @pytest.mark.req("REQ-OFF-028")
+def test_a_run_of_tiny_steps_merges_without_moving_the_corner(ctx: Context) -> None:
+    # Spec review: steps of 0.9 eps_len into a corner merged onto the run's first point moved the
+    # corner; 2000 of them, run towards -x, move it 1.8e-3 mm toward the path along the next
+    # segment, more than a + 3u. Points within u of the last kept one merge, so the corner moves
+    # less than u, and the path keeps t from the chain as given.
+    steps = [(-0.9e-6 * i, 0.0) for i in range(2001)]
+    points = [(10.0, 0.0), *steps, (steps[-1][0], 10.0)]
+    rows = polyline(points)
+    paths = run(rows, LEFT, 2.0, ctx)
+    d = distance_to_curves(paths.points, as_rows(flat_chain(rows, LEFT, ctx)))
+    assert d.min() >= 2.0
+
+
+@pytest.mark.req("REQ-OFF-028")
 def test_more_pieces_than_the_first_room_are_written_on_a_second_call(
     ctx: Context, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -328,7 +378,7 @@ def test_more_pieces_than_the_first_room_are_written_on_a_second_call(
     rooms: list[int] = []
     kernel = _kernels.offset2d.chain_side
 
-    def spy(*args: Any) -> tuple[int, int, int]:
+    def spy(*args: Any) -> tuple[int, int, int, list[float] | None]:
         rooms.append(int(args[8].shape[0]))  # points_out
         return kernel(*args)
 

@@ -6,6 +6,8 @@
 #include "grow.hpp"
 
 #include <cstdint>
+#include <optional>
+#include <span>
 #include <vector>
 
 namespace splintercam::offset2d {
@@ -19,11 +21,18 @@ inline constexpr std::uint8_t enclosed_flag = 2; // not reachable from the first
 struct SidePieces {
     geometry2d::GridRegion region;
     std::vector<std::uint8_t> flags;
+    std::optional<geometry2d::Point2> fold; // where the chain folds back: no pieces then
 };
 
 // The area within delta of the one chain of `input`, with round ends, and of its boundary the
 // edges on the tool side (+1 left of the chain's direction, -1 right), the caps nearest an end
 // left out (REQ-OFF-028, DEC-OFF-018). No exception leaves it.
+// Which points of a chain to keep: the first, then each more than `threshold` from the last kept
+// one, and the last (which replaces a kept point within `threshold` of it), so no segment is
+// threshold or shorter and no point moves (DEC-OFF-018).
+[[nodiscard]] std::vector<std::uint8_t> keep_chain(std::span<const double> points,
+                                                   double threshold);
+
 [[nodiscard]] SidePieces chain_side(const GrowInput& input, int tool_side, OffsetParams params,
                                     OffsetLimits limits, geometry2d::TieReach reach);
 

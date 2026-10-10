@@ -3,7 +3,7 @@
 `grow_flat_chains`, for the machined area of the stock update."""
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 from numpy.typing import NDArray
@@ -172,71 +172,104 @@ def offset_chain_side(  # noqa: PLR0913 (the SPEC's reviewed interface, DEC-OFF-
     if chain.value is None:
         return Result(None, chain.diagnostics)
     diagnostics = list(chain.diagnostics)
-    if closes(chain.value.points):
-        message = "the chain closes: a loop goes through offset_region"
-        return Result(None, (*diagnostics, Diagnostic("CHAIN_CLOSED", Severity.ERROR, message)))
     tol = ctx.tolerances
-    points, source_ids = merge_short(chain.value.points, chain.value.source_ids, tol.length_eps_mm)
+    # Below the grid unit the grown area cannot show a segment, so the labels must not see it.
+    threshold = max(tol.grid_unit_mm, tol.length_eps_mm)
+    points, source_ids = merge_short(chain.value.points, chain.value.source_ids, threshold)
+    refusal = _refusal(chain.value.points, points)
+    if refusal is not None:
+        return Result(None, (*diagnostics, refusal))
     if points.shape[0] < 2:
         message = "a chain of zero length has no side"
-        return Result(
-            _paths(None, 0), (*diagnostics, Diagnostic("OFFSET_EMPTY", Severity.INFO, message))
-        )
+        empty = Diagnostic("OFFSET_EMPTY", Severity.INFO, message)
+        return Result(_paths(None, _SideOut()), (*diagnostics, empty))
     delta = clearance_mm + tol.arc_tol_mm + BIAS_GRID_UNITS * tol.grid_unit_mm
-    tool = 1 if tool_side is AirSide.LEFT else -1
-    status, region, flags = _side_kernel((points, source_ids), tool, delta, classes, ctx)
-
-    def dump() -> dict[str, object]:
-        return {"chain": points.tolist(), "delta_mm": delta, "tool": tool,
-                "arc_tol_mm": tol.arc_tol_mm, "grid_unit_mm": tol.grid_unit_mm}  # fmt: skip
-
-    result = outcome(status, region, dump, diagnostics, ctx)
-    if result.value is None:
-        return Result(None, result.diagnostics)
-    return Result(_paths(result.value, flags), result.diagnostics)
+    side = _Side(points, source_ids, 1 if tool_side is AirSide.LEFT else -1, delta)
+    return _offset_side(side, classes, diagnostics, ctx)
 
 
 def merge_short(
-    points: NDArray[np.float64], source_ids: NDArray[np.int64], eps_len: float
+    points: NDArray[np.float64], source_ids: NDArray[np.int64], threshold: float
 ) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
-    """The chain without segments of eps_len or shorter, so the side rule always sees two real
-    segments at a vertex (DEC-OFF-018): a short segment's end merges away (its start, for the last
-    one), the ends stay, and a merged segment takes the ID of its longest part."""
-    while points.shape[0] > 2:
-        length = np.hypot(*np.diff(points, axis=0).T)
-        if not bool(np.any(length <= eps_len)):
-            break
-        keep = np.ones(points.shape[0], dtype=bool)
-        keep[1:-1] = length[:-1] > eps_len
-        keep[-2] &= length[-1] > eps_len
-        group = np.cumsum(keep[:-1]) - 1
-        order = np.lexsort((-length, group))
-        first = order[np.r_[True, group[order][1:] != group[order][:-1]]]
-        points, source_ids = points[keep], source_ids[first]
-    if points.shape[0] == 2 and float(np.hypot(*(points[1] - points[0]))) <= eps_len:
+    """The chain with its points within `threshold` of the last kept one merged away (the ends
+    stay, no point moves), so no segment is threshold or shorter; a merged segment takes the ID
+    of its longest part (DEC-OFF-018). A chain shorter than that is one point."""
+    keep = np.empty(points.shape[0], dtype=np.uint8)
+    _kernels.offset2d.keep_chain(np.ascontiguousarray(points, dtype=np.float64), threshold, keep)
+    kept = keep.astype(bool)
+    if points.shape[0] < 2 or int(np.count_nonzero(kept)) == points.shape[0]:
+        return points, source_ids
+    if int(np.count_nonzero(kept)) == 2 and _length(points[kept])[0] <= threshold:
         return points[:1], source_ids[:0]
-    return points, source_ids
+    length = _length(points)
+    group = np.cumsum(kept[:-1]) - 1
+    order = np.lexsort((-length, group))
+    first = order[np.r_[True, group[order][1:] != group[order][:-1]]]
+    return points[kept], source_ids[first]
 
 
-def _side_kernel(
-    flat: tuple[NDArray[np.float64], NDArray[np.int64]],
-    tool: int,
-    delta: float,
-    classes: SourceClasses,
-    ctx: Context,
-) -> tuple[int, PolygonRegion | None, NDArray[np.uint8]]:
-    """The kernel call, with the chain there and back for the IDs (DEC-OFF-015); the pieces as a
-    region and each piece's flags (1 closed, 2 enclosed)."""
+def _length(points: NDArray[np.float64]) -> NDArray[np.float64]:
+    d = np.diff(points, axis=0)
+    return np.sqrt(d[:, 0] * d[:, 0] + d[:, 1] * d[:, 1])  # not hypot (geometry2d, local rules)
+
+
+def _refusal(flat: NDArray[np.float64], merged: NDArray[np.float64]) -> Diagnostic | None:
+    """`CHAIN_CLOSED` for a loop; `CHAIN_FOLDS` where the merged chain turns back on itself at a
+    vertex (exactly collinear, by geometry2d's `orient2d`), which leaves it no side (DEC-OFF-018,
+    provisional)."""
+    if closes(flat):
+        message = "the chain closes: a loop goes through offset_region"
+        return Diagnostic("CHAIN_CLOSED", Severity.ERROR, message)
+    if merged.shape[0] < 3:
+        return None
+    before, corner, after = merged[:-2], merged[1:-1], merged[2:]
+    dot = ((corner - before) * (after - corner)).sum(axis=1)
+    back = np.flatnonzero((orient2d(before, corner, after) == 0) & (dot < 0.0))
+    if back.size == 0:
+        return None
+    x, y = (float(v) for v in corner[back[0]])
+    return _folds(x, y)
+
+
+def _folds(x: float, y: float) -> Diagnostic:
+    message = "the chain runs back over itself, so it has no side there"
+    return Diagnostic("CHAIN_FOLDS", Severity.ERROR, message, f"({x:.4f}, {y:.4f}) mm")
+
+
+@dataclass(frozen=True, slots=True)
+class _Side:
+    """The merged chain and what the kernel call of one side takes besides."""
+
+    points: NDArray[np.float64]
+    source_ids: NDArray[np.int64]
+    tool: int  # +1 left, -1 right
+    delta: float
+
+
+@dataclass(slots=True)
+class _SideOut:
+    """What the kernel writes besides the region: each piece's flags (1 closed, 2 enclosed) and
+    where the chain folds back over itself."""
+
+    flags: NDArray[np.uint8] = field(default_factory=lambda: np.empty(0, np.uint8))
+    fold: list[float] | None = None  # x, y
+
+
+def _offset_side(
+    side: _Side, classes: SourceClasses, diagnostics: list[Diagnostic], ctx: Context
+) -> Result[OpenPaths]:
+    """The kernel call, with the chain there and back for the IDs (DEC-OFF-015), as a result."""
     tol = ctx.tolerances
-    points, source_ids = flat
+    points, source_ids = side.points, side.source_ids
     id_points = np.concatenate([points, points[-2:0:-1]])
     ids = np.concatenate([source_ids, source_ids[-1:], source_ids[-2::-1]]).astype(np.int64)
     per_vertex = vertex_classes(classes, ids)
-    offset = (delta, tol.arc_tol_mm, delta + MARGIN_GRID_UNITS * tol.grid_unit_mm, BIAS_GRID_UNITS)
+    reach = side.delta + MARGIN_GRID_UNITS * tol.grid_unit_mm
+    offset = (side.delta, tol.arc_tol_mm, reach, BIAS_GRID_UNITS)
     grid = (tol.grid_unit_mm, MAX_SPAN_GRID_UNITS, JOIN_STEPS_MAX, tol.length_eps_mm)
-    steps = math.pi / math.acos(1.0 - tol.arc_tol_mm / delta)
+    steps = math.pi / math.acos(1.0 - tol.arc_tol_mm / side.delta)
     chain = np.ascontiguousarray(points, dtype=np.float64)
-    flags = [np.empty(0, np.uint8)]
+    out = _SideOut()
 
     def call(
         out_points: NDArray[np.float64],
@@ -244,17 +277,28 @@ def _side_kernel(
         out_ids: NDArray[np.int64],
         out_fixed: NDArray[np.uint8],
     ) -> tuple[int, int, int]:
-        flags[0] = np.empty(out_starts.size, dtype=np.uint8)
-        return _kernels.offset2d.chain_side(
-            chain, id_points, np.array([0], dtype=np.int64), ids, per_vertex, tool, offset, grid,
-            out_points, out_starts, flags[0], out_ids, out_fixed,
+        out.flags = np.empty(out_starts.size, dtype=np.uint8)
+        status, n_points, n_pieces, out.fold = _kernels.offset2d.chain_side(
+            chain, id_points, np.array([0], dtype=np.int64), ids, per_vertex, side.tool, offset,
+            grid, out_points, out_starts, out.flags, out_ids, out_fixed,
         )  # fmt: skip
+        return status, n_points, n_pieces
 
     status, region = run_kernel(call, 4 * points.shape[0] + 2 * math.ceil(steps) + 64)
-    return status, region, flags[0]
+    if out.fold is not None and not ctx.cancel.is_cancelled:
+        return Result(None, (*diagnostics, _folds(out.fold[0], out.fold[1])))
+
+    def dump() -> dict[str, object]:
+        return {"chain": points.tolist(), "delta_mm": side.delta, "tool": side.tool,
+                "arc_tol_mm": tol.arc_tol_mm, "grid_unit_mm": tol.grid_unit_mm}  # fmt: skip
+
+    result = outcome(status, region, dump, diagnostics, ctx)
+    if result.value is None:
+        return Result(None, result.diagnostics)
+    return Result(_paths(result.value, out), result.diagnostics)
 
 
-def _paths(region: PolygonRegion | None, flags: NDArray[np.uint8] | int) -> OpenPaths:
+def _paths(region: PolygonRegion | None, out: _SideOut) -> OpenPaths:
     """The pieces of the kernel's region as open paths, read-only; no pieces for None."""
     if region is None:
         none = np.empty(0, bool)
@@ -263,12 +307,12 @@ def _paths(region: PolygonRegion | None, flags: NDArray[np.uint8] | int) -> Open
             np.empty(0, np.uint8),
         )  # fmt: skip
     k = region.loop_starts.size
-    per_piece = np.asarray(flags, dtype=np.uint8)[:k]
+    per_piece = out.flags[:k]
     closed, enclosed = (per_piece & 1).astype(bool), (per_piece & 2).astype(bool)
     n_ids = region.points.shape[0] - int(np.count_nonzero(~closed))
-    out = OpenPaths(
+    paths = OpenPaths(
         region.points, region.loop_starts, closed, enclosed, region.source_ids[:n_ids], region.fixed
     )
-    for array in (out.closed, out.enclosed, out.source_ids):
+    for array in (paths.closed, paths.enclosed, paths.source_ids):
         array.flags.writeable = False
-    return out
+    return paths
