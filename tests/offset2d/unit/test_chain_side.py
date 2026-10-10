@@ -243,6 +243,25 @@ FOLDS = {
     "a spike": [(0.0, 0.0), (5.0, 0.0), (5.0, -0.01), (5.0, 0.0), (10.0, 0.0)],
     "back 1e-9 above": [(0.0, 0.0), (10.0, 0.0), (10.0, 1e-9), (2.0, 1e-9)],
     "back over itself": [(0.0, 0.0), (10.0, 0.0), (10.0, 5.0), (5.0, 5.0), (5.0, 0.0), (2.0, 0.0)],
+    "back over itself, off the middle": [
+        (0.0, 0.0),
+        (10.0, 0.0),
+        (10.0, 5.0),
+        (9.0, 5.0),
+        (9.0, 0.0),
+        (6.0, 0.0),
+    ],
+    "a spike 2e-5 wide": [(0.0, 0.0), (5.0, 0.0), (5.0, -0.01), (4.99998, 0.0), (10.0, 0.0)],
+    # The last segment comes back tilted: the first segment's ends lie within u of its line, but
+    # its far end lies 3u off the first's, so only one way round finds the fold.
+    "back over itself, tilted": [
+        (5.0, 0.0),
+        (8.0, 0.0),
+        (8.0, 50.0),
+        (14.0, 50.0),
+        (14.0, 3e-4),
+        (5.5, -5e-5),
+    ],
 }
 
 
@@ -254,14 +273,36 @@ def test_a_chain_running_back_over_itself_has_no_side(
 ) -> None:
     # Spec reviews: where the chain runs back over itself, one segment calls a place the tool's
     # side and another the material's, so there is no side to cut: refused with CHAIN_FOLDS at
-    # the fold (DEC-OFF-018, provisional). Found at a vertex that turns back exactly, or, for the
-    # last two, where tied segments disagree (the 1e-9 step merges away first).
+    # the fold (DEC-OFF-018, provisional). Found on the chain, wherever the overlap lies: two
+    # segments in opposite directions within u of each other's line (the 1e-9 step merges away).
     r, ids = np.array(polyline(FOLDS[name])), 100 + np.arange(len(FOLDS[name]) - 1, dtype=np.int64)
     classes = SourceClasses(ids, np.zeros(ids.size, dtype=np.int8))
     result = offset_chain_side(r, ids, side, 2.0, classes, ctx)
     assert result.value is None
     assert codes(result) == ["CHAIN_FOLDS"]
     assert result.diagnostics[-1].location is not None
+
+
+@pytest.mark.req("REQ-OFF-028")
+@pytest.mark.parametrize("side", [LEFT, RIGHT])
+def test_a_chain_touching_itself_at_a_point_is_no_fold(side: AirSide, ctx: Context) -> None:
+    # Third spec review: a V whose tip touches the first segment, and the same chain reversed,
+    # tie opposite sides only at a point; that is no fold, whichever way the chain runs.
+    touch = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (5.0, 0.0), (0.0, 10.0)]
+    for points in (touch, touch[::-1]):
+        paths = run(polyline(points), side, 2.0, ctx)
+        d = distance_to_curves(paths.points, as_rows(flat_chain(polyline(points), side, ctx)))
+        assert d.min() >= 2.0
+
+
+@pytest.mark.req("REQ-OFF-013", "REQ-OFF-028")
+def test_points_within_u_of_the_end_merge_back_to_a_real_segment(ctx: Context) -> None:
+    # Third spec review: two points within u of the end, the first of them kept, left a last
+    # segment of 5e-9 mm, which the kernel refused with ValueError. They merge away now.
+    rows = polyline([(-10.0, 0.0), (0.0, 0.0), (1.00001e-4, 0.0), (5e-9, 2e-9)])
+    paths = run(rows, LEFT, 2.0, ctx)
+    assert paths.closed.tolist() == [False]
+    assert (paths.points[:, 1] > 2.0 - 1e-3).all()
 
 
 @pytest.mark.req("REQ-OFF-028")
@@ -378,7 +419,7 @@ def test_more_pieces_than_the_first_room_are_written_on_a_second_call(
     rooms: list[int] = []
     kernel = _kernels.offset2d.chain_side
 
-    def spy(*args: Any) -> tuple[int, int, int, list[float] | None]:
+    def spy(*args: Any) -> tuple[int, int, int]:
         rooms.append(int(args[8].shape[0]))  # points_out
         return kernel(*args)
 

@@ -40,8 +40,9 @@ bool finite(std::span<const double> values) {
 }
 
 // The arrays of flattened loops as offset2d's Python side builds them (REQ-OFF-013).
-geometry2d::Polylines checked_loops(const PointRows& points, std::span<const std::int64_t> s,
+geometry2d::Polylines checked_loops(const PointRows& points, const Counts& starts,
                                     std::size_t id_count) {
+    const std::span<const std::int64_t> s = view(starts);
     const auto n = static_cast<std::int64_t>(points.shape(0));
     const bool ascending = std::ranges::adjacent_find(s, std::ranges::greater_equal{}) == s.end();
     if (id_count != points.shape(0) || (s.empty() != (n == 0)) ||
@@ -80,7 +81,7 @@ IdSource id_source(const PointRows& points, const Counts& starts, const Counts& 
     if (classes.shape(0) != source_ids.shape(0)) {
         throw nb::value_error("one class per vertex");
     }
-    return {.loops = checked_loops(points, view(starts), source_ids.shape(0)),
+    return {.loops = checked_loops(points, starts, source_ids.shape(0)),
             .source_ids = view(source_ids),
             .classes = view(classes)};
 }
@@ -98,10 +99,10 @@ void bind_clip(nb::module_& m) {
                 !(reach > 0.0)) {
                 throw nb::value_error("op 0 to 2; u, span, reach > 0; eps >= 0");
             }
-            const ClipInput input{
-                .subject = checked_loops(subject, view(subject_starts), subject.shape(0)),
-                .clip = checked_loops(clip, view(clip_starts), clip.shape(0)),
-                .ids = id_source(id_points, id_starts, source_ids, classes)};
+            const ClipInput input{.subject =
+                                      checked_loops(subject, subject_starts, subject.shape(0)),
+                                  .clip = checked_loops(clip, clip_starts, clip.shape(0)),
+                                  .ids = id_source(id_points, id_starts, source_ids, classes)};
             geometry2d::GridRegion region;
             {
                 const nb::gil_scoped_release unlocked;
@@ -133,8 +134,7 @@ void bind_grow(nb::module_& m) {
                 !(reach > 0.0) || !(u > 0.0) || !(span > 0.0) || !(steps > 0.0) || !(eps >= 0.0)) {
                 throw nb::value_error("delta > arc_tol > 0; reach, u, span, steps > 0; eps >= 0");
             }
-            const GrowInput input{.chains =
-                                      checked_loops(chains, view(chain_starts), chains.shape(0)),
+            const GrowInput input{.chains = checked_loops(chains, chain_starts, chains.shape(0)),
                                   .ids = id_source(id_points, id_starts, source_ids, classes)};
             geometry2d::GridRegion region;
             {
@@ -171,7 +171,10 @@ void bind_side(nb::module_& m) {
                     "steps > 0; eps >= 0");
             }
             const std::array<std::int64_t, 1> one_chain{0};
-            const GrowInput input{.chains = checked_loops(chain, one_chain, chain.shape(0)),
+            if (!finite(view(chain))) {
+                throw nb::value_error("finite chain points");
+            }
+            const GrowInput input{.chains = {.points = view(chain), .loop_starts = one_chain},
                                   .ids = id_source(id_points, id_starts, source_ids, classes)};
             const std::vector<std::uint8_t> kept = keep_chain(view(chain), eps);
             if (!std::ranges::all_of(kept, [](std::uint8_t k) { return k != 0; })) {
@@ -187,13 +190,8 @@ void bind_side(nb::module_& m) {
                     {.limit = reach, .eps = eps});
             }
             copy_out(pieces.flags, flags_out);
-            const auto [status, n_points, n_pieces] =
-                write_region(pieces.region, std::tie(points_out, starts_out, ids_out, fixed_out));
-            std::optional<std::array<double, 2>> fold;
-            if (pieces.fold) {
-                fold = {std::get<0>(*pieces.fold), std::get<1>(*pieces.fold)};
-            }
-            return std::tuple{status, n_points, n_pieces, fold};
+            return write_region(pieces.region,
+                                std::tie(points_out, starts_out, ids_out, fixed_out));
         },
         nb::arg("chain"), nb::arg("id_points"), nb::arg("id_starts"), nb::arg("source_ids"),
         nb::arg("classes"), nb::arg("tool_side"), nb::arg("offset"), nb::arg("grid"),
@@ -202,20 +200,31 @@ void bind_side(nb::module_& m) {
         "The tool side of one open chain offset with round ends, the caps left out (tool_side +1 "
         "left, -1 right; offset = delta, a, the reach of the source IDs; grid = u, the span "
         "limit, the join step limit, eps_len); flags per piece: 1 closed, 2 enclosed; return "
-        "(status, points, pieces, fold), the counts it needed and where the chain folds back "
-        "over itself (no pieces then); an open piece has one ID fewer than vertices.");
+        "(status, points, pieces), the counts it needed; an open piece has one ID fewer than "
+        "vertices.");
     m.def(
         "keep_chain",
         [](const PointRows& points, double threshold, const FlagsOut& keep_out) {
-            if (!finite(view(points)) || !std::isfinite(threshold) || !(threshold >= 0.0) ||
-                keep_out.shape(0) != points.shape(0)) {
-                throw nb::value_error("finite points and threshold >= 0, one flag per point");
+            if (points.shape(0) == 0 || !finite(view(points)) || !std::isfinite(threshold) ||
+                !(threshold >= 0.0) || keep_out.shape(0) != points.shape(0)) {
+                throw nb::value_error("finite points, at least one; threshold >= 0; one flag each");
             }
             copy_out(keep_chain(view(points), threshold), keep_out);
         },
         nb::arg("points"), nb::arg("threshold"), nb::arg("keep_out"),
         "Which points of a chain to keep so that no segment is threshold or shorter: the first, "
         "each more than threshold from the last kept one, and the last.");
+    m.def(
+        "find_fold",
+        [](const PointRows& points, double tol) {
+            if (!finite(view(points)) || !std::isfinite(tol) || !(tol >= 0.0)) {
+                throw nb::value_error("finite points; tol >= 0");
+            }
+            return find_fold(view(points), tol);
+        },
+        nb::arg("points"), nb::arg("tol"),
+        "Where a chain runs back over itself (two segments in opposite directions within tol of "
+        "each other's line, overlapping by more than tol), or None.");
 }
 
 } // namespace
@@ -227,8 +236,7 @@ void bind(nb::module_& m) {
            const Counts& id_starts, const Counts& source_ids, const Classes& classes,
            const Quad& offset, const Quad& grid, const PointsOut& points_out,
            const CountsOut& starts_out, const CountsOut& ids_out, const FlagsOut& fixed_out) {
-            const geometry2d::Polylines loops =
-                checked_loops(points, view(loop_starts), points.shape(0));
+            const geometry2d::Polylines loops = checked_loops(points, loop_starts, points.shape(0));
             const IdSource ids = id_source(id_points, id_starts, source_ids, classes);
             const auto [delta, arc_tol, bias, margin] = offset;
             const auto [u, span, steps, eps] = grid;

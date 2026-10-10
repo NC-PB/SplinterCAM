@@ -19,7 +19,8 @@ namespace {
 
 using geometry2d::Point2;
 
-enum class Side : std::uint8_t { tool, cap, other };
+// In order of precedence when segments tie: a cap, then the other side (DEC-OFF-018).
+enum class Side : std::uint8_t { cap, other, tool };
 
 struct Chain {
     std::span<const double> points; // the flattened chain, x and y, merged within u
@@ -73,8 +74,7 @@ Side side_of(const Chain& chain, std::size_t j, Point2 q) {
 
 struct Labelled {
     std::vector<Side> sides;
-    std::vector<double> place;  // where along the chain its middle lies: segment + parameter
-    std::optional<Point2> fold; // the middle of an edge two tied segments put on both sides
+    std::vector<double> place; // where along the chain its middle lies: segment + parameter
 };
 
 std::size_t loop_end(const geometry2d::GridRegion& region, std::size_t loop) {
@@ -83,9 +83,9 @@ std::size_t loop_end(const geometry2d::GridRegion& region, std::size_t loop) {
 }
 
 // Every edge's label from all segments within eps of its middle's nearest (the chain given there
-// and back: k < n is segment k, k >= n segment 2n - 1 - k). A cap if any says so; where one says
-// tool side and another the other side, the chain folds back over itself and has no side there
-// (DEC-OFF-018). `finish_region` has failed already if an edge had no segment within the reach.
+// and back: k < n is segment k, k >= n segment 2n - 1 - k), whatever their order: a cap if any
+// says so, else the other side if any says so. Ties of opposite sides are left only where the
+// chain touches itself at a point; folds are refused before (DEC-OFF-018).
 Labelled label(const geometry2d::GridRegion& region, const Chain& chain, const GrowInput& input,
                geometry2d::TieReach reach) {
     std::vector<double> middles;
@@ -99,27 +99,18 @@ Labelled label(const geometry2d::GridRegion& region, const Chain& chain, const G
                                            (geometry2d::y(p) + geometry2d::y(q)) / 2});
         }
     }
-    Labelled out;
-    out.sides.assign(middles.size() / 2, Side::other);
-    out.place.assign(middles.size() / 2, 0.0);
-    std::vector<bool> seen(middles.size() / 2, false);
+    Labelled out{.sides = std::vector<Side>(middles.size() / 2, Side::tool),
+                 .place = std::vector<double>(middles.size() / 2, -1.0)};
     for (const geometry2d::Tie& tie : geometry2d::nearest_ties(middles, input.ids.loops, reach)) {
         const auto e = static_cast<std::size_t>(tie.point);
         const auto k = static_cast<std::size_t>(tie.segment);
         const std::size_t j = k < chain.segments ? k : (2 * chain.segments) - 1 - k;
         const Point2 q = geometry2d::point(middles, e);
-        const Side side = side_of(chain, j, q);
-        Side& label = out.sides.at(e);
-        if (!seen.at(e)) {
-            label = side;
+        out.sides.at(e) = std::min(out.sides.at(e), side_of(chain, j, q));
+        if (out.place.at(e) < 0.0) {
             out.place.at(e) =
                 static_cast<double>(j) + std::clamp(along(chain, j, q).first, 0.0, 1.0);
-        } else if (side == Side::cap) {
-            label = side;
-        } else if (label != Side::cap && side != label && !out.fold) {
-            out.fold = q;
         }
-        seen.at(e) = true;
     }
     return out;
 }
@@ -207,10 +198,6 @@ SidePieces chain_side(const GrowInput& input, int tool_side, OffsetParams params
                       .tool = tool_side,
                       .cap_reach = params.bias_units * limits.u};
     const Labelled labels = label(region, chain, input, reach);
-    if (labels.fold) {
-        out.fold = labels.fold;
-        return out;
-    }
     std::vector<Piece> pieces;
     for (std::size_t loop = 0; loop < region.starts.size(); ++loop) {
         pieces_of_loop(pieces, region, labels, {loop, tool_side > 0});
@@ -239,27 +226,90 @@ std::vector<std::uint8_t> keep_chain(std::span<const double> points, double thre
     const std::size_t n = points.size() / 2;
     std::vector<std::uint8_t> keep(n, 0);
     const auto apart = [&](std::size_t i, std::size_t j) {
-        const double dx = geometry2d::x(geometry2d::point(points, i)) -
-                          geometry2d::x(geometry2d::point(points, j));
-        const double dy = geometry2d::y(geometry2d::point(points, i)) -
-                          geometry2d::y(geometry2d::point(points, j));
-        return std::sqrt((dx * dx) + (dy * dy)) > threshold;
+        const Point2 p = geometry2d::point(points, i);
+        const Point2 q = geometry2d::point(points, j);
+        return geometry2d::length(geometry2d::x(p) - geometry2d::x(q),
+                                  geometry2d::y(p) - geometry2d::y(q)) > threshold;
     };
+    keep.at(0) = 1;
     std::size_t last = 0;
-    keep.at(0) = n > 0 ? 1 : 0;
     for (std::size_t i = 1; i + 1 < n; ++i) {
         if (apart(i, last)) {
             keep.at(i) = 1;
             last = i;
         }
     }
-    if (n > 1) {
-        if (last > 0 && !apart(n - 1, last)) {
-            keep.at(last) = 0; // the end stays
-        }
-        keep.at(n - 1) = 1;
+    // The end stays: kept points within threshold of it go, back to the first.
+    for (std::size_t i = last; i > 0 && n > 1 && !apart(n - 1, i); --i) {
+        keep.at(i) = 0;
     }
+    keep.at(n - 1) = 1;
     return keep;
+}
+
+namespace {
+
+struct Segment {
+    Point2 a;
+    Point2 b;
+};
+
+// Where segment s runs back over segment r: opposite directions, both ends of s within tol of r's
+// line, and their spans along r overlapping by more than tol; the overlap's middle on r.
+std::optional<Point2> overlap(Segment r, Segment s, double tol) {
+    const double dx = geometry2d::x(r.b) - geometry2d::x(r.a);
+    const double dy = geometry2d::y(r.b) - geometry2d::y(r.a);
+    const double length = geometry2d::length(dx, dy);
+    const auto along_r = [&](Point2 p) {
+        return (((geometry2d::x(p) - geometry2d::x(r.a)) * dx) +
+                ((geometry2d::y(p) - geometry2d::y(r.a)) * dy)) /
+               length;
+    };
+    const auto off_r = [&](Point2 p) {
+        return std::abs(((geometry2d::y(p) - geometry2d::y(r.a)) * dx) -
+                        ((geometry2d::x(p) - geometry2d::x(r.a)) * dy)) /
+               length;
+    };
+    const double from = along_r(s.a);
+    const double to = along_r(s.b);
+    const double low = std::max(0.0, to);
+    const double high = std::min(length, from);
+    if (!(to < from) || off_r(s.a) > tol || off_r(s.b) > tol || high - low <= tol) {
+        return std::nullopt;
+    }
+    const double mid = (low + high) / (2 * length);
+    return Point2{geometry2d::x(r.a) + (mid * dx), geometry2d::y(r.a) + (mid * dy)};
+}
+
+} // namespace
+
+std::optional<Point2> find_fold(std::span<const double> points, double tol) {
+    const std::size_t n = points.size() / 2;
+    std::vector<Segment> segments;
+    std::vector<std::size_t> order;
+    for (std::size_t i = 0; i + 1 < n; ++i) {
+        segments.push_back({geometry2d::point(points, i), geometry2d::point(points, i + 1)});
+        order.push_back(i);
+    }
+    const auto low_x = [&](std::size_t i) {
+        return std::min(geometry2d::x(segments.at(i).a), geometry2d::x(segments.at(i).b));
+    };
+    const auto high_x = [&](std::size_t i) {
+        return std::max(geometry2d::x(segments.at(i).a), geometry2d::x(segments.at(i).b));
+    };
+    std::ranges::stable_sort(order, {}, low_x);
+    // Each pair whose x ranges meet within tol, either way round (a sweep along x).
+    std::optional<Point2> found;
+    for (std::size_t p = 0; p < order.size() && !found; ++p) {
+        for (std::size_t q = p + 1;
+             q < order.size() && !found && low_x(order.at(q)) <= high_x(order.at(p)) + tol; ++q) {
+            const Segment r = segments.at(order.at(p));
+            const Segment s = segments.at(order.at(q));
+            found = overlap(r, s, tol);
+            found = found ? found : overlap(s, r, tol);
+        }
+    }
+    return found;
 }
 
 } // namespace splintercam::offset2d
