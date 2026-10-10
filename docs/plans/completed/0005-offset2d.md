@@ -1,4 +1,4 @@
-# Plan 0005: offset2d, the offsets and Booleans of topic 02 (draft)
+# Plan 0005: offset2d, the offsets and Booleans of topic 02
 
 <!-- Lives in docs/plans/active/ while work is ongoing, then moves to docs/plans/completed/.
      The agent updates the progress log at the end of every session, before stopping. -->
@@ -8,7 +8,42 @@
 - Research: `docs/research/02-offsets-and-booleans.md` (L4, reviewed 2026-10-08; PR 45)
 - Branch: one pull request per step from `main`, never stacked (docs/dev/07)
 - Owner: Peter Burgener; agents: Claude Code sessions
-- Status (2026-10-08): draft. Peter decided the module (DEC-G2D-038), approved its entry and budget and answered both questions (DEC-G2D-040). Research 02 is in; Peter reviewed the SPEC and answered its four questions (DEC-OFF-001 to 006), which releases steps 2 to 9. REQ-OFF-032 waits for pull request 47.
+- Status (2026-10-11): complete. Steps 1 to 9 and the backlog's property test of `offset_chain_side` done and reviewed, merged in pull requests 46 to 61 and the closing pull request of 2026-10-11 (this closure); see Handover. Earlier: Peter decided the module (DEC-G2D-038), approved its entry and budget and answered both questions (DEC-G2D-040); research 02 came in (pull requests 45 and 47); Peter reviewed the SPEC and answered its four questions (DEC-OFF-001 to 006).
+
+## Handover
+
+For the next agent. offset2d is complete on `main`; nothing is in flight.
+
+What exists (public API in `src/splintercam/offset2d/__init__.py`; contract in its `SPEC.md`, every requirement `Reviewed`):
+
+| Area | Python | Kernel |
+| --- | --- | --- |
+| Region offset (SHRINK air, GROW material), the orientation guard, the band | `offset_region` (`_region.py`) | `offset.cpp` |
+| Source IDs by the class tie, pinch split, canonical order | `EdgeClass`, `SourceClasses` (`_classes.py`); `run_kernel`, `outcome` (`_results.py`) | `result.cpp` (`finish_region`) over geometry2d's `grid.hpp`, `distance.hpp` |
+| Booleans (Positive fill rule) | `boolean`, `BooleanOp` (`_boolean.py`) | `boolean.cpp` |
+| Stock update | `machined_area`, `stock_layer` (`_stock.py`) | `grow.cpp`, `boolean.cpp` |
+| Open chains | `grow_chain`, `offset_chain_side`, `OpenPaths` (`_chain.py`) | `grow.cpp`, `chain_side.cpp` (`keep_chain`, `find_contact`, the side labels) |
+
+Tests: unit tests per area in `tests/offset2d/unit/`; property tests in `tests/offset2d/property/` (research 02's tests 2, 9, 10, 17, 19 and the chain side); test 20 against shapely/GEOS in `tests/offset2d/differential/` (ADR 0010, the uv default group `test-oracle`); oracles and generators in `tests/support/offset2d_oracles.py` and `offset2d_strategies.py`.
+
+Peter's answers during the work (each a DEC-OFF entry): the module's kernel interface and parameters (001, 002); shapely for tests only (003); the side from the region's kind, closed chains refused (004); `CHAIN_FOLDS` final, enclosed pieces flagged and not machined in release 1, one milling direction (018 to 020); open chains must be simple, `CHAIN_SELF_CONTACT` (021); the budget of 1600 NLOC and test 16 as a unit test until the golden case (023).
+
+Open, for later plans (details under Backlog):
+
+- The golden case `pocket-island-touching-wall` waits for the pocket strategy and the golden tools (`tools/golden-diff`, `tools/golden-approve`, a zoo runner); none of them exists.
+- Performance: research 02's target is 10^4 segments in 50 ms; Clipper2's inward offset of dense input past an arc's radius takes up to about a second at tol_min. Dense input is to be reduced first.
+- The helper shared between geometry2d and offset2d (Peter's: it changes geometry2d's kernel interface).
+- RR-002 items 1 to 6 (`docs/research/REQUESTS.md`) wait for Project Spike.
+- `tools/size-check` reports four files over 400 lines: `tests/offset2d/unit/test_chain_side.py` (478), `tests/offset2d/property/test_chain_side_property.py` (423), and geometry2d's `kernel/bindings.cpp` (515) and `kernel/distance.cpp` (458). Split a test file the next time it grows.
+- offset2d measures 1520 NLOC against its budget of 1600.
+
+How the work ran (keep doing it this way):
+
+- Spec reviews of geometry take several rounds; each found a new way to cut the part (Butt ends, a sub-grid stub, folds found only at an edge's middle, order-dependent ties). Decide rules on the input chain, not on Clipper2's output edges, which merge collinear edges.
+- After each fix, mutate by hand and run `tools/test-one offset2d <filter>`. A mutation that leaves a variable unused fails the build (warnings are errors) and proves nothing: check for "build failed".
+- Property tests found more in the test's own reading than in the code: when one fails, reproduce the example in a script and read the requirement again before touching the code; keep the example as `@example`.
+- A pull request can merge while you work: check its state before pushing more commits, and gate the push on the state itself (`gh pr view` exits 0 whatever the state; this closure first went to the merged branch of pull request 61).
+- Gate on `tools/check`'s exit code, and run `tools/size-check --change origin/main` before every push.
 
 ## The module
 
@@ -158,7 +193,7 @@ Total: about 1230 added lines of code (about 1050 NLOC) and 2080 of tests, in ni
 
 - After step 7: revisit a shared helper for the duplicated code between geometry2d and offset2d, with the Booleans as the third caller (Peter, 2026-10-09): the tail of `grid_region` (back to mm, fixed nodes, source IDs; `src/splintercam/geometry2d/kernel/grid.cpp` and `fill_region` in `src/splintercam/offset2d/kernel/offset.cpp`) and the output-buffer retry (`region_with_fill_rule` in `src/splintercam/geometry2d/_grid.py` and `_kernel_offset` in `src/splintercam/offset2d/_region.py`), about 40 lines. The copies already differ (offset2d's IDs use the class tie), so a shared helper needs parameters for both. Sharing changes geometry2d's kernel interface (DEC-G2D-040): Peter's.
 - Performance: the ID search grows with t (growing a finely flattened rounded box at tol_min: 25 ms at t = 1 mm, 89 ms at t = 50 mm), and Clipper2's inward offset past an arc's radius is slow on dense input (640 ms for 2100 vertices shrunk by 10 mm); research 02's target is 10^4 segments in 50 ms, with dense input reduced first.
-- RR-002 (`docs/research/REQUESTS.md`): five corrections to research 02, for Project Spike.
+- RR-002 (`docs/research/REQUESTS.md`): items 1 to 6, corrections to research 02, for Project Spike (7 to 9 answered in pull request 59).
 - Test helpers copied between files (simplifier, 2026-10-10): `with_tol` in three offset2d test files and inline in `test_stock.py`, `pieces` and `as_rows` in `test_chain_side.py` and the chain-side property test; one copy each in `tests/support/`.
 - From the final test audit of step 8 (the property test itself is done, 2026-10-10, DEC-OFF-024): the shared middles and ties of `finish_region` and the side's labels (simplifier), which would save one nearest-segment pass.
 

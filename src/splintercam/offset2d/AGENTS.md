@@ -1,6 +1,6 @@
 # AGENTS.md: offset2d
 
-Layer 1. Implements docs/research/02 (plan 0005, `docs/plans/active/0005-offset2d.md`). Contract: `./SPEC.md`. Why it is built this way: `./DECISIONS.md` (read it before changing behaviour). Public API: `./__init__.py`. C++ part: `./kernel/`. Depends on: foundation, geometry2d (its Python API, and the kernel headers `kernel/exact.hpp`, `kernel/distance.hpp`, `kernel/grid.hpp`; DEC-G2D-040, DEC-OFF-001).
+Layer 1. Implements docs/research/02. Complete and reviewed: `docs/plans/completed/0005-offset2d.md` (Handover). Contract: `./SPEC.md`. Why it is built this way: `./DECISIONS.md` (read it before changing behaviour). Public API: `./__init__.py`. C++ part: `./kernel/`. Depends on: foundation, geometry2d (its Python API, and the kernel headers `kernel/exact.hpp`, `kernel/distance.hpp`, `kernel/grid.hpp`; DEC-G2D-040, DEC-OFF-001).
 
 ## Commands
 
