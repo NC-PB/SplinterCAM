@@ -7,7 +7,7 @@
 
 ## Context
 
-Unit mix-ups and scattered epsilons are among the most common CAM bugs ([RESEARCH 01](../research/01-foundations.md), [18](../research/18-known-pitfalls.md#general-engineering)). Agents in particular write literal `1e-6` wherever a comparison fails.
+Unit mix-ups and scattered epsilons are among the most common CAM bugs ([RESEARCH 01](../research/01-foundations.md)). Agents in particular write literal `1e-6` wherever a comparison fails.
 
 ## Decision
 
@@ -25,3 +25,5 @@ Every function that compares geometry needs the context; this is deliberate. Tol
 
 - Metres as the internal unit: common in physics code, but CAM data, tools and G-code are in millimetres, so every value would be converted twice.
 - A global epsilon: simple, and the source of most "works on my part" bugs.
+
+<!-- Citation corrected on 2026-10-11 with Peter's approval: a link to research 18, which is not used in SplinterCAM (D-042, T-019), was removed from the Context. The decision is unchanged. -->

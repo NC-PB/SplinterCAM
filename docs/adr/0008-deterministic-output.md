@@ -7,7 +7,7 @@
 
 ## Context
 
-Golden tests, failure replay and agent debugging all need the same input to give the same output. Parallel code, hash-map iteration and unseeded randomness break this quietly ([RESEARCH 18](../research/18-known-pitfalls.md#general-engineering)).
+Golden tests, failure replay and agent debugging all need the same input to give the same output. Parallel code, hash-map iteration and unseeded randomness break this quietly.
 
 ## Decision
 
@@ -20,3 +20,5 @@ Slightly more care in parallel code. Failures become reproducible, which is what
 ## Alternatives considered
 
 - Deterministic only with one thread: hides bugs that appear only in parallel runs.
+
+<!-- Citation corrected on 2026-10-11 with Peter's approval: a link to research 18, which is not used in SplinterCAM (D-042, T-019), was removed from the Context. The decision is unchanged. -->
