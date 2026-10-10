@@ -198,6 +198,22 @@ def test_a_chain_crossing_itself_gives_open_pieces_along_the_chain(ctx: Context)
 
 
 @pytest.mark.req("REQ-OFF-028")
+def test_an_open_piece_behind_a_neck_narrower_than_2t_is_enclosed(ctx: Context) -> None:
+    # A square spiral whose inner turn leaves an entry of 3 mm, narrower than 2t = 3.2 mm, the
+    # tool right: an open piece outside, from the start, and one in the inner corridor up to the
+    # end's cap, on another boundary loop: enclosed (DEC-OFF-019).
+    spiral = [(0.0, 0.0), (20.0, 0.0), (20.0, 20.0), (0.0, 20.0), (0.0, 3.0), (15.0, 3.0),
+              (15.0, 15.0), (5.0, 15.0), (5.0, 8.0)]  # fmt: skip
+    paths = run(polyline(spiral), RIGHT, 1.6, ctx)
+    assert paths.closed.tolist() == [False, False]
+    assert paths.enclosed.tolist() == [False, True]
+    outside, corridor = pieces(paths)
+    slack = band_top(1.6, ctx) - 1.6
+    assert np.linalg.norm(outside[0] - [0.0, -1.6]) <= slack
+    assert np.linalg.norm(corridor[-1] - [5.0 - 1.6, 8.0]) <= slack  # right of (5, 15) to (5, 8)
+
+
+@pytest.mark.req("REQ-OFF-028")
 def test_a_short_segment_into_an_inside_corner_keeps_t_from_the_chain_start(ctx: Context) -> None:
     # Spec review: (0, 0) to (1, 0) to (1, 10), the tool left, t = 3. The wall along the second
     # segment must not come closer than t to the chain's start: the round end's area keeps it
@@ -281,6 +297,8 @@ def test_a_chain_running_back_over_itself_has_no_side(
     assert result.value is None
     assert codes(result) == ["CHAIN_FOLDS"]
     assert result.diagnostics[-1].location is not None
+    if name == "back part way":  # the middle of the overlap from (2, 0) to (10, 0)
+        assert result.diagnostics[-1].location == "(6.0000, 0.0000) mm"
 
 
 @pytest.mark.req("REQ-OFF-028")
@@ -302,7 +320,7 @@ def test_points_within_u_of_the_end_merge_back_to_a_real_segment(ctx: Context) -
     rows = polyline([(-10.0, 0.0), (0.0, 0.0), (1.00001e-4, 0.0), (5e-9, 2e-9)])
     paths = run(rows, LEFT, 2.0, ctx)
     assert paths.closed.tolist() == [False]
-    assert (paths.points[:, 1] > 2.0 - 1e-3).all()
+    assert distance_to_curves(paths.points, as_rows(flat_chain(rows, LEFT, ctx))).min() >= 2.0
 
 
 @pytest.mark.req("REQ-OFF-028")
@@ -326,6 +344,11 @@ def test_a_stub_shorter_than_the_grid_unit_merges_away(
     assert paths.closed.tolist() == [False]
     assert np.abs(paths.points - plain.points).max() <= band_top(2.0, ctx) - 2.0
     assert (paths.points[:, 1] > 2.0).all()
+    # A merge moves the chain by up to u, so δ grows by u (DEC-OFF-018): the straight wall lies
+    # one grid unit further out than the plain line's.
+    u = ctx.tolerances.grid_unit_mm
+    shift = float(np.median(paths.points[:, 1]) - np.median(plain.points[:, 1]))
+    assert shift == pytest.approx(u + (stub[-1][1] - 0.0), abs=0.5 * u)
 
 
 @pytest.mark.req("REQ-OFF-028")
