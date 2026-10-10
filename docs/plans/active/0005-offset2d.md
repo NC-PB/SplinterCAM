@@ -57,6 +57,12 @@ Total: about 1230 added lines of code (about 1050 NLOC) and 2080 of tests, in ni
 
 ## Progress log
 
+### 2026-10-10, step 9, part 1 (ADR 0010 applied, test 20)
+
+- ADR 0010 applied: the group `test-oracle` with shapely 2.2.0 (GEOS 3.14.1) in `pyproject.toml` and `uv.lock`, made a default group (`[tool.uv] default-groups`), so every `uv sync` installs it: `tools/bootstrap`, `tools/build`, the sanitizer environment and CI; otherwise `tools/build`'s sync would remove it again. The wheel carries GEOS as `shapely/.dylibs/libgeos*.dylib` with `LICENSE_GEOS` (checked on macOS, as the ADR asked).
+- Test 20 (`tests/offset2d/differential/test_offset_region_differential.py`, DEC-OFF-022): test 10's regions, clearances and tolerances, our result against GEOS's round-joined buffer at 10⁴ points outside the band widened by 3u for GEOS's own error; the densifier `dense_loops` has its own known-answer tests. 1000 examples pass; a GEOS `TopologyException` on a 1e-15 mm radial connector, found by that run, is fixed in the densifier. Mutation: a clearance 0.2 % too large fails at once.
+- Left for part 2: the golden case `pocket-island-touching-wall`, which needs a format and a runner first (question for Peter in the pull request).
+
 ### 2026-10-10, step 8, part 2 (one side of a chain)
 
 - `offset_chain_side` (REQ-OFF-028; DEC-OFF-018) in `kernel/chain_side.cpp`: the chain grown with Round ends, every output edge labelled tool side, cap or other from the chain segments tied nearest its middle, runs of tool-side edges as pieces, open ones along the chain, then closed ones. Research 02's test 12: the line and two arcs on both sides, the sharp V; its C gives one open piece on the inner wall, by research 02's own cap rule (RR-002 item 7); a closed piece tested on an omega with a narrow neck.

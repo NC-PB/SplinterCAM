@@ -41,8 +41,16 @@ stack-test = [
 packaging = [
     "briefcase==0.4.5",
 ]
+# ADR 0010: shapely/GEOS (GEOS is LGPL-2.1) as a differential reference for tests only. Never in
+# [project] dependencies; only files under tests/ import it; Briefcase installs no groups.
+test-oracle = [
+    "shapely>=2.2.0",
+]
 
 [tool.uv]
+# Every `uv sync` (tools/bootstrap, tools/build, CI) installs these, so test 20 of offset2d runs
+# everywhere without skipping (ADR 0010). stack-test and packaging stay opt-in.
+default-groups = ["dev", "test-oracle"]
 # uv-managed CPython everywhere, so every machine and CI runner uses the same build of Python.
 python-preference = "only-managed"
 # Built in the venv with a persistent build/ folder: CMake then recompiles only what changed.
