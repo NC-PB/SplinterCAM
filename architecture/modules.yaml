@@ -39,11 +39,11 @@ modules:
   io:                     { layer: 1, kernel: false, depends_on: [foundation, geometry2d, geometry3d], research: ["21"] }
   offset2d:               { layer: 1, kernel: true,  depends_on: [foundation, geometry2d], kernel_includes: [geometry2d], research: ["02"], budget: 1600 }
 
-  model:                  { layer: 2, kernel: false, depends_on: [foundation], research: ["19", "23"] }
-  cl:                     { layer: 2, kernel: false, depends_on: [foundation], research: ["13"] }
+  model:                  { layer: 2, kernel: false, depends_on: [foundation], research: ["23"] }
+  cl:                     { layer: 2, kernel: false, depends_on: [foundation], research: ["26"] }
   stock:                  { layer: 2, kernel: true,  depends_on: [foundation, geometry2d, geometry3d], research: ["08"] }
 
-  features:               { layer: 3, kernel: false, depends_on: [foundation, geometry2d, geometry3d, io, model], research: ["19", "20"] }
+  features:               { layer: 3, kernel: false, depends_on: [foundation, geometry2d, geometry3d, io, model], research: ["20", "25"] }
   toolpath:               { layer: 3, kernel: true,  depends_on: [foundation, geometry2d, geometry3d, model, cl, stock], research: ["10", "11"] }
   strategies/profile:     { layer: 3, kernel: false, depends_on: [foundation, geometry2d, model, cl, toolpath], research: ["02", "22"] }
   strategies/pocket:      { layer: 3, kernel: false, depends_on: [foundation, geometry2d, model, cl, toolpath], research: ["04"] }
@@ -54,11 +54,12 @@ modules:
   strategies/turning:     { layer: 3, kernel: false, depends_on: [foundation, geometry2d, model, cl, toolpath, stock], research: ["14", "15", "16"] }
 
   kinematics:             { layer: 4, kernel: true,  depends_on: [foundation, model], research: ["12"] }
-  vnc:                    { layer: 4, kernel: false, depends_on: [foundation, model, cl, kinematics], research: ["13", "19"] }
-  post:                   { layer: 4, kernel: false, depends_on: [foundation, model, cl, vnc], research: ["13", "16"] }
-  simulation:             { layer: 4, kernel: true,  depends_on: [foundation, geometry3d, model, cl, stock, vnc], research: ["08"] }
+  # ncx writes the toolpath record as NCX and runs the pinned ncx binary (compile, check); every controller dialect,
+  # cycle, rounding rule and the control's virtual machine live in NCXchange (D-021, D-031, D-148, D-149).
+  ncx:                    { layer: 4, kernel: false, depends_on: [foundation, model, cl], research: ["26", "27"] }
+  simulation:             { layer: 4, kernel: true,  depends_on: [foundation, geometry3d, model, cl, stock], research: ["08"] }
 
-  job:                    { layer: 5, kernel: false, depends_on: [foundation, io, model, cl, stock, features, toolpath, "strategies/*", kinematics, vnc, post, simulation], research: ["18", "19"] }
+  job:                    { layer: 5, kernel: false, depends_on: [foundation, io, model, cl, stock, features, toolpath, "strategies/*", kinematics, ncx, simulation], research: [] }
 
   apps/cli:               { layer: 6, kernel: false, depends_on: [job] }
   apps/desktop:           { layer: 6, kernel: false, depends_on: [job] }

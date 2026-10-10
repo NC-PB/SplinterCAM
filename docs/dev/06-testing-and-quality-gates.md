@@ -12,8 +12,8 @@ Tests are the sensors that let agents work unsupervised between reviews. RESEARC
 | Property | `tests/<m>/property/` (Hypothesis) | The module's invariants on thousands of random and deliberately messy inputs |
 | Golden | `testdata/zoo/`, runner in `tests/job/golden/` | Whole operations on reference parts, compared geometrically with approved outputs |
 | Regression | `testdata/regressions/<issue>/` | Minimised failures; never deleted |
-| Differential | `tests/<m>/differential/` | Same question answered by an independent library (Clipper2, OpenCAMLib, a G-code interpreter) |
-| End-to-end | `tests/apps/cli/` | Job file → G-code → independent parser → simulated stock → compared with the part |
+| Differential | `tests/<m>/differential/` | Same question answered by an independent library (shapely/GEOS for offsets, ADR 0010; OpenCAMLib; NCXchange's virtual machine reading the NCX back) |
+| End-to-end | `tests/apps/cli/` | Job file → NCX → `ncx check` passes → read back → simulated stock → compared with the part |
 | Architecture | `tools/arch-check` | `modules.yaml` rules: Python imports, kernel includes, OCP and PySide6 only where allowed |
 | Traceability | `tools/trace-check` | Every reviewed requirement has a test; lines in `src/` that no requirement's test runs are listed |
 | Size | `tools/size-check` | Change, file and module size limits ([12](12-lean-code.md), section 3) |
@@ -44,7 +44,7 @@ Tests are the sensors that let agents work unsupervised between reviews. RESEARC
 
 ## Comparing geometry
 
-- Never compare coordinates for exact equality or G-code as text.
+- Never compare coordinates for exact equality or NCX and NC programs as text.
 - Compare curves by Hausdorff distance within the case tolerance, loops by count, orientation and area, toolpaths by swept-area difference, number of retracts and cycle time within a percentage.
 - Each `case.json` states the tolerances and the checks to run, so the comparison rules are data, not code:
 

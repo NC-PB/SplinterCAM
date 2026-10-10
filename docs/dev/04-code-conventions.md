@@ -28,7 +28,7 @@ Two readers matter: the person who reviews and maintains the code, and the next 
 
 ```text
 // Uncut corner condition s <= R(1 + sin(beta/2)): RESEARCH 04 "Uncut corners"; Held 1991.
-// Retry with a slightly different distance near critical offsets: RESEARCH 18, 2D item 6.
+// Near a critical distance the integer result decides; no retry: research 02, Critical distances.
 ```
 
 - Every public function and type has a doc comment with units, preconditions, postconditions and the requirement IDs it implements. Private functions get no docstring, and a comment only where the reason is not obvious. Comments never restate the code or the SPEC.
@@ -41,7 +41,7 @@ Two readers matter: the person who reviews and maintains the code, and the next 
 - Validate at the boundary, trust inside. Public functions, importers and kernel entry points check their inputs; code inside a module does not re-check what the boundary guarantees.
 - Expected outcomes are values: an empty offset, a tool that does not fit, a hole that cannot be reached. Return them as results with typed diagnostics ([03](03-architecture-rules.md)).
 - Programming errors (a broken invariant, a null where none is allowed) fail loudly with an assertion or exception. Assertions stay on in release test builds.
-- Never swallow an error. Never catch "everything" except at the top of a job, where the failure is logged, dumped for replay and reported (RESEARCH 18, section General engineering (Project Spike)).
+- Never swallow an error. Never catch "everything" except at the top of a job, where the failure is logged, dumped for replay and reported (ours).
 - Never swallow out-of-memory or cancellation.
 
 ## Determinism
@@ -49,7 +49,7 @@ Two readers matter: the person who reviews and maintains the code, and the next 
 - Stable sorts, with an explicit tie-breaker.
 - Never let the output order depend on hash-map iteration, pointer addresses or thread timing.
 - Random numbers only from a seeded generator passed in through the `Context`.
-- Text output (G-code, reports) formats numbers with an invariant culture and explicit rounding rules (RESEARCH 18, section Multi-axis machine and post-processing, item 1 (Project Spike)).
+- Text output (NCX, reports) formats numbers with an invariant culture; NCX is written at one fixed resolution and NCXchange rounds to the machine (D-149).
 
 ## State and concurrency
 

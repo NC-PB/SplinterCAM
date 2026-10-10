@@ -22,5 +22,5 @@ Layer <n>. Implements docs/research/<NN>. Contract: `./SPEC.md`. Why it is built
 
 ## Known pitfalls
 
-- RESEARCH 18 (Project Spike), items <…>.
+- The traps of research <NN>, items <…>.
 - <Add one line when an agent trips over something in this module.>
