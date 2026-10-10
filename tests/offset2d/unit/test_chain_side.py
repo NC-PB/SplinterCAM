@@ -178,23 +178,37 @@ def test_a_room_behind_a_neck_narrower_than_2t_is_an_enclosed_closed_piece(
 
 
 @pytest.mark.req("REQ-OFF-028")
-def test_a_chain_crossing_itself_gives_open_pieces_along_the_chain(ctx: Context) -> None:
-    # (0, 0) to (20, 0) to (20, 10) to (10, 10) to (10, -10), the tool left, t = 1: the last
-    # segment crosses the first, so the tool side breaks into an open piece above the first
-    # segment's start, an open piece right of the last segment's end, and the hook's room. The
-    # open pieces come in the chain's order and both run with it; both are on the outer loop,
-    # reachable; the room is enclosed.
-    paths = run(polyline([(0.0, 0.0), (20.0, 0.0), (20.0, 10.0), (10.0, 10.0), (10.0, -10.0)]),
-                LEFT, 1.0, ctx)  # fmt: skip
-    assert paths.closed.tolist() == [False, False, True]
-    assert paths.enclosed.tolist() == [False, False, True]
-    first, second, _ = pieces(paths)
-    slack = band_top(1.0, ctx) - 1.0
-    assert np.abs(first[[0, -1]] - [[0.0, 1.0], [9.0, 1.0]]).max() <= slack
-    assert np.abs(second[[0, -1]] - [[11.0, -1.0], [11.0, -10.0]]).max() <= slack
+def test_a_hook_gives_open_pieces_along_the_chain(ctx: Context) -> None:
+    # (0, 0) to (20, 0) to (20, 10) to (10, 10) to (10, 3), the tool left, t = 2: the hook's end
+    # lies 3 mm from the first segment, nearer than 2t, so the tool side breaks into an open piece
+    # from the start to the end's cap and an open piece inside the hook, on a hole of the grown
+    # area: in the chain's order, both running with it, the second enclosed (DEC-OFF-019).
+    hook = polyline([(0.0, 0.0), (20.0, 0.0), (20.0, 10.0), (10.0, 10.0), (10.0, 3.0)])
+    paths = run(hook, LEFT, 2.0, ctx)
+    assert paths.closed.tolist() == [False, False]
+    assert paths.enclosed.tolist() == [False, True]
+    first, inside = pieces(paths)
+    slack = band_top(2.0, ctx) - 2.0
+    assert np.linalg.norm(first[0] - [0.0, 2.0]) <= slack
+    assert inside[:, 0].min() > 10.0
+    assert inside[:, 1].max() < 10.0
+    d = distance_to_curves(paths.points, as_rows(flat_chain(hook, LEFT, ctx)))
+    assert d.min() >= 2.0
     assert set(paths.fixed.tolist()) <= {0, 1}
     for array in (paths.points, paths.starts, paths.closed, paths.enclosed, paths.source_ids):
         assert not array.flags.writeable
+
+
+@pytest.mark.req("REQ-OFF-028")
+def test_a_closed_piece_on_the_outer_loop_is_not_enclosed(ctx: Context) -> None:
+    # A chain round a square with both ends tucked inside (third spec review), the tool outside:
+    # the whole outer loop is tool side, one closed piece, reached from outside, so never enclosed
+    # (DEC-OFF-019, Peter, 2026-10-10); the reach is topic 10's link and entry check.
+    square = [(5.0, 2.0), (5.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0), (0.0, 0.0),
+              (4.0, 0.0), (4.0, 2.0)]  # fmt: skip
+    paths = run(polyline(square), RIGHT, 2.0, ctx)
+    assert paths.closed.tolist() == [True]
+    assert paths.enclosed.tolist() == [False]
 
 
 @pytest.mark.req("REQ-OFF-028")
@@ -251,71 +265,78 @@ def test_an_inside_corner_on_the_left_rounds_nothing(ctx: Context) -> None:
     assert np.linalg.norm(piece[1] - [8.0, 2.0]) <= 2 * slack
 
 
-FOLDS = {
+OFF_THE_MIDDLE = [(0.0, 0.0), (10.0, 0.0), (10.0, 5.0), (9.0, 5.0), (9.0, 0.0), (6.0, 0.0)]
+TILTED = [(5.0, 0.0), (8.0, 0.0), (8.0, 50.0), (14.0, 50.0), (14.0, 3e-4), (5.5, -5e-5)]
+FOLDS = {  # runs back over the segment before it: CHAIN_FOLDS
     "out and back": [(0.0, 0.0), (10.0, 0.0), (0.0, 0.0)],
     "back part way": [(0.0, 0.0), (10.0, 0.0), (2.0, 0.0)],
     "round past the start": [(5.0, 0.0), (10.0, 0.0), (0.0, 0.0), (5.0, 0.0)],
     "a stub of 5u at the start": [(0.0, 0.0), (-5e-4, 0.0), (10.0, 0.0)],
     "a spike": [(0.0, 0.0), (5.0, 0.0), (5.0, -0.01), (5.0, 0.0), (10.0, 0.0)],
     "back 1e-9 above": [(0.0, 0.0), (10.0, 0.0), (10.0, 1e-9), (2.0, 1e-9)],
-    "back over itself": [(0.0, 0.0), (10.0, 0.0), (10.0, 5.0), (5.0, 5.0), (5.0, 0.0), (2.0, 0.0)],
-    "back over itself, off the middle": [
-        (0.0, 0.0),
-        (10.0, 0.0),
-        (10.0, 5.0),
-        (9.0, 5.0),
-        (9.0, 0.0),
-        (6.0, 0.0),
-    ],
     "a spike 2e-5 wide": [(0.0, 0.0), (5.0, 0.0), (5.0, -0.01), (4.99998, 0.0), (10.0, 0.0)],
-    # The last segment comes back tilted: the first segment's ends lie within u of its line, but
-    # its far end lies 3u off the first's, so only one way round finds the fold.
-    "back over itself, tilted": [
-        (5.0, 0.0),
-        (8.0, 0.0),
-        (8.0, 50.0),
-        (14.0, 50.0),
-        (14.0, 3e-4),
-        (5.5, -5e-5),
-    ],
+}
+CONTACTS = {  # parts not next to each other within t_topo: CHAIN_SELF_CONTACT
+    "back over itself": [(0.0, 0.0), (10.0, 0.0), (10.0, 5.0), (5.0, 5.0), (5.0, 0.0), (2.0, 0.0)],
+    "back over itself, off the middle": OFF_THE_MIDDLE,
+    # The last segment comes back tilted, 3u off the first segment's line at its far end.
+    "back over itself, tilted": TILTED,
+    "crossing": [(0.0, 0.0), (20.0, 0.0), (20.0, 10.0), (10.0, 10.0), (10.0, -10.0)],
+    "touching at a point": [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (5.0, 0.0), (0.0, 10.0)],
+    "RR-003's spike": [(0.0, 0.0), (5.0, 0.0), (5.0, -0.5), (4.99, 0.0), (10.0, 0.0)],
+}
+LOCATIONS = {  # the overlap's middle, the point of contact
+    "back part way": "(6.0000, 0.0000) mm",
+    "RR-003's spike": "(4.9900, 0.0000) mm",
+    "touching at a point": "(5.0000, 0.0000) mm",
 }
 
 
 @pytest.mark.req("REQ-OFF-028")
-@pytest.mark.parametrize("name", list(FOLDS))
+@pytest.mark.parametrize(
+    ("name", "code"),
+    [(n, "CHAIN_FOLDS") for n in FOLDS] + [(n, "CHAIN_SELF_CONTACT") for n in CONTACTS],
+)
 @pytest.mark.parametrize("side", [LEFT, RIGHT])
-def test_a_chain_running_back_over_itself_has_no_side(
-    name: str, side: AirSide, ctx: Context
+def test_a_chain_that_is_not_simple_is_refused(
+    name: str, code: str, side: AirSide, ctx: Context
 ) -> None:
-    # Spec reviews: where the chain runs back over itself, one segment calls a place the tool's
-    # side and another the material's, so there is no side to cut: refused with CHAIN_FOLDS at
-    # the fold (DEC-OFF-018, provisional). Found on the chain, wherever the overlap lies: two
-    # segments in opposite directions within u of each other's line (the 1e-9 step merges away).
-    r, ids = np.array(polyline(FOLDS[name])), 100 + np.arange(len(FOLDS[name]) - 1, dtype=np.int64)
+    # An open chain must be simple (Held, SRC-030, Def. 5.3; DEC-OFF-021, Peter): where it runs
+    # back over the segment before it, one segment calls a place the tool's side and the other
+    # the material's (CHAIN_FOLDS, DEC-OFF-018); where parts not next to each other touch, cross
+    # or overlap within t_topo, their sides meet (CHAIN_SELF_CONTACT). Refused at the position,
+    # found on the chain wherever it lies (the 1e-9 step merges away first). RR-003's spike
+    # returns onto the incoming wall at (4.99, 0).
+    points = {**FOLDS, **CONTACTS}[name]
+    r, ids = np.array(polyline(points)), 100 + np.arange(len(points) - 1, dtype=np.int64)
     classes = SourceClasses(ids, np.zeros(ids.size, dtype=np.int8))
     result = offset_chain_side(r, ids, side, 2.0, classes, ctx)
     assert result.value is None
-    assert codes(result) == ["CHAIN_FOLDS"]
+    assert codes(result) == [code]
     assert result.diagnostics[-1].location is not None
-    if name == "back part way":  # the middle of the overlap from (2, 0) to (10, 0)
-        assert result.diagnostics[-1].location == "(6.0000, 0.0000) mm"
+    if name in LOCATIONS:
+        assert result.diagnostics[-1].location == LOCATIONS[name]
 
 
 @pytest.mark.req("REQ-OFF-028")
 @pytest.mark.parametrize("side", [LEFT, RIGHT])
-def test_a_chain_touching_itself_at_a_point_is_no_fold(side: AirSide, ctx: Context) -> None:
-    # Third spec review: a V whose tip touches the first segment, and the same chain reversed,
-    # tie opposite sides only at a point; that is no fold, whichever way the chain runs.
-    touch = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (5.0, 0.0), (0.0, 10.0)]
-    for points in (touch, touch[::-1]):
-        paths = run(polyline(points), side, 2.0, ctx)
-        d = distance_to_curves(paths.points, as_rows(flat_chain(polyline(points), side, ctx)))
-        assert d.min() >= 2.0
+def test_a_spike_that_touches_nothing_else_is_offset_as_drawn(side: AirSide, ctx: Context) -> None:
+    # RR-003's answer (Peter, 2026-10-10): a turn-back that touches nothing else is valid geometry
+    # and is offset as drawn; the part model is the profile's check (topic 22). The spike's return
+    # ends at (5.01, 0.01), clear of the incoming wall, and the chain leaves upward: accepted, the
+    # path at least t from every segment. (Ending at (4.99, 0.01), the return leg would cross the
+    # incoming wall at x = 4.990, a contact.)
+    spike = polyline([(0.0, 0.0), (5.0, 0.0), (5.0, -0.5), (5.01, 0.01), (5.01, 10.0)])
+    paths = run(spike, side, 1.0, ctx)
+    assert paths.starts.size >= 1
+    d = distance_to_curves(paths.points, as_rows(flat_chain(spike, side, ctx)))
+    assert d.min() >= 1.0
+    assert d.max() <= band_top(1.0, ctx)
 
 
 @pytest.mark.req("REQ-OFF-013", "REQ-OFF-028")
 def test_points_within_u_of_the_end_merge_back_to_a_real_segment(ctx: Context) -> None:
-    # Third spec review: two points within u of the end, the first of them kept, left a last
+    # Third spec review: two points within t_topo of the end, the first of them kept, left a last
     # segment of 5e-9 mm, which the kernel refused with ValueError. They merge away now.
     rows = polyline([(-10.0, 0.0), (0.0, 0.0), (1.00001e-4, 0.0), (5e-9, 2e-9)])
     paths = run(rows, LEFT, 2.0, ctx)
@@ -337,18 +358,18 @@ def test_a_stub_shorter_than_the_grid_unit_merges_away(
     stub: list[tuple[float, float]], ctx: Context
 ) -> None:
     # Spec review, blocker: a stub of 0.5u, which the grid cannot show, turned the round end into
-    # tool side and wrapped the path round the start onto the material side. Merged within u, the
-    # chain gives the side of the plain line, on its tool side only.
+    # tool side and wrapped the path round the start onto the material side. Merged within t_topo,
+    # the chain gives the side of the plain line, on its tool side only.
     paths = run(polyline(stub), LEFT, 2.0, ctx)
     plain = run(polyline([(0.0, 0.0), (10.0, 0.0)]), LEFT, 2.0, ctx)
     assert paths.closed.tolist() == [False]
     assert np.abs(paths.points - plain.points).max() <= band_top(2.0, ctx) - 2.0
     assert (paths.points[:, 1] > 2.0).all()
-    # A merge moves the chain by up to u, so δ grows by u (DEC-OFF-018): the straight wall lies
-    # one grid unit further out than the plain line's.
-    u = ctx.tolerances.grid_unit_mm
+    # A merge moves the chain by up to t_topo, so δ grows by t_topo (DEC-OFF-018): the straight
+    # wall lies t_topo further out than the plain line's.
+    t_topo, u = ctx.tolerances.topology_tol_mm, ctx.tolerances.grid_unit_mm
     shift = float(np.median(paths.points[:, 1]) - np.median(plain.points[:, 1]))
-    assert shift == pytest.approx(u + (stub[-1][1] - 0.0), abs=0.5 * u)
+    assert shift == pytest.approx(t_topo + stub[-1][1], abs=0.5 * u)
 
 
 @pytest.mark.req("REQ-OFF-028")
@@ -422,8 +443,8 @@ def test_a_chain_spanning_the_limit_is_refused(ctx: Context) -> None:
 def test_a_run_of_tiny_steps_merges_without_moving_the_corner(ctx: Context) -> None:
     # Spec review: steps of 0.9 eps_len into a corner merged onto the run's first point moved the
     # corner; 2000 of them, run towards -x, move it 1.8e-3 mm toward the path along the next
-    # segment, more than a + 3u. Points within u of the last kept one merge, so the corner moves
-    # less than u, and the path keeps t from the chain as given.
+    # segment, more than a + 3u. Points within t_topo of the last kept one merge, so the corner
+    # moves less than t_topo, and the path keeps t from the chain as given.
     steps = [(-0.9e-6 * i, 0.0) for i in range(2001)]
     points = [(10.0, 0.0), *steps, (steps[-1][0], 10.0)]
     rows = polyline(points)

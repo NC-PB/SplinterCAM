@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <utility>
 #include <vector>
 
 namespace splintercam::offset2d {
@@ -30,11 +31,16 @@ struct SidePieces {
 [[nodiscard]] std::vector<std::uint8_t> keep_chain(std::span<const double> points,
                                                    double threshold);
 
-// Where the chain runs back over itself: two segments in opposite directions, each end of one
-// within `tol` of the other's line, overlapping by more than `tol` (DEC-OFF-018); none if it does
-// not.
-[[nodiscard]] std::optional<geometry2d::Point2> find_fold(std::span<const double> points,
-                                                          double tol);
+// Where an open chain is not simple (SRC-030, p. 19, Def. 5.3; DEC-OFF-021): a fold, where a
+// segment runs back over the one before it (opposite directions, within `tol` of its line,
+// overlapping by more than `tol`), the first along the chain; else a contact, where two segments
+// not next to each other come within `tol`, the first pair along the chain; none if it is simple.
+struct Contact {
+    geometry2d::Point2 at;
+    bool fold = false;
+    std::pair<std::size_t, std::size_t> pair{};
+};
+[[nodiscard]] std::optional<Contact> find_contact(std::span<const double> points, double tol);
 
 // The area within delta of the one chain of `input`, with round ends, and of its boundary the
 // edges on the tool side (+1 left of the chain's direction, -1 right), the caps nearest an end
