@@ -6,6 +6,7 @@ and the refusals."""
 import dataclasses
 import itertools
 import math
+from typing import Any
 
 import numpy as np
 import pytest
@@ -13,6 +14,7 @@ from numpy.typing import NDArray
 
 from geometry2d_checks import codes
 from offset2d_oracles import distance_to_curves
+from splintercam import _kernels
 from splintercam.foundation import CANCELLED, TOLERANCE_DEFAULTS, CancellationToken, Context
 from splintercam.geometry2d import AirSide, CurveRows, build_chain
 from splintercam.offset2d import EdgeClass, OpenPaths, SourceClasses, offset_chain_side
@@ -109,7 +111,13 @@ def test_the_sharp_v_on_its_outside_runs_unbroken_round_the_join(ctx: Context) -
     assert paths.closed.tolist() == [False]
     piece = pieces(paths)[0]
     assert piece[:, 0].max() >= 1.0  # round the tip at (0, 0)
-    assert np.linalg.norm(piece[0] - np.array([-10.0, -1.0])) < 0.01
+    slack = band_top(1.0, ctx) - 1.0
+    assert np.linalg.norm(piece[0] - np.array([-10.0, -1.0])) <= slack
+    normal = np.array([1.0, 10.0]) / math.hypot(1.0, 10.0)  # right of the second segment
+    assert np.linalg.norm(piece[-1] - (np.array([-10.0, 1.0]) + normal)) <= slack
+    d = distance_to_curves(piece, as_rows(flat_chain(SHARP_V, RIGHT, ctx)))
+    assert d.min() >= 1.0
+    assert d.max() <= band_top(1.0, ctx)
 
 
 @pytest.mark.req("REQ-OFF-028")
@@ -124,33 +132,69 @@ def test_a_c_open_narrower_than_2t_with_the_tool_inside_is_one_open_piece(ctx: C
     paths = run(c, LEFT, 6.0, ctx)
     assert paths.closed.tolist() == [False]
     radii = np.hypot(paths.points[:, 0], paths.points[:, 1])
-    assert radii.max() <= 10.0 - 6.0 + 0.01
+    assert radii.max() <= 10.0 - 6.0 + band_top(6.0, ctx) - 6.0
     tol = ctx.tolerances  # it hugs the inner wall: within the band of the inscribed chords
     assert radii.min() >= 10.0 - band_top(6.0, ctx) - tol.flatten_tol_mm
 
 
-@pytest.mark.req("REQ-OFF-028")
-def test_a_room_behind_a_neck_narrower_than_2t_is_a_closed_piece(ctx: Context) -> None:
+OMEGA = [(-20.0, 0.0), (-1.0, 0.0), (-1.0, 5.0), (-10.0, 5.0), (-10.0, 20.0), (10.0, 20.0),
+         (10.0, 5.0), (1.0, 5.0), (1.0, 0.0), (20.0, 0.0)]  # fmt: skip
+
+
+def signed_area(loop: NDArray[np.float64]) -> float:
+    x, y = loop[:, 0], loop[:, 1]
+    return 0.5 * float(np.sum(x * np.roll(y, -1) - np.roll(x, -1) * y))
+
+
+@pytest.mark.req("REQ-OFF-028", "REQ-OFF-038")
+@pytest.mark.parametrize("side", [LEFT, RIGHT])
+def test_a_room_behind_a_neck_narrower_than_2t_is_an_enclosed_closed_piece(
+    side: AirSide, ctx: Context
+) -> None:
     # The case of a closed piece: an omega, the tool inside a room whose neck (2 mm) is narrower
-    # than 2t. The bands of the neck's walls meet, so the room is enclosed by tool-side edges
-    # only: one closed piece; the base line's tool side one open piece below it.
-    omega = polyline([(-20.0, 0.0), (-1.0, 0.0), (-1.0, 5.0), (-10.0, 5.0), (-10.0, 20.0),
-                      (10.0, 20.0), (10.0, 5.0), (1.0, 5.0), (1.0, 0.0), (20.0, 0.0)])  # fmt: skip
-    paths = run(omega, RIGHT, 3.0, ctx)
-    flags: list[bool] = paths.closed.tolist()
-    assert flags == [False, True]  # open pieces first
-    closed = pieces(paths)[1]
-    room_ids = set(paths.source_ids[pieces(paths)[0].shape[0] - 1 :].tolist())
-    assert {103, 104, 105} <= room_ids <= set(range(101, 108))  # the room's walls only
-    d = distance_to_curves(closed, as_rows(flat_chain(omega, RIGHT, ctx)))
-    assert d.min() >= 3.0  # the room's loop in the band: it rounds the neck's corners at t
-    assert d.max() <= band_top(3.0, ctx)
+    # than 2t (the chain run backwards for the tool on the left). The bands of the neck's walls
+    # meet, so the room is enclosed by tool-side edges only: one closed piece, enclosed, after the
+    # open piece below the base line (DEC-OFF-019). It runs with the chain like the open piece, so
+    # the walls lie on the side away from the tool: clockwise round the room for the tool on the
+    # right, counter-clockwise on the left (DEC-OFF-020); from its smallest point (REQ-OFF-038).
+    omega = polyline(OMEGA if side is RIGHT else OMEGA[::-1])
+    paths = run(omega, side, 3.0, ctx)
+    assert paths.closed.tolist() == [False, True]  # open pieces first
+    assert paths.enclosed.tolist() == [False, True]
+    open_piece, closed = pieces(paths)
+    chain = as_rows(flat_chain(omega, side, ctx))
+    for piece in (open_piece, closed):
+        d = distance_to_curves(piece, chain)
+        assert d.min() >= 3.0  # in the band, rounding the neck's corners at t
+        assert d.max() <= band_top(3.0, ctx)
     assert closed[:, 1].min() > 5.0  # above the room's floor
-    open_piece = pieces(paths)[flags.index(False)]
-    d = distance_to_curves(open_piece, as_rows(flat_chain(omega, RIGHT, ctx)))
-    assert d.min() >= 3.0  # in the band, rounding the neck's corners at t below its mouth
-    assert d.max() <= band_top(3.0, ctx)
     assert open_piece[:, 1].max() < 0.0  # below the base line
+    assert signed_area(closed) * (1.0 if side is LEFT else -1.0) > 0.0
+    assert open_piece[0, 0] * (1.0 if side is RIGHT else -1.0) < 0.0  # from the chain's start
+    corners: list[tuple[float, float]] = [(float(x), float(y)) for x, y in closed.tolist()]
+    assert corners[0] == min(corners)
+    walls = set(paths.source_ids[open_piece.shape[0] - 1 :].tolist())
+    assert {103, 104, 105} <= walls <= set(range(101, 108))  # the room's walls, either way round
+
+
+@pytest.mark.req("REQ-OFF-028")
+def test_a_chain_crossing_itself_gives_open_pieces_along_the_chain(ctx: Context) -> None:
+    # (0, 0) to (20, 0) to (20, 10) to (10, 10) to (10, -10), the tool left, t = 1: the last
+    # segment crosses the first, so the tool side breaks into an open piece above the first
+    # segment's start, an open piece right of the last segment's end, and the hook's room. The
+    # open pieces come in the chain's order and both run with it; both are on the outer loop,
+    # reachable; the room is enclosed.
+    paths = run(polyline([(0.0, 0.0), (20.0, 0.0), (20.0, 10.0), (10.0, 10.0), (10.0, -10.0)]),
+                LEFT, 1.0, ctx)  # fmt: skip
+    assert paths.closed.tolist() == [False, False, True]
+    assert paths.enclosed.tolist() == [False, False, True]
+    first, second, _ = pieces(paths)
+    slack = band_top(1.0, ctx) - 1.0
+    assert np.abs(first[[0, -1]] - [[0.0, 1.0], [9.0, 1.0]]).max() <= slack
+    assert np.abs(second[[0, -1]] - [[11.0, -1.0], [11.0, -10.0]]).max() <= slack
+    assert set(paths.fixed.tolist()) <= {0, 1}
+    for array in (paths.points, paths.starts, paths.closed, paths.enclosed, paths.source_ids):
+        assert not array.flags.writeable
 
 
 @pytest.mark.req("REQ-OFF-028")
@@ -223,12 +267,15 @@ def test_a_segment_of_eps_len_or_less_merges_into_its_neighbour(where: str, ctx:
     assert paths.closed.tolist() == plain.closed.tolist()
     assert paths.points.shape == plain.points.shape
     assert np.abs(paths.points - plain.points).max() <= band_top(2.0, ctx) - 2.0
+    # The merged segment takes its longest part's ID: the rows are 100, 101, 102 in order.
+    assert set(paths.source_ids.tolist()) == {"start": {101, 102}, "corner": {100, 102},
+                                              "end": {100, 101}}[where]  # fmt: skip
 
 
-@pytest.mark.req("REQ-OFF-011", "REQ-OFF-038")
+@pytest.mark.req("REQ-OFF-011")
 def test_the_same_input_gives_the_same_arrays(ctx: Context) -> None:
     first, again = run(MIXED, LEFT, 2.0, ctx), run(MIXED, LEFT, 2.0, ctx)
-    for field in ("points", "starts", "closed", "source_ids", "fixed"):
+    for field in ("points", "starts", "closed", "enclosed", "source_ids", "fixed"):
         assert getattr(first, field).tobytes() == getattr(again, field).tobytes()
 
 
@@ -261,3 +308,36 @@ def test_bad_arguments_and_cancellation(ctx: Context) -> None:
     cancel.cancel()
     cancelled = dataclasses.replace(ctx, cancel=cancel)
     assert offset_chain_side(r, ids, LEFT, 1.0, classes, cancelled).diagnostics == (CANCELLED,)
+
+
+@pytest.mark.req("REQ-OFF-018")
+def test_a_chain_spanning_the_limit_is_refused(ctx: Context) -> None:
+    # 2^26 grid units of 0.0001 mm are 6710.9 mm: a line of 6712 mm is refused.
+    r, ids = np.array(polyline([(0.0, 0.0), (6712.0, 0.0)])), np.array([100])
+    one = SourceClasses(ids, np.zeros(1, dtype=np.int8))
+    assert codes(offset_chain_side(r, ids, LEFT, 1.0, one, ctx)) == ["REGION_TOO_LARGE"]
+
+
+@pytest.mark.req("REQ-OFF-028")
+def test_more_pieces_than_the_first_room_are_written_on_a_second_call(
+    ctx: Context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A zigzag of sharp tips: the round joins need more vertices than the first allocation, so
+    # the kernel runs again with more room, and the pieces and their flags come from that run.
+    zigzag = polyline([(0.0, 0.0)] + [(50.0 * (i % 2 == 0), 10.0 * (i + 1)) for i in range(16)])
+    rooms: list[int] = []
+    kernel = _kernels.offset2d.chain_side
+
+    def spy(*args: Any) -> tuple[int, int, int]:
+        rooms.append(int(args[8].shape[0]))  # points_out
+        return kernel(*args)
+
+    monkeypatch.setattr(_kernels.offset2d, "chain_side", spy)
+    paths = run(zigzag, LEFT, 2.0, ctx)
+    assert len(rooms) == 2
+    assert rooms[0] < paths.points.shape[0] <= rooms[1]
+    assert paths.closed.tolist() == [False]
+    assert paths.enclosed.tolist() == [False]
+    d = distance_to_curves(paths.points, as_rows(flat_chain(zigzag, LEFT, ctx)))
+    assert d.min() >= 2.0
+    assert d.max() <= band_top(2.0, ctx)

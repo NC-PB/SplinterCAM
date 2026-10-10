@@ -128,60 +128,71 @@ Labelled label(const geometry2d::GridRegion& region, const Chain& chain, const G
 
 struct Piece {
     bool closed;
-    double place; // where along the chain it starts
+    std::size_t loop; // the boundary loop it lies on
+    double place;     // where along the chain it starts
     std::vector<Point2> points;
     std::vector<std::int64_t> ids;
     std::vector<std::uint8_t> fixed;
 };
 
-// Vertices first .. first + count of a loop of `size` vertices starting at `base`, as one piece.
-Piece make_piece(const geometry2d::GridRegion& region, std::size_t base, std::size_t size,
-                 std::pair<std::size_t, std::size_t> run, bool closed, bool backwards) {
-    const auto [first, count] = run;
-    Piece piece{.closed = closed, .place = 0.0, .points = {}, .ids = {}, .fixed = {}};
-    const std::size_t vertices = closed ? count : count + 1;
+struct Run {
+    std::size_t first;
+    std::size_t count; // edges
+    bool closed;
+};
+
+// The edges first .. first + count of a loop of `size` vertices starting at `base`, as one piece;
+// turned round, a closed piece keeps its first vertex (the canonical start, REQ-OFF-038).
+Piece make_piece(const geometry2d::GridRegion& region, std::pair<std::size_t, std::size_t> loop,
+                 Run run, bool backwards) {
+    const auto [base, size] = loop;
+    Piece piece{
+        .closed = run.closed, .loop = 0, .place = 0.0, .points = {}, .ids = {}, .fixed = {}};
+    const std::size_t vertices = run.closed ? run.count : run.count + 1;
     for (std::size_t i = 0; i < vertices; ++i) {
-        const std::size_t v = base + ((first + (backwards ? vertices - 1 - i : i)) % size);
+        const std::size_t v =
+            base + ((run.first + (backwards ? (run.count - i) % vertices : i)) % size);
         piece.points.push_back(region.points.at(v));
         piece.fixed.push_back(region.fixed.at(v));
     }
     // An edge keeps its ID whichever way it runs: the ID of the vertex it starts at, forwards.
-    for (std::size_t i = 0; i < count; ++i) {
-        piece.ids.push_back(
-            region.ids.at(base + ((first + (backwards ? count - 1 - i : i)) % size)));
+    for (std::size_t i = 0; i < run.count; ++i) {
+        const std::size_t e = run.first + (backwards ? run.count - 1 - i : i);
+        piece.ids.push_back(region.ids.at(base + (e % size)));
     }
     return piece;
 }
 
 // The runs of tool-side edges of one loop: the whole loop as a closed piece, or each maximal run
-// as an open piece, turned round when it runs against the chain (by the summed length of its
-// edges along their segments; on a tie, by where its ends lie along the chain).
+// as an open piece. Each is turned round when it runs against the chain (by the summed length of
+// its edges along their segments; on a tie, by where its ends lie along the chain), so every
+// piece has the chain on the same side and one milling direction (DEC-OFF-020, Peter).
 void pieces_of_loop(std::vector<Piece>& out, const geometry2d::GridRegion& region,
-                    const Labelled& labels, std::size_t base, std::size_t size) {
-    const auto tool = [&](std::size_t i) {
-        return labels.sides.at(base + (i % size)) == Side::tool;
-    };
+                    const Labelled& labels, std::size_t loop) {
+    const auto base = static_cast<std::size_t>(region.starts.at(loop));
+    const std::size_t size = loop_end(region, loop) - base;
     const auto edge = [&](std::size_t i) { return base + (i % size); };
-    if (std::ranges::all_of(std::views::iota(std::size_t{0}, size), tool)) {
-        out.push_back(make_piece(region, base, size, {0, size}, true, false));
-        out.back().place = labels.place.at(base);
-        return;
-    }
+    const auto tool = [&](std::size_t i) { return labels.sides.at(edge(i)) == Side::tool; };
+    const bool closed = std::ranges::all_of(std::views::iota(std::size_t{0}, size), tool);
     for (std::size_t i = 0; i < size; ++i) {
-        if (!tool(i) || tool(i + size - 1)) {
+        if (!closed && (!tool(i) || tool(i + size - 1))) {
             continue;
         }
         std::size_t count = 0;
         double forward = 0.0;
-        while (tool(i + count)) {
+        while (count < size && tool(i + count)) {
             forward += labels.forward.at(edge(i + count));
             ++count;
         }
         const double from = labels.place.at(edge(i));
         const double to = labels.place.at(edge(i + count - 1));
         const bool backwards = forward < 0.0 || (forward == 0.0 && to < from);
-        out.push_back(make_piece(region, base, size, {i, count}, false, backwards));
+        out.push_back(make_piece(region, {base, size}, {i, count, closed}, backwards));
+        out.back().loop = loop;
         out.back().place = std::min(from, to);
+        if (closed) {
+            return;
+        }
     }
 }
 
@@ -206,17 +217,21 @@ SidePieces chain_side(const GrowInput& input, int tool_side, OffsetParams params
     }
     std::vector<Piece> pieces;
     for (std::size_t loop = 0; loop < region.starts.size(); ++loop) {
-        const auto base = static_cast<std::size_t>(region.starts.at(loop));
-        pieces_of_loop(pieces, region, labels, base, loop_end(region, loop) - base);
+        pieces_of_loop(pieces, region, labels, loop);
     }
     // Open pieces first, along the chain, then closed ones; ties by the first vertex (REQ-OFF-038).
     std::ranges::stable_sort(pieces, [](const Piece& a, const Piece& b) {
         return std::tuple{a.closed, a.place, a.points.front()} <
                std::tuple{b.closed, b.place, b.points.front()};
     });
+    // A piece on another loop than the first open piece's lies across the grown area from it:
+    // enclosed, never reached from the open piece without cutting closer than t (DEC-OFF-019).
+    const std::size_t reachable =
+        pieces.empty() || pieces.front().closed ? region.starts.size() : pieces.front().loop;
     for (const Piece& piece : pieces) {
         out.region.starts.push_back(static_cast<std::int64_t>(out.region.points.size()));
-        out.closed.push_back(piece.closed ? 1 : 0);
+        out.flags.push_back((piece.closed ? closed_flag : 0) |
+                            (piece.loop != reachable ? enclosed_flag : 0));
         out.region.points.insert(out.region.points.end(), piece.points.begin(), piece.points.end());
         out.region.ids.insert(out.region.ids.end(), piece.ids.begin(), piece.ids.end());
         out.region.fixed.insert(out.region.fixed.end(), piece.fixed.begin(), piece.fixed.end());

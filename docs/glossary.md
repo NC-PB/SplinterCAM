@@ -47,6 +47,7 @@
 | region kind | `RegionKind` (`MATERIAL`, `AIR`) | Bereichsart | What fills the region a set of loops bounds; it decides the air side of each arc. Not the edge classes of D-059 | 01 |
 | polygon region | `PolygonRegion` | Polygonbereich | A region as flat loops at the kernel boundary: points, loop starts, a source ID and a fixed-node flag per vertex; outer loops CCW, holes CW | 01, 02 |
 | machining region | `build_region`, `FlatRegion` | Bearbeitungsbereich | The region an operation works in: the Clipper2 PolyTree of the side-correct flattened loops, with the extra clearance its offsets must add | 01, 02 |
+| enclosed piece | `OpenPaths.enclosed` | eingeschlossenes Teilstück | A piece of a profile's tool side that the tool cannot reach from the open piece without cutting closer than the clearance; release 1 does not machine it and warns (DEC-OFF-019) | 02 |
 | fixed node | `fixed` | Fixpunkt | A vertex that later steps must not move or merge, such as a pinch point (D-084) | 01, 02 |
 | scallop height | `scallop_height` | Kammhöhe | Height of the ridge left between passes | 09 |
 | toolpath | `Toolpath` | Werkzeugweg | Ordered passes and links of one operation | 10 |

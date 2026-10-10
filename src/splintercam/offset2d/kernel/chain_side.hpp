@@ -10,11 +10,15 @@
 
 namespace splintercam::offset2d {
 
+inline constexpr std::uint8_t closed_flag = 1;   // the piece is a loop, its closing edge implied
+inline constexpr std::uint8_t enclosed_flag = 2; // not reachable from the first open piece
+
 // The pieces as a region (open pieces with one source ID per edge, the vertex count less one) and
-// whether each is closed; open pieces first, along the chain, then closed ones.
+// their flags; open pieces first, along the chain, then closed ones; every piece with the chain on
+// the side away from the tool.
 struct SidePieces {
     geometry2d::GridRegion region;
-    std::vector<std::uint8_t> closed;
+    std::vector<std::uint8_t> flags;
 };
 
 // The area within delta of the one chain of `input`, with round ends, and of its boundary the

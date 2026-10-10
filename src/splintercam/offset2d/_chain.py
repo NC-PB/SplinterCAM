@@ -131,13 +131,15 @@ def grow_flat_chains(
 @dataclass(frozen=True, slots=True)
 class OpenPaths:
     """One side of an open chain (REQ-OFF-028): the open pieces along the chain, each from the cap
-    at its start to the cap at its end in the chain's direction with one source ID per edge, then
-    the closed pieces, each keeping its loop's traversal with its closing edge implied and one ID
-    per vertex."""
+    at its start to the cap at its end with one source ID per edge, then the closed pieces, each
+    with its closing edge implied and one ID per vertex. Every piece runs with the chain on the
+    side away from the tool, so all share one milling direction (DEC-OFF-020); a piece the first
+    open piece cannot reach without cutting closer than t is enclosed (DEC-OFF-019)."""
 
     points: NDArray[np.float64]  # (n, 2)
     starts: NDArray[np.int64]  # (k,), first vertex of each piece
     closed: NDArray[np.bool_]  # (k,)
+    enclosed: NDArray[np.bool_]  # (k,), on another boundary loop than the first open piece
     source_ids: NDArray[np.int64]  # one per edge: (n - open pieces,)
     fixed: NDArray[np.uint8]  # (n,)
 
@@ -156,7 +158,7 @@ def offset_chain_side(  # noqa: PLR0913 (the SPEC's reviewed interface, DEC-OFF-
     chain's ends left out (research 02, Open chains; DEC-OFF-018). A closed chain is refused with
     `CHAIN_CLOSED`; an empty result carries `OFFSET_EMPTY`.
 
-    Implements: REQ-OFF-013, REQ-OFF-028, REQ-OFF-029, REQ-OFF-031.
+    Implements: REQ-OFF-013, REQ-OFF-018, REQ-OFF-028, REQ-OFF-029.
     """
     if tool_side not in tuple(AirSide):  # a caller without type checks
         raise ValueError(f"the tool side must be an AirSide, got {tool_side!r}")
@@ -182,7 +184,7 @@ def offset_chain_side(  # noqa: PLR0913 (the SPEC's reviewed interface, DEC-OFF-
         )
     delta = clearance_mm + tol.arc_tol_mm + BIAS_GRID_UNITS * tol.grid_unit_mm
     tool = 1 if tool_side is AirSide.LEFT else -1
-    status, region, closed = _side_kernel((points, source_ids), tool, delta, classes, ctx)
+    status, region, flags = _side_kernel((points, source_ids), tool, delta, classes, ctx)
 
     def dump() -> dict[str, object]:
         return {"chain": points.tolist(), "delta_mm": delta, "tool": tool,
@@ -191,7 +193,7 @@ def offset_chain_side(  # noqa: PLR0913 (the SPEC's reviewed interface, DEC-OFF-
     result = outcome(status, region, dump, diagnostics, ctx)
     if result.value is None:
         return Result(None, result.diagnostics)
-    return Result(_paths(result.value, closed), result.diagnostics)
+    return Result(_paths(result.value, flags), result.diagnostics)
 
 
 def merge_short(
@@ -224,7 +226,7 @@ def _side_kernel(
     ctx: Context,
 ) -> tuple[int, PolygonRegion | None, NDArray[np.uint8]]:
     """The kernel call, with the chain there and back for the IDs (DEC-OFF-015); the pieces as a
-    region and whether each is closed."""
+    region and each piece's flags (1 closed, 2 enclosed)."""
     tol = ctx.tolerances
     points, source_ids = flat
     id_points = np.concatenate([points, points[-2:0:-1]])
@@ -234,7 +236,7 @@ def _side_kernel(
     grid = (tol.grid_unit_mm, MAX_SPAN_GRID_UNITS, JOIN_STEPS_MAX, tol.length_eps_mm)
     steps = math.pi / math.acos(1.0 - tol.arc_tol_mm / delta)
     chain = np.ascontiguousarray(points, dtype=np.float64)
-    closed = [np.empty(0, np.uint8)]
+    flags = [np.empty(0, np.uint8)]
 
     def call(
         out_points: NDArray[np.float64],
@@ -242,29 +244,31 @@ def _side_kernel(
         out_ids: NDArray[np.int64],
         out_fixed: NDArray[np.uint8],
     ) -> tuple[int, int, int]:
-        closed[0] = np.empty(out_starts.size, dtype=np.uint8)
+        flags[0] = np.empty(out_starts.size, dtype=np.uint8)
         return _kernels.offset2d.chain_side(
             chain, id_points, np.array([0], dtype=np.int64), ids, per_vertex, tool, offset, grid,
-            out_points, out_starts, closed[0], out_ids, out_fixed,
+            out_points, out_starts, flags[0], out_ids, out_fixed,
         )  # fmt: skip
 
     status, region = run_kernel(call, 4 * points.shape[0] + 2 * math.ceil(steps) + 64)
-    return status, region, closed[0]
+    return status, region, flags[0]
 
 
-def _paths(region: PolygonRegion | None, closed: NDArray[np.uint8] | int) -> OpenPaths:
+def _paths(region: PolygonRegion | None, flags: NDArray[np.uint8] | int) -> OpenPaths:
     """The pieces of the kernel's region as open paths, read-only; no pieces for None."""
     if region is None:
+        none = np.empty(0, bool)
         return OpenPaths(
-            np.empty((0, 2)), np.empty(0, np.int64), np.empty(0, bool), np.empty(0, np.int64),
+            np.empty((0, 2)), np.empty(0, np.int64), none, none, np.empty(0, np.int64),
             np.empty(0, np.uint8),
         )  # fmt: skip
     k = region.loop_starts.size
-    flags = np.asarray(closed, dtype=np.uint8)[:k].astype(bool)
-    n_ids = region.points.shape[0] - int(np.count_nonzero(~flags))
+    per_piece = np.asarray(flags, dtype=np.uint8)[:k]
+    closed, enclosed = (per_piece & 1).astype(bool), (per_piece & 2).astype(bool)
+    n_ids = region.points.shape[0] - int(np.count_nonzero(~closed))
     out = OpenPaths(
-        region.points, region.loop_starts, flags, region.source_ids[:n_ids], region.fixed
+        region.points, region.loop_starts, closed, enclosed, region.source_ids[:n_ids], region.fixed
     )
-    for array in (out.closed, out.source_ids):
+    for array in (out.closed, out.enclosed, out.source_ids):
         array.flags.writeable = False
     return out

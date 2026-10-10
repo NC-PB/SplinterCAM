@@ -159,7 +159,7 @@ void bind_side(nb::module_& m) {
         [](const PointRows& chain, const PointRows& id_points, const Counts& id_starts,
            const Counts& source_ids, const Classes& classes, int tool_side, const Quad& offset,
            const Quad& grid, const PointsOut& points_out, const CountsOut& starts_out,
-           const FlagsOut& closed_out, const CountsOut& ids_out, const FlagsOut& fixed_out) {
+           const FlagsOut& flags_out, const CountsOut& ids_out, const FlagsOut& fixed_out) {
             const auto [delta, arc_tol, reach, bias] = offset;
             const auto [u, span, steps, eps] = grid;
             if ((tool_side != 1 && tool_side != -1) || chain.shape(0) < 2 || !finite(offset) ||
@@ -187,18 +187,19 @@ void bind_side(nb::module_& m) {
                     {.u = u, .max_span_units = span, .join_steps_max = steps, .eps_len = eps},
                     {.limit = reach, .eps = eps});
             }
-            copy_out(pieces.closed, closed_out);
+            copy_out(pieces.flags, flags_out);
             return write_region(pieces.region,
                                 std::tie(points_out, starts_out, ids_out, fixed_out));
         },
         nb::arg("chain"), nb::arg("id_points"), nb::arg("id_starts"), nb::arg("source_ids"),
         nb::arg("classes"), nb::arg("tool_side"), nb::arg("offset"), nb::arg("grid"),
-        nb::arg("points_out"), nb::arg("starts_out"), nb::arg("closed_out"), nb::arg("ids_out"),
+        nb::arg("points_out"), nb::arg("starts_out"), nb::arg("flags_out"), nb::arg("ids_out"),
         nb::arg("fixed_out"),
         "The tool side of one open chain offset with round ends, the caps left out (tool_side +1 "
         "left, -1 right; offset = delta, a, the reach of the source IDs; grid = u, the span "
-        "limit, the join step limit, eps_len); return (status, points, pieces), the counts it "
-        "needed; an open piece has one ID fewer than vertices.");
+        "limit, the join step limit, eps_len); flags per piece: 1 closed, 2 enclosed; return "
+        "(status, points, pieces), the counts it needed; an open piece has one ID fewer than "
+        "vertices.");
 }
 
 } // namespace
