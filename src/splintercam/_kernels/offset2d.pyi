@@ -21,3 +21,18 @@ def grow_chains(chains: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), 
     """
     Grow open chains by delta with round joins and ends in one Clipper2 call (offset = delta, a, the reach of the source IDs in mm; grid = u, the span limit, the join step limit, eps_len); return (status, points, loops), the counts it needed.
     """
+
+def chain_side(chain: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], id_points: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], id_starts: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu', writable=False)], source_ids: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu', writable=False)], classes: Annotated[NDArray[numpy.int8], dict(shape=(None,), order='C', device='cpu', writable=False)], tool_side: int, offset: Sequence[float], grid: Sequence[float], points_out: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu')], starts_out: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu')], flags_out: Annotated[NDArray[numpy.uint8], dict(shape=(None,), order='C', device='cpu')], ids_out: Annotated[NDArray[numpy.int64], dict(shape=(None,), order='C', device='cpu')], fixed_out: Annotated[NDArray[numpy.uint8], dict(shape=(None,), order='C', device='cpu')]) -> tuple[int, int, int]:
+    """
+    The tool side of one open chain offset with round ends, the caps left out (tool_side +1 left, -1 right; offset = delta, a, the reach of the source IDs; grid = u, the span limit, the join step limit, eps_len); flags per piece: 1 closed, 2 enclosed; return (status, points, pieces), the counts it needed; an open piece has one ID fewer than vertices.
+    """
+
+def keep_chain(points: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], threshold: float, keep_out: Annotated[NDArray[numpy.uint8], dict(shape=(None,), order='C', device='cpu')]) -> None:
+    """
+    Which points of a chain to keep so that no segment is threshold or shorter: the first, each more than threshold from the last kept one, and the last.
+    """
+
+def find_fold(points: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], tol: float) -> list[float] | None:
+    """
+    Where a chain runs back over itself (two segments in opposite directions within tol of each other's line, overlapping by more than tol), or None.
+    """

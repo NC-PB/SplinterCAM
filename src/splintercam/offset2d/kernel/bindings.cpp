@@ -2,6 +2,7 @@
 // Python bindings of the offset2d kernel (docs/dev/03: arrays and plain values only). Outputs are
 // arrays the Python side allocates and passes in, so no kernel code owns Python memory.
 #include "boolean.hpp"
+#include "chain_side.hpp"
 #include "grow.hpp"
 #include "offset.hpp"
 
@@ -11,6 +12,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/array.h>
+#include <nanobind/stl/optional.h>
 #include <nanobind/stl/tuple.h>
 #include <span>
 #include <tuple>
@@ -152,6 +154,79 @@ void bind_grow(nb::module_& m) {
         "eps_len); return (status, points, loops), the counts it needed.");
 }
 
+void bind_side(nb::module_& m) {
+    m.def(
+        "chain_side",
+        [](const PointRows& chain, const PointRows& id_points, const Counts& id_starts,
+           const Counts& source_ids, const Classes& classes, int tool_side, const Quad& offset,
+           const Quad& grid, const PointsOut& points_out, const CountsOut& starts_out,
+           const FlagsOut& flags_out, const CountsOut& ids_out, const FlagsOut& fixed_out) {
+            const auto [delta, arc_tol, reach, bias] = offset;
+            const auto [u, span, steps, eps] = grid;
+            if ((tool_side != 1 && tool_side != -1) || chain.shape(0) < 2 || !finite(offset) ||
+                !finite(grid) || !(delta > arc_tol) || !(arc_tol > 0.0) || !(reach > 0.0) ||
+                !(u > 0.0) || !(span > 0.0) || !(steps > 0.0) || !(eps >= 0.0)) {
+                throw nb::value_error(
+                    "tool_side +1 or -1, two points or more, delta > arc_tol > 0; reach, u, span, "
+                    "steps > 0; eps >= 0");
+            }
+            const std::array<std::int64_t, 1> one_chain{0};
+            if (!finite(view(chain))) {
+                throw nb::value_error("finite chain points");
+            }
+            const GrowInput input{.chains = {.points = view(chain), .loop_starts = one_chain},
+                                  .ids = id_source(id_points, id_starts, source_ids, classes)};
+            const std::vector<std::uint8_t> kept = keep_chain(view(chain), eps);
+            if (!std::ranges::all_of(kept, [](std::uint8_t k) { return k != 0; })) {
+                throw nb::value_error("no chain segment of eps_len or shorter");
+            }
+            SidePieces pieces;
+            {
+                const nb::gil_scoped_release unlocked;
+                pieces = chain_side(
+                    input, tool_side,
+                    {.delta = delta, .arc_tol = arc_tol, .bias_units = bias, .margin_units = 0},
+                    {.u = u, .max_span_units = span, .join_steps_max = steps, .eps_len = eps},
+                    {.limit = reach, .eps = eps});
+            }
+            copy_out(pieces.flags, flags_out);
+            return write_region(pieces.region,
+                                std::tie(points_out, starts_out, ids_out, fixed_out));
+        },
+        nb::arg("chain"), nb::arg("id_points"), nb::arg("id_starts"), nb::arg("source_ids"),
+        nb::arg("classes"), nb::arg("tool_side"), nb::arg("offset"), nb::arg("grid"),
+        nb::arg("points_out"), nb::arg("starts_out"), nb::arg("flags_out"), nb::arg("ids_out"),
+        nb::arg("fixed_out"),
+        "The tool side of one open chain offset with round ends, the caps left out (tool_side +1 "
+        "left, -1 right; offset = delta, a, the reach of the source IDs; grid = u, the span "
+        "limit, the join step limit, eps_len); flags per piece: 1 closed, 2 enclosed; return "
+        "(status, points, pieces), the counts it needed; an open piece has one ID fewer than "
+        "vertices.");
+    m.def(
+        "keep_chain",
+        [](const PointRows& points, double threshold, const FlagsOut& keep_out) {
+            if (points.shape(0) == 0 || !finite(view(points)) || !std::isfinite(threshold) ||
+                !(threshold >= 0.0) || keep_out.shape(0) != points.shape(0)) {
+                throw nb::value_error("finite points, at least one; threshold >= 0; one flag each");
+            }
+            copy_out(keep_chain(view(points), threshold), keep_out);
+        },
+        nb::arg("points"), nb::arg("threshold"), nb::arg("keep_out"),
+        "Which points of a chain to keep so that no segment is threshold or shorter: the first, "
+        "each more than threshold from the last kept one, and the last.");
+    m.def(
+        "find_fold",
+        [](const PointRows& points, double tol) {
+            if (!finite(view(points)) || !std::isfinite(tol) || !(tol >= 0.0)) {
+                throw nb::value_error("finite points; tol >= 0");
+            }
+            return find_fold(view(points), tol);
+        },
+        nb::arg("points"), nb::arg("tol"),
+        "Where a chain runs back over itself (two segments in opposite directions within tol of "
+        "each other's line, overlapping by more than tol), or None.");
+}
+
 } // namespace
 
 void bind(nb::module_& m) {
@@ -191,6 +266,7 @@ void bind(nb::module_& m) {
         "loops), the counts it needed.");
     bind_clip(m);
     bind_grow(m);
+    bind_side(m);
 }
 
 } // namespace splintercam::offset2d
