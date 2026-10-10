@@ -34,7 +34,7 @@ Each requirement names how it is verified: a unit test, a property test, a golde
 
 **Traceability.** Tests carry the IDs they verify in their names or tags. `tools/trace-check` reports requirements without a test and tests that cite unknown IDs, and writes the table to `docs/generated/traceability.md`. It runs in `tools/check`, so an agent cannot finish a requirement without a test.
 
-**Where requirements come from.** Most are already implied by the research: the invariants of RESEARCH 24 (Project Spike), the pitfalls of RESEARCH 18 (Project Spike; each pitfall is a requirement in disguise) and the traps listed in each section. The `research-to-spec` skill drafts a spec from a RESEARCH section; a person reviews it. The geometry2d SPEC draft, `specs/geometry2d-SPEC.md` (Project Spike), shows the expected result.
+**Where requirements come from.** Most are already implied by the research: the invariants of RESEARCH 24 (Project Spike), the traps listed in each research topic (each trap is a requirement in disguise) and the traps listed in each section. The `research-to-spec` skill drafts a spec from a RESEARCH section; a person reviews it. The geometry2d SPEC draft, `specs/geometry2d-SPEC.md` (Project Spike), shows the expected result.
 
 ## Spec lifecycle
 

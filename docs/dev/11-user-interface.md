@@ -7,7 +7,7 @@ The desktop application ([ADR 0004](../adr/0004-tech-stack.md): PySide6 with Qt 
 ## Principles
 
 1. **No computation in the GUI.** Every action is a call to the `job` API that the command-line runner can make too. The GUI shows state and sends commands.
-2. **Generated, not hand-built.** Operation panels are generated from each strategy's parameter declarations and selection slots (research 19, section Operations (Project Spike)). A new strategy gets its panel for free.
+2. **Generated, not hand-built.** Operation panels are generated from each strategy's parameter declarations and selection slots (D-018). A new strategy gets its panel for free.
 3. **Show the consequence.** Boundaries, tool positions, start points, leads and the stock are previewed in the 3D view while the user edits, computed by the same code that computes the toolpath.
 4. **Nothing silent.** Every warning and error is a diagnostic with a link to the operation, the parameter and the geometry it concerns.
 5. **Never block.** Computations run in the background with progress and a cancel button; the window always responds.
@@ -16,7 +16,7 @@ The desktop application ([ADR 0004](../adr/0004-tech-stack.md): PySide6 with Qt 
 
 ```text
 +----------------------------------------------------------------------------+
-| Menu and toolbar: file, setup, operations, simulate, post                  |
+| Menu and toolbar: file, setup, operations, simulate, output                |
 +------------------+--------------------------------------+------------------+
 | Job tree         |                                      | Properties       |
 |  Setup 1         |                                      |  (generated for  |
@@ -63,7 +63,7 @@ A **basic view** shows the parameters marked as basic (typically ten or fewer); 
 
 To generate this, each parameter declaration carries, besides type, unit and default: its group, a basic or advanced flag, a label, a tooltip, a link to the help text, an allowed range, and an optional visibility condition in a small expression language (for example "only for closed contours"). A test checks that every declared parameter has all of these ([06](06-testing-and-quality-gates.md)).
 
-Numeric fields accept units and expressions ("10 mm", "0.4 * tool.diameter"), stored in millimetres (research 19, section Units and expressions (Project Spike)).
+Numeric fields accept units and expressions ("10 mm", "0.4 * tool.diameter"), stored in millimetres (ours).
 
 ## Selection slots
 
@@ -101,7 +101,7 @@ The diagnostics dock lists the typed diagnostics of all operations ([03](03-arch
 
 ## Long computations
 
-Operations compute in worker processes. The tree shows progress per operation and the status bar the overall progress with a cancel button. Editing a parameter marks only the affected aspects dirty (research 19, section Operations (Project Spike)) and recomputes in the background.
+Operations compute in worker processes. The tree shows progress per operation and the status bar the overall progress with a cancel button. Editing a parameter marks only the affected aspects dirty (D-018) and recomputes in the background.
 
 ## Testing the interface
 

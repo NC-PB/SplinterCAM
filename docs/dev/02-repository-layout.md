@@ -56,12 +56,11 @@ SplinterCAM/
 │   │   ├── finishing3d/
 │   │   └── turning/
 │   ├── kinematics/            (kernel/)
-│   ├── vnc/                   virtual NC: machine and control behaviour
-│   ├── post/                  post-processor runtime
+│   ├── ncx/                   NCX writer and the call of the pinned ncx binary (D-031)
 │   ├── simulation/            (kernel/)
 │   ├── job/                   documents, operation graph, recompute, persistence
 │   └── apps/
-│       ├── cli/               headless runner: job file in, G-code and reports out
+│       ├── cli/               headless runner: job file in, NCX, NC programs (through ncx) and reports out
 │       └── desktop/           PySide6 GUI; viewer/ wraps the OCCT viewer through OCP
 ├── tests/                     one folder per module, same names as in src/splintercam/
 │   ├── geometry2d/
@@ -69,8 +68,6 @@ SplinterCAM/
 │   │   ├── property/
 │   │   └── differential/
 │   └── …
-├── posts/                     post-processor definitions, one folder per control family
-├── machines/                  machine definitions (data)
 ├── testdata/
 │   ├── zoo/                   reference parts: case.json, inputs, expected/, README.md
 │   ├── regressions/           minimised failures, one folder per issue
@@ -89,9 +86,9 @@ SplinterCAM/
 - **One folder per module, contract inside it.** `SPEC.md`, `AGENTS.md`, the Python code and its C++ `kernel/` sit together, so an agent working on `geometry2d` finds everything in one place. Documentation that lives far from its code goes stale. Tests live in `tests/<module>/` under the same name, so they are not shipped inside the package.
 - **`architecture/modules.yaml` is data, not prose.** Tools read it to enforce dependencies ([03](03-architecture-rules.md)), to generate the module graph in `docs/generated/`, to check each module's size budget ([12](12-lean-code.md)), and to scaffold new modules. Agents read it to learn what they may import.
 - **`strategies/` holds one folder per strategy.** Strategies never depend on each other, so several agents can work on different strategies in parallel without conflicts.
-- **`kernel/` folders hold all C++.** They are compiled into one extension module, `splintercam._kernels`. Kernels see only arrays and small permissive C++ libraries, never OCCT, Qt or Python objects. OCCT is reached only through OCP, in `io`, `features` and the desktop viewer ([03](03-architecture-rules.md), [09](09-dependencies-licensing-provenance.md)).
+- **`kernel/` folders hold all C++.** They are compiled into one extension module, `splintercam._kernels`. Kernels see only arrays and small permissive C++ libraries, never OCCT, Qt or Python objects; the desktop viewer's display helper is not a compute kernel and may link OCCT (D-166). OCCT is reached only through OCP, in `io`, `features` and the desktop viewer ([03](03-architecture-rules.md), [09](09-dependencies-licensing-provenance.md)).
 - **`apps/cli` comes before `apps/desktop`.** A headless runner lets agents and CI run complete jobs, compare outputs and render pictures without a GUI.
-- **Posts and machines are data.** Post-processors and machine definitions are text files that users edit, not compiled code (RESEARCH 13 (Project Spike)).
+- **No posts here.** Controller dialects, cycles and machine definitions live in NCXchange: its TOML machine files are the machine data, and users edit them there (D-021, D-031, D-053).
 - **`testdata/` is shared, `tests/` is per module.** Big files (meshes, STEP models, reference outputs) are shared between modules and CI, tracked with Git LFS, and each has a licence entry.
 - **`tools/` is the stable interface.** Whatever the stack, agents always run `tools/check`, `tools/test-one` and so on ([tools/README.md](../../tools/README.md)). Changing the build system later then does not invalidate the agent instructions.
 
@@ -109,7 +106,7 @@ SplinterCAM/
 testdata/zoo/pocket-island-touching-wall/
 ├── case.json          operation, tool, parameters, tolerances, checks to run
 ├── part.step          or part.dxf / part.stl
-├── expected/          golden outputs (G-code, CL JSON, report) once approved
+├── expected/          golden outputs (CL JSON, NCX, report) once approved
 └── README.md          what the case tests, where it came from, its licence
 ```
 

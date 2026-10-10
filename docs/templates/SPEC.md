@@ -72,7 +72,7 @@ of proprietary systems went in.>
 ## Test plan
 
 - Unit: <…>
-- Property: <generators, including messy inputs from RESEARCH 18 (Project Spike)>
+- Property: <generators, including the messy inputs of the research topic's traps>
 - Golden cases: <testdata/zoo names>
 - Differential: <reference library, if any>
 
