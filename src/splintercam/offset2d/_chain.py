@@ -144,6 +144,7 @@ class OpenPaths:
     fixed: NDArray[np.uint8]  # (n,)
 
 
+# Six arguments per the reviewed SPEC signature; bundling would change a module interface.
 def offset_chain_side(  # noqa: PLR0913 (the SPEC's reviewed interface, DEC-OFF-004, DEC-OFF-018)
     rows: NDArray[np.float64],
     ids: NDArray[np.int64],
