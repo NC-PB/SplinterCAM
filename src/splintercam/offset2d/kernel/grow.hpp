@@ -6,7 +6,11 @@
 #include "offset.hpp"
 #include "result.hpp"
 
+#include <cstdint>
+
 namespace splintercam::offset2d {
+
+enum class ChainEnds : std::uint8_t { round, butt };
 
 struct GrowInput {
     geometry2d::Polylines chains; // open chains: each runs from its start to the next start
@@ -16,7 +20,9 @@ struct GrowInput {
 // The area within delta of the chains (JoinType Round, EndType Round, ArcTolerance arc_tol):
 // too_large when the chains plus 2·delta span the limit (REQ-OFF-031), failed when a join needs
 // more steps than the limit; the result through `finish_region`. No exception leaves it.
+// Round ends for a grown path; Butt (flat) ends for one side of a chain (research 02, Open chains).
 [[nodiscard]] geometry2d::GridRegion grow_chains(const GrowInput& input, OffsetParams params,
-                                                 OffsetLimits limits, geometry2d::TieReach reach);
+                                                 OffsetLimits limits, geometry2d::TieReach reach,
+                                                 ChainEnds ends = ChainEnds::round);
 
 } // namespace splintercam::offset2d

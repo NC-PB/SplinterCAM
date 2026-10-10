@@ -2,6 +2,7 @@
 // Python bindings of the offset2d kernel (docs/dev/03: arrays and plain values only). Outputs are
 // arrays the Python side allocates and passes in, so no kernel code owns Python memory.
 #include "boolean.hpp"
+#include "chain_side.hpp"
 #include "grow.hpp"
 #include "offset.hpp"
 
@@ -152,6 +153,58 @@ void bind_grow(nb::module_& m) {
         "eps_len); return (status, points, loops), the counts it needed.");
 }
 
+void bind_side(nb::module_& m) {
+    m.def(
+        "chain_side",
+        [](const PointRows& chain, const PointRows& id_points, const Counts& id_starts,
+           const Counts& source_ids, const Classes& classes, int tool_side, const Quad& offset,
+           const Quad& grid, const PointsOut& points_out, const CountsOut& starts_out,
+           const FlagsOut& closed_out, const CountsOut& ids_out, const FlagsOut& fixed_out) {
+            const auto [delta, arc_tol, reach, bias] = offset;
+            const auto [u, span, steps, eps] = grid;
+            if ((tool_side != 1 && tool_side != -1) || chain.shape(0) < 2 || !finite(offset) ||
+                !finite(grid) || !(delta > arc_tol) || !(arc_tol > 0.0) || !(reach > 0.0) ||
+                !(u > 0.0) || !(span > 0.0) || !(steps > 0.0) || !(eps >= 0.0)) {
+                throw nb::value_error(
+                    "tool_side +1 or -1, two points or more, delta > arc_tol > 0; reach, u, span, "
+                    "steps > 0; eps >= 0");
+            }
+            const std::array<std::int64_t, 1> one_chain{0};
+            const GrowInput input{
+                .chains = {.points = view(chain), .loop_starts = std::span{one_chain}},
+                .ids = id_source(id_points, id_starts, source_ids, classes)};
+            if (!finite(view(chain))) {
+                throw nb::value_error("finite chain points");
+            }
+            SidePieces pieces;
+            {
+                const nb::gil_scoped_release unlocked;
+                pieces = chain_side(
+                    input, tool_side,
+                    {.delta = delta, .arc_tol = arc_tol, .bias_units = bias, .margin_units = 0},
+                    {.u = u, .max_span_units = span, .join_steps_max = steps, .eps_len = eps},
+                    {.limit = reach, .eps = eps});
+            }
+            for (std::size_t i = 0; i < std::min(pieces.points.size(), points_out.shape(0)); ++i) {
+                points_out(i, 0) = std::get<0>(pieces.points.at(i));
+                points_out(i, 1) = std::get<1>(pieces.points.at(i));
+            }
+            copy_out(pieces.starts, starts_out);
+            copy_out(pieces.closed, closed_out);
+            copy_out(pieces.ids, ids_out);
+            copy_out(pieces.fixed, fixed_out);
+            return std::tuple{static_cast<int>(pieces.status), pieces.points.size(),
+                              pieces.starts.size(), pieces.ids.size()};
+        },
+        nb::arg("chain"), nb::arg("id_points"), nb::arg("id_starts"), nb::arg("source_ids"),
+        nb::arg("classes"), nb::arg("tool_side"), nb::arg("offset"), nb::arg("grid"),
+        nb::arg("points_out"), nb::arg("starts_out"), nb::arg("closed_out"), nb::arg("ids_out"),
+        nb::arg("fixed_out"),
+        "The tool side of one open chain offset with Butt ends (tool_side +1 left, -1 right; "
+        "offset = delta, a, the reach of the source IDs; grid = u, the span limit, the join step "
+        "limit, eps_len); return (status, points, pieces, ids), the counts it needed.");
+}
+
 } // namespace
 
 void bind(nb::module_& m) {
@@ -191,6 +244,7 @@ void bind(nb::module_& m) {
         "loops), the counts it needed.");
     bind_clip(m);
     bind_grow(m);
+    bind_side(m);
 }
 
 } // namespace splintercam::offset2d

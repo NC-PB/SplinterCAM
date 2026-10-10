@@ -50,12 +50,16 @@ Released with the SPEC (Peter, 2026-10-08). Steps 2 and 3 follow his answers 2 a
 - [x] 5. **The orientation guard** (REQ-OFF-023). Test 21. It replaces step 4's refusal of a hole holding the extreme point (DEC-OFF-008), and `test_an_island_holding_the_extreme_point_fails_until_the_guard_exists` becomes test 21 proper. Size: about 120 + 200.
 - [x] 6. **Source IDs with classes, pinch points, order** (REQ-OFF-034, 037, 038, 011, 010). Tests 14, 17, 19. Size: about 150 + 350.
 - [x] 7. **Booleans** (REQ-OFF-030, 031, 033, 035, and the pinch tests of 036). Tests 1 to 5 and 15, Vatti note test 7. The stock update: `machined_area` and `stock_layer` (REQ-OFF-032, 044; research 02's answer to RR-001, released 2026-10-09). Test 22. Size: about 200 + 400.
-- [ ] 8. **Open chains** (REQ-OFF-027 to 029). Tests 12 and 13. Size: about 260 + 350.
+- [x] 8. **Open chains** (REQ-OFF-027 to 029). Tests 12 and 13. Size: about 260 + 350.
 - [ ] 9. **Golden case and differential.** `pocket-island-touching-wall` (test 16; a person approves the golden files); ADR 0010 (accepted 2026-10-09) applied: the group `test-oracle` with shapely in `pyproject.toml` and `uv.lock`, installed by `tools/bootstrap` (DEC-OFF-003); then test 20. Size: about 0 + 250.
 
 Total: about 1230 added lines of code (about 1050 NLOC) and 2080 of tests, in nine steps.
 
 ## Progress log
+
+### 2026-10-10, step 8, part 2 (one side of a chain)
+
+- `offset_chain_side` (REQ-OFF-028; DEC-OFF-018) in `kernel/chain_side.cpp`: the chain grown with Butt ends, every output edge labelled tool side, other side or cap from the nearest chain point, runs of tool-side edges as pieces. Measured on the way: a cap's middle lies on the chain's end, so rounding labelled caps at random (a three-quarter arc took both caps into its piece); caps are now found by the cut line within 3u. Research 02's test 12: the line and two arcs on both sides, the sharp V; its C gives one open piece on the inner wall, by research 02's own cap rule (RR-002 item 7); a closed piece tested on an omega with a narrow neck. Mutations: the side flipped fails five tests, runs never turned round one. `noqa: PLR0913` on the SPEC's six-argument signature, for Peter.
 
 ### 2026-10-10, step 8, part 1 (the grown chain)
 

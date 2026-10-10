@@ -3,6 +3,7 @@
 `grow_flat_chains`, for the machined area of the stock update."""
 
 import math
+from dataclasses import dataclass
 
 import numpy as np
 from numpy.typing import NDArray
@@ -17,6 +18,7 @@ from ._results import (
     JOIN_STEPS_MAX,
     MARGIN_GRID_UNITS,
     MAX_SPAN_GRID_UNITS,
+    OK,
     check_arc_tol,
     outcome,
     run_kernel,
@@ -125,3 +127,183 @@ def grow_flat_chains(
         )  # fmt: skip
 
     return run_kernel(call, 2 * points.shape[0] + math.ceil(steps) * (len(flat) + 1) + 64)
+
+
+@dataclass(frozen=True, slots=True)
+class OpenPaths:
+    """One side of an open chain (REQ-OFF-028): the pieces one after another; an open piece runs in
+    the chain's direction, from the cap at its start to the cap at its end, with one source ID per
+    edge; a closed piece keeps its loop's traversal, its closing edge implied, one ID per vertex."""
+
+    points: NDArray[np.float64]  # (n, 2)
+    starts: NDArray[np.int64]  # (k,), first vertex of each piece
+    closed: NDArray[np.bool_]  # (k,)
+    source_ids: NDArray[np.int64]  # one per edge: (n - open pieces,)
+    fixed: NDArray[np.uint8]  # (n,)
+
+
+@dataclass(frozen=True, slots=True)
+class _Side:
+    """The flattened chain and what the kernel call of one side takes besides."""
+
+    points: NDArray[np.float64]
+    source_ids: NDArray[np.int64]
+    tool: int  # +1 left, -1 right
+    delta: float
+
+
+def offset_chain_side(  # noqa: PLR0913 (the SPEC's reviewed interface, DEC-OFF-004, DEC-OFF-018)
+    rows: NDArray[np.float64],
+    ids: NDArray[np.int64],
+    tool_side: AirSide,
+    clearance_mm: float,
+    classes: SourceClasses,
+    ctx: Context,
+) -> Result[OpenPaths]:
+    """The tool-centre path at clearance t on one side of an open chain (a profile, D-025): the
+    chain flattened with the tool's side as the air side of every arc, offset with flat ends by
+    δ = t + a + 3u, and of that area's boundary the edges on the tool side, the caps at the
+    chain's ends left out (research 02, Open chains). A closed chain is refused with
+    `CHAIN_CLOSED`; an empty result carries `OFFSET_EMPTY`.
+
+    Implements: REQ-OFF-013, REQ-OFF-028, REQ-OFF-029, REQ-OFF-031.
+    """
+    _check_side_arguments(ids, tool_side, clearance_mm, classes, ctx)
+    if ctx.cancel.is_cancelled:
+        return Result(None, (CANCELLED,))
+    chain = build_chain(rows, ids, tool_side, ctx)  # the tool's side is the arcs' air side
+    if chain.value is None:
+        return Result(None, chain.diagnostics)
+    points = chain.value.points
+    early = _degenerate(points, list(chain.diagnostics))
+    if early is not None:
+        return early
+    tol = ctx.tolerances
+    delta = clearance_mm + tol.arc_tol_mm + BIAS_GRID_UNITS * tol.grid_unit_mm
+    tool = 1 if tool_side is AirSide.LEFT else -1
+    side = _Side(points, chain.value.source_ids, tool, delta)
+    return _run_side(side, classes, list(chain.diagnostics), ctx)
+
+
+def _check_side_arguments(
+    ids: NDArray[np.int64],
+    tool_side: AirSide,
+    clearance_mm: float,
+    classes: SourceClasses,
+    ctx: Context,
+) -> None:
+    if tool_side not in tuple(AirSide):  # a caller without type checks
+        raise ValueError(f"the tool side must be an AirSide, got {tool_side!r}")
+    if not (math.isfinite(clearance_mm) and clearance_mm > 0.0):
+        raise ValueError(f"the clearance must be finite and > 0, got {clearance_mm!r}")
+    check_classes(classes, np.asarray(ids, dtype=np.int64))
+    check_arc_tol(ctx)
+
+
+def _degenerate(
+    points: NDArray[np.float64], diagnostics: list[Diagnostic]
+) -> Result[OpenPaths] | None:
+    """A closed chain (`CHAIN_CLOSED`) or one of zero length, which has no side (`OFFSET_EMPTY`);
+    None for a chain to offset."""
+    if closes(points):
+        message = "the chain closes: a loop goes through offset_region"
+        diagnostics.append(Diagnostic("CHAIN_CLOSED", Severity.ERROR, message))
+        return Result(None, tuple(diagnostics))
+    if points.shape[0] < 2:
+        message = "a chain of zero length has no side"
+        diagnostics.append(Diagnostic("OFFSET_EMPTY", Severity.INFO, message))
+        return Result(_no_paths(), tuple(diagnostics))
+    return None
+
+
+def _run_side(
+    side: _Side, classes: SourceClasses, diagnostics: list[Diagnostic], ctx: Context
+) -> Result[OpenPaths]:
+    status, paths = _side_kernel(side, classes, ctx)
+    if ctx.cancel.is_cancelled:
+        return Result(None, (*diagnostics, CANCELLED))
+    if status != OK or paths is None:
+
+        def dump() -> dict[str, object]:
+            return {"chain": side.points.tolist(), "delta_mm": side.delta, "tool": side.tool}
+
+        failed = outcome(status, None, dump, diagnostics, ctx)
+        return Result(None, failed.diagnostics)
+    if paths.starts.size == 0:
+        diagnostics.append(Diagnostic("OFFSET_EMPTY", Severity.INFO, "the side vanishes"))
+    return Result(paths, tuple(diagnostics))
+
+
+def _no_paths() -> OpenPaths:
+    return OpenPaths(
+        np.empty((0, 2)), np.empty(0, np.int64), np.empty(0, bool), np.empty(0, np.int64),
+        np.empty(0, np.uint8),
+    )  # fmt: skip
+
+
+def _side_kernel(side: _Side, classes: SourceClasses, ctx: Context) -> tuple[int, OpenPaths | None]:
+    """The kernel call, with the chain there and back for the IDs (DEC-OFF-015)."""
+    tol = ctx.tolerances
+    points, source_ids = side.points, side.source_ids
+    id_points = np.concatenate([points, points[-2:0:-1]])
+    ids = np.concatenate([source_ids, source_ids[-1:], source_ids[-2::-1]]).astype(np.int64)
+    per_vertex = vertex_classes(classes, ids)
+    reach = side.delta + MARGIN_GRID_UNITS * tol.grid_unit_mm
+    offset = (side.delta, tol.arc_tol_mm, reach, BIAS_GRID_UNITS)
+    grid = (tol.grid_unit_mm, MAX_SPAN_GRID_UNITS, JOIN_STEPS_MAX, tol.length_eps_mm)
+    steps = math.pi / math.acos(1.0 - tol.arc_tol_mm / side.delta)
+    room = 4 * points.shape[0] + math.ceil(steps) + 64
+    chain = np.ascontiguousarray(points, dtype=np.float64)
+    id_starts = np.array([0], dtype=np.int64)
+    while True:
+        out = _SideOut(room)
+        status, n_points, n_pieces, n_ids = _kernels.offset2d.chain_side(
+            chain, id_points, id_starts, ids, per_vertex, side.tool, offset, grid,
+            out.points, out.starts, out.closed, out.ids, out.fixed,
+        )  # fmt: skip
+        if max(n_points, n_pieces, n_ids) <= room:
+            break
+        room = max(n_points, n_pieces, n_ids)
+    if status != OK:
+        return status, None
+    return status, out.ordered(n_points, n_pieces)
+
+
+class _SideOut:
+    """The arrays the kernel writes the pieces into."""
+
+    def __init__(self, room: int) -> None:
+        self.points: NDArray[np.float64] = np.empty((room, 2))
+        self.starts: NDArray[np.int64] = np.empty(room, dtype=np.int64)
+        self.closed: NDArray[np.uint8] = np.empty(room, dtype=np.uint8)
+        self.ids: NDArray[np.int64] = np.empty(room, dtype=np.int64)
+        self.fixed: NDArray[np.uint8] = np.empty(room, dtype=np.uint8)
+
+    def ordered(self, n_points: int, n_pieces: int) -> OpenPaths:
+        """The pieces sorted by their first vertex, x then y (REQ-OFF-038, ours), read-only."""
+        starts: list[int] = self.starts[:n_pieces].tolist()
+        closed: list[bool] = [bool(c) for c in self.closed[:n_pieces].tolist()]
+        ends = [*starts[1:], n_points]
+        id_counts = [e - s - (0 if c else 1) for s, e, c in zip(starts, ends, closed, strict=True)]
+        id_starts = [sum(id_counts[:k]) for k in range(n_pieces)]
+        first: list[tuple[float, float]] = [
+            (float(self.points[s, 0]), float(self.points[s, 1])) for s in starts
+        ]
+        order = sorted(range(n_pieces), key=lambda k: first[k])
+        take = [np.arange(starts[k], ends[k], dtype=np.int64) for k in order]
+        take_ids = [
+            np.arange(id_starts[k], id_starts[k] + id_counts[k], dtype=np.int64) for k in order
+        ]
+        vertices = np.concatenate(take) if take else np.empty(0, np.int64)
+        edges = np.concatenate(take_ids) if take_ids else np.empty(0, np.int64)
+        sizes = [ends[k] - starts[k] for k in order]
+        result = OpenPaths(
+            self.points[vertices],
+            np.cumsum([0, *sizes], dtype=np.int64)[:-1],
+            np.array([closed[k] for k in order], dtype=bool),
+            self.ids[edges],
+            self.fixed[vertices],
+        )
+        for array in (result.points, result.starts, result.closed, result.source_ids, result.fixed):
+            array.flags.writeable = False
+        return result

@@ -9,7 +9,7 @@
 namespace splintercam::offset2d {
 
 geometry2d::GridRegion grow_chains(const GrowInput& input, OffsetParams params, OffsetLimits limits,
-                                   geometry2d::TieReach reach) {
+                                   geometry2d::TieReach reach, ChainEnds ends) {
     geometry2d::GridRegion result;
     if (input.chains.points.empty()) {
         return result; // no chain: an empty region
@@ -32,8 +32,9 @@ geometry2d::GridRegion grow_chains(const GrowInput& input, OffsetParams params, 
     // Open paths take no orientation guess (SRC-122: only EndType Polygon does), so no guard.
     constexpr double miter_limit = 2.0; // Clipper2's default, without effect on round joins
     Clipper2Lib::ClipperOffset offsetter(miter_limit, params.arc_tol / limits.u);
-    offsetter.AddPaths(geometry2d::to_grid(input.chains, frame, limits.u),
-                       Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Round);
+    offsetter.AddPaths(
+        geometry2d::to_grid(input.chains, frame, limits.u), Clipper2Lib::JoinType::Round,
+        ends == ChainEnds::round ? Clipper2Lib::EndType::Round : Clipper2Lib::EndType::Butt);
     Clipper2Lib::Paths64 solution;
     offsetter.Execute(params.delta / limits.u, solution);
     return finish_region(solution, frame, limits.u, input.ids, reach);

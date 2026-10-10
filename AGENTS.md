@@ -8,7 +8,7 @@ Status: early start of release 1 (D-156): `foundation` done; `geometry2d` slices
 
 ## Start here
 
-- Current work: `docs/plans/active/0005-offset2d.md`, step 8 (open chains), after step 7's pull requests. `offset_region`, `boolean`, `machined_area` and `stock_layer` exist (steps 4 to 7); the chains and the differential test follow in steps 8 and 9. Work continues in local sessions. Records of the finished slices: `docs/plans/completed/0003-geometry2d-slice-1.md` and `docs/plans/completed/0004-geometry2d-slice-2.md` (Handover).
+- Current work: `docs/plans/active/0005-offset2d.md`, step 9 (the golden case and the differential test), after step 8's pull requests. `offset_region`, `boolean`, `machined_area`, `stock_layer`, `grow_chain` and `offset_chain_side` exist (steps 4 to 8); the differential test follows in step 9. Work continues in local sessions. Records of the finished slices: `docs/plans/completed/0003-geometry2d-slice-1.md` and `docs/plans/completed/0004-geometry2d-slice-2.md` (Handover).
 - Work one plan step at a time. At the end of each step, tick it, write a progress-log entry in the plan, run `tools/check`, and commit. One pull request per session, with small code changes included; a new algorithm or a change over about 100 lines of non-test code gets its own (docs/dev/07, Branches, commits and pull requests). The plan says where to stop for the user's review.
 - Decisions (D-nnn) and sources (SRC-nnn) are registered in Project Spike until the handover; `docs/spike/` holds dated snapshots. Never edit them. If a decision seems wrong or missing, stop and write the question in the progress log.
 
