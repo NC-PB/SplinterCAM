@@ -97,6 +97,8 @@ def test_a_line_and_two_arcs_on_either_side(side: AirSide, ctx: Context) -> None
     )
     assert paths.source_ids.size == piece.shape[0] - 1
     assert set(paths.source_ids.tolist()) == {100, 101, 102}
+    true = CurveRows(np.array(MIXED), 100 + np.arange(3, dtype=np.int64), np.array([0]))
+    assert distance_to_curves(piece, true).min() >= t_mm  # no closer than t to the true arcs
 
 
 @pytest.mark.req("REQ-OFF-028")
@@ -113,9 +115,9 @@ def test_the_sharp_v_on_its_outside_runs_unbroken_round_the_join(ctx: Context) -
 @pytest.mark.req("REQ-OFF-028")
 def test_a_c_open_narrower_than_2t_with_the_tool_inside_is_one_open_piece(ctx: Context) -> None:
     # Research 02, test 12, the C: an arc of radius 10 open over 20 degrees, t = 6, the tool
-    # inside. Its inner wall runs from cap to cap: the edges near the mouth lie nearest the
-    # chain's ends, so they are caps by research 02's own rule, and the tool cannot pass the tips
-    # anyway. One open piece, no closed one (DEC-OFF-018; research 02 expects a closed piece too).
+    # inside. The round ends close the mouth, but the edges there lie nearest the chain's ends,
+    # so they are caps by research 02's own rule: the inner wall is one open piece from cap to
+    # cap, no closed one (DEC-OFF-018; research 02 expects a closed piece).
     h = math.radians(10.0)
     c = [[10 * math.cos(h), 10 * math.sin(h), 10 * math.cos(h), -10 * math.sin(h), 0.0, 0.0,
           2 * math.pi - 2 * h]]  # fmt: skip
@@ -123,6 +125,8 @@ def test_a_c_open_narrower_than_2t_with_the_tool_inside_is_one_open_piece(ctx: C
     assert paths.closed.tolist() == [False]
     radii = np.hypot(paths.points[:, 0], paths.points[:, 1])
     assert radii.max() <= 10.0 - 6.0 + 0.01
+    tol = ctx.tolerances  # it hugs the inner wall: within the band of the inscribed chords
+    assert radii.min() >= 10.0 - band_top(6.0, ctx) - tol.flatten_tol_mm
 
 
 @pytest.mark.req("REQ-OFF-028")
@@ -134,8 +138,10 @@ def test_a_room_behind_a_neck_narrower_than_2t_is_a_closed_piece(ctx: Context) -
                       (10.0, 20.0), (10.0, 5.0), (1.0, 5.0), (1.0, 0.0), (20.0, 0.0)])  # fmt: skip
     paths = run(omega, RIGHT, 3.0, ctx)
     flags: list[bool] = paths.closed.tolist()
-    assert sorted(flags) == [False, True]
-    closed = pieces(paths)[flags.index(True)]
+    assert flags == [False, True]  # open pieces first
+    closed = pieces(paths)[1]
+    room_ids = set(paths.source_ids[pieces(paths)[0].shape[0] - 1 :].tolist())
+    assert {103, 104, 105} <= room_ids <= set(range(101, 108))  # the room's walls only
     d = distance_to_curves(closed, as_rows(flat_chain(omega, RIGHT, ctx)))
     assert d.min() >= 3.0  # the room's loop in the band: it rounds the neck's corners at t
     assert d.max() <= band_top(3.0, ctx)
@@ -145,6 +151,78 @@ def test_a_room_behind_a_neck_narrower_than_2t_is_a_closed_piece(ctx: Context) -
     assert d.min() >= 3.0  # in the band, rounding the neck's corners at t below its mouth
     assert d.max() <= band_top(3.0, ctx)
     assert open_piece[:, 1].max() < 0.0  # below the base line
+
+
+@pytest.mark.req("REQ-OFF-028")
+def test_a_short_segment_into_an_inside_corner_keeps_t_from_the_chain_start(ctx: Context) -> None:
+    # Spec review: (0, 0) to (1, 0) to (1, 10), the tool left, t = 3. The wall along the second
+    # segment must not come closer than t to the chain's start: the round end's area keeps it
+    # away, and the edges nearest the start are a cap, left out.
+    rows = polyline([(0.0, 0.0), (1.0, 0.0), (1.0, 10.0)])
+    paths = run(rows, LEFT, 3.0, ctx)
+    assert paths.closed.tolist() == [False]
+    d = distance_to_curves(paths.points, as_rows(flat_chain(rows, LEFT, ctx)))
+    assert d.min() >= 3.0
+    assert d.max() <= band_top(3.0, ctx)
+
+
+@pytest.mark.req("REQ-OFF-028")
+@pytest.mark.parametrize("side", [LEFT, RIGHT])
+def test_one_line_is_one_edge_run_in_the_chain_direction(side: AirSide, ctx: Context) -> None:
+    # A line from (10, 0) to (0, 0), running towards -x: the side is one edge of the grown area,
+    # turned to run with the chain whichever way its loop runs.
+    paths = run(polyline([(10.0, 0.0), (0.0, 0.0)]), side, 2.0, ctx)
+    assert paths.closed.tolist() == [False]
+    y = -2.0 if side is LEFT else 2.0
+    assert np.allclose(paths.points, [[10.0, y], [0.0, y]], atol=band_top(2.0, ctx) - 2.0)
+    assert paths.source_ids.tolist() == [100]
+
+
+@pytest.mark.req("REQ-OFF-028")
+def test_an_inside_corner_on_the_left_rounds_nothing(ctx: Context) -> None:
+    # (0, 0) to (10, 0) to (10, 10), the tool left: concave toward the tool, so the piece meets
+    # the corner's bisector once, at (10 - t, t), with no arc round it.
+    rows = polyline([(0.0, 0.0), (10.0, 0.0), (10.0, 10.0)])
+    piece = pieces(run(rows, LEFT, 2.0, ctx))[0]
+    slack = band_top(2.0, ctx) - 2.0
+    assert np.linalg.norm(piece[0] - [0.0, 2.0]) <= slack
+    assert np.linalg.norm(piece[-1] - [8.0, 10.0]) <= slack
+    assert piece.shape[0] == 3
+    assert np.linalg.norm(piece[1] - [8.0, 2.0]) <= 2 * slack
+
+
+@pytest.mark.req("REQ-OFF-028")
+@pytest.mark.parametrize("side", [LEFT, RIGHT])
+def test_a_chain_out_and_back_keeps_both_legs_sides(side: AirSide, ctx: Context) -> None:
+    # (0, 0) to (10, 0) and back: the tool's side of the way out is the other side of the way
+    # back. Both legs tie at every edge; the side is the tool's if either leg says so
+    # (DEC-OFF-018): one piece round the turn, starting on the way out.
+    paths = run(polyline([(0.0, 0.0), (10.0, 0.0), (0.0, 0.0)]), side, 2.0, ctx)
+    assert paths.closed.tolist() == [False]
+    piece = pieces(paths)[0]
+    slack = band_top(2.0, ctx) - 2.0
+    y = 2.0 if side is LEFT else -2.0
+    assert np.linalg.norm(piece[0] - [0.0, y]) <= slack  # from the start of the way out
+    assert piece[:, 0].max() >= 12.0  # round the turn at (10, 0)
+    assert np.linalg.norm(piece[-1] - [0.0, -y]) <= slack  # to the end of the way back
+
+
+@pytest.mark.req("REQ-OFF-028")
+@pytest.mark.parametrize("where", ["start", "corner", "end"])
+def test_a_segment_of_eps_len_or_less_merges_into_its_neighbour(where: str, ctx: Context) -> None:
+    # A segment half eps_len long at the start, at the corner or at the end gives the side of the
+    # chain without it: the side rule needs two real segments at a vertex (DEC-OFF-018).
+    e = 0.5 * ctx.tolerances.length_eps_mm
+    with_short = {
+        "start": [(0.0, 0.0), (e, 0.0), (10.0, 0.0), (10.0, 10.0)],
+        "corner": [(0.0, 0.0), (10.0, 0.0), (10.0, e), (10.0, 10.0)],
+        "end": [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (10.0, 10.0 + e)],
+    }[where]
+    plain = run(polyline([(0.0, 0.0), (10.0, 0.0), (10.0, 10.0)]), LEFT, 2.0, ctx)
+    paths = run(polyline(with_short), LEFT, 2.0, ctx)
+    assert paths.closed.tolist() == plain.closed.tolist()
+    assert paths.points.shape == plain.points.shape
+    assert np.abs(paths.points - plain.points).max() <= band_top(2.0, ctx) - 2.0
 
 
 @pytest.mark.req("REQ-OFF-011", "REQ-OFF-038")

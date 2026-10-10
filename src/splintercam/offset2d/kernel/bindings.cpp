@@ -39,9 +39,8 @@ bool finite(std::span<const double> values) {
 }
 
 // The arrays of flattened loops as offset2d's Python side builds them (REQ-OFF-013).
-geometry2d::Polylines checked_loops(const PointRows& points, const Counts& starts,
+geometry2d::Polylines checked_loops(const PointRows& points, std::span<const std::int64_t> s,
                                     std::size_t id_count) {
-    const std::span<const std::int64_t> s = view(starts);
     const auto n = static_cast<std::int64_t>(points.shape(0));
     const bool ascending = std::ranges::adjacent_find(s, std::ranges::greater_equal{}) == s.end();
     if (id_count != points.shape(0) || (s.empty() != (n == 0)) ||
@@ -80,7 +79,7 @@ IdSource id_source(const PointRows& points, const Counts& starts, const Counts& 
     if (classes.shape(0) != source_ids.shape(0)) {
         throw nb::value_error("one class per vertex");
     }
-    return {.loops = checked_loops(points, starts, source_ids.shape(0)),
+    return {.loops = checked_loops(points, view(starts), source_ids.shape(0)),
             .source_ids = view(source_ids),
             .classes = view(classes)};
 }
@@ -98,10 +97,10 @@ void bind_clip(nb::module_& m) {
                 !(reach > 0.0)) {
                 throw nb::value_error("op 0 to 2; u, span, reach > 0; eps >= 0");
             }
-            const ClipInput input{.subject =
-                                      checked_loops(subject, subject_starts, subject.shape(0)),
-                                  .clip = checked_loops(clip, clip_starts, clip.shape(0)),
-                                  .ids = id_source(id_points, id_starts, source_ids, classes)};
+            const ClipInput input{
+                .subject = checked_loops(subject, view(subject_starts), subject.shape(0)),
+                .clip = checked_loops(clip, view(clip_starts), clip.shape(0)),
+                .ids = id_source(id_points, id_starts, source_ids, classes)};
             geometry2d::GridRegion region;
             {
                 const nb::gil_scoped_release unlocked;
@@ -133,7 +132,8 @@ void bind_grow(nb::module_& m) {
                 !(reach > 0.0) || !(u > 0.0) || !(span > 0.0) || !(steps > 0.0) || !(eps >= 0.0)) {
                 throw nb::value_error("delta > arc_tol > 0; reach, u, span, steps > 0; eps >= 0");
             }
-            const GrowInput input{.chains = checked_loops(chains, chain_starts, chains.shape(0)),
+            const GrowInput input{.chains =
+                                      checked_loops(chains, view(chain_starts), chains.shape(0)),
                                   .ids = id_source(id_points, id_starts, source_ids, classes)};
             geometry2d::GridRegion region;
             {
@@ -170,11 +170,13 @@ void bind_side(nb::module_& m) {
                     "steps > 0; eps >= 0");
             }
             const std::array<std::int64_t, 1> one_chain{0};
-            const GrowInput input{
-                .chains = {.points = view(chain), .loop_starts = std::span{one_chain}},
-                .ids = id_source(id_points, id_starts, source_ids, classes)};
-            if (!finite(view(chain))) {
-                throw nb::value_error("finite chain points");
+            const GrowInput input{.chains = checked_loops(chain, one_chain, chain.shape(0)),
+                                  .ids = id_source(id_points, id_starts, source_ids, classes)};
+            for (std::size_t i = 0; i + 1 < chain.shape(0); ++i) {
+                if (!(std::hypot(chain(i + 1, 0) - chain(i, 0), chain(i + 1, 1) - chain(i, 1)) >
+                      eps)) {
+                    throw nb::value_error("no chain segment of eps_len or shorter");
+                }
             }
             SidePieces pieces;
             {
@@ -185,24 +187,18 @@ void bind_side(nb::module_& m) {
                     {.u = u, .max_span_units = span, .join_steps_max = steps, .eps_len = eps},
                     {.limit = reach, .eps = eps});
             }
-            for (std::size_t i = 0; i < std::min(pieces.points.size(), points_out.shape(0)); ++i) {
-                points_out(i, 0) = std::get<0>(pieces.points.at(i));
-                points_out(i, 1) = std::get<1>(pieces.points.at(i));
-            }
-            copy_out(pieces.starts, starts_out);
             copy_out(pieces.closed, closed_out);
-            copy_out(pieces.ids, ids_out);
-            copy_out(pieces.fixed, fixed_out);
-            return std::tuple{static_cast<int>(pieces.status), pieces.points.size(),
-                              pieces.starts.size(), pieces.ids.size()};
+            return write_region(pieces.region,
+                                std::tie(points_out, starts_out, ids_out, fixed_out));
         },
         nb::arg("chain"), nb::arg("id_points"), nb::arg("id_starts"), nb::arg("source_ids"),
         nb::arg("classes"), nb::arg("tool_side"), nb::arg("offset"), nb::arg("grid"),
         nb::arg("points_out"), nb::arg("starts_out"), nb::arg("closed_out"), nb::arg("ids_out"),
         nb::arg("fixed_out"),
-        "The tool side of one open chain offset with Butt ends (tool_side +1 left, -1 right; "
-        "offset = delta, a, the reach of the source IDs; grid = u, the span limit, the join step "
-        "limit, eps_len); return (status, points, pieces, ids), the counts it needed.");
+        "The tool side of one open chain offset with round ends, the caps left out (tool_side +1 "
+        "left, -1 right; offset = delta, a, the reach of the source IDs; grid = u, the span "
+        "limit, the join step limit, eps_len); return (status, points, pieces), the counts it "
+        "needed; an open piece has one ID fewer than vertices.");
 }
 
 } // namespace
@@ -214,7 +210,8 @@ void bind(nb::module_& m) {
            const Counts& id_starts, const Counts& source_ids, const Classes& classes,
            const Quad& offset, const Quad& grid, const PointsOut& points_out,
            const CountsOut& starts_out, const CountsOut& ids_out, const FlagsOut& fixed_out) {
-            const geometry2d::Polylines loops = checked_loops(points, loop_starts, points.shape(0));
+            const geometry2d::Polylines loops =
+                checked_loops(points, view(loop_starts), points.shape(0));
             const IdSource ids = id_source(id_points, id_starts, source_ids, classes);
             const auto [delta, arc_tol, bias, margin] = offset;
             const auto [u, span, steps, eps] = grid;
