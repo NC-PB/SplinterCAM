@@ -32,7 +32,7 @@ def keep_chain(points: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), o
     Which points of a chain to keep so that no segment is threshold or shorter: the first, each more than threshold from the last kept one, and the last.
     """
 
-def find_fold(points: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], tol: float) -> list[float] | None:
+def find_contact(points: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], tol: float) -> tuple[float, float, bool] | None:
     """
-    Where a chain runs back over itself (two segments in opposite directions within tol of each other's line, overlapping by more than tol), or None.
+    Where an open chain is not simple: (x, y, fold), a fold where a segment runs back over the one before it, else a contact of two segments not next to each other within tol; None for a simple chain.
     """

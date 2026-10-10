@@ -7,6 +7,8 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
+#include <numeric>
 #include <optional>
 #include <ranges>
 #include <span>
@@ -115,6 +117,19 @@ Labelled label(const geometry2d::GridRegion& region, const Chain& chain, const G
     return out;
 }
 
+// Whether a loop of the grown area is an outer loop: counter-clockwise, a positive area (shoelace).
+bool outer(const geometry2d::GridRegion& region, std::size_t loop) {
+    const auto first = static_cast<std::size_t>(region.starts.at(loop));
+    const std::size_t end = loop_end(region, loop);
+    double twice = 0.0;
+    for (std::size_t k = first; k < end; ++k) {
+        const Point2 p = region.points.at(k);
+        const Point2 q = region.points.at(k + 1 < end ? k + 1 : first);
+        twice += (geometry2d::x(p) * geometry2d::y(q)) - (geometry2d::x(q) * geometry2d::y(p));
+    }
+    return twice > 0.0;
+}
+
 struct Piece {
     bool closed;
     std::size_t loop; // the boundary loop it lies on
@@ -207,14 +222,15 @@ SidePieces chain_side(const GrowInput& input, int tool_side, OffsetParams params
         return std::tuple{a.closed, a.place, a.points.front()} <
                std::tuple{b.closed, b.place, b.points.front()};
     });
-    // A piece on another loop than the first open piece's lies across the grown area from it:
-    // enclosed, never reached from the open piece without cutting closer than t (DEC-OFF-019).
+    // A piece on a hole of the grown area other than the first open piece's lies across the area
+    // from it: enclosed. The outer loop is reached from outside, which topic 10's link and entry
+    // check decides (DEC-OFF-019, Peter).
     const std::size_t reachable =
         pieces.empty() || pieces.front().closed ? region.starts.size() : pieces.front().loop;
     for (const Piece& piece : pieces) {
+        const bool enclosed = piece.loop != reachable && !outer(region, piece.loop);
         out.region.starts.push_back(static_cast<std::int64_t>(out.region.points.size()));
-        out.flags.push_back((piece.closed ? closed_flag : 0) |
-                            (piece.loop != reachable ? enclosed_flag : 0));
+        out.flags.push_back((piece.closed ? closed_flag : 0) | (enclosed ? enclosed_flag : 0));
         out.region.points.insert(out.region.points.end(), piece.points.begin(), piece.points.end());
         out.region.ids.insert(out.region.ids.end(), piece.ids.begin(), piece.ids.end());
         out.region.fixed.insert(out.region.fixed.end(), piece.fixed.begin(), piece.fixed.end());
@@ -254,8 +270,8 @@ struct Segment {
     Point2 b;
 };
 
-// Where segment s runs back over segment r: opposite directions, both ends of s within tol of r's
-// line, and their spans along r overlapping by more than tol; the overlap's middle on r.
+// Where segment s runs back over segment r, the one before it: opposite directions, the ends of s
+// within tol of r's line, overlapping by more than tol; the overlap's middle on r.
 std::optional<Point2> overlap(Segment r, Segment s, double tol) {
     const double dx = geometry2d::x(r.b) - geometry2d::x(r.a);
     const double dy = geometry2d::y(r.b) - geometry2d::y(r.a);
@@ -283,33 +299,85 @@ std::optional<Point2> overlap(Segment r, Segment s, double tol) {
 
 } // namespace
 
-std::optional<Point2> find_fold(std::span<const double> points, double tol) {
-    const std::size_t n = points.size() / 2;
-    std::vector<Segment> segments;
-    std::vector<std::size_t> order;
-    for (std::size_t i = 0; i + 1 < n; ++i) {
-        segments.push_back({geometry2d::point(points, i), geometry2d::point(points, i + 1)});
-        order.push_back(i);
+namespace {
+
+// The distance between two segments and the middle of their nearest points: 0 where they cross or
+// touch (geometry2d's exact orientation), else the least distance from an end to the other.
+std::pair<double, Point2> apart(Segment r, Segment s) {
+    const auto sign = [](Point2 a, Point2 b, Point2 c) { return geometry2d::orient_sign(a, b, c); };
+    const bool cross = sign(r.a, r.b, s.a) * sign(r.a, r.b, s.b) <= 0 &&
+                       sign(s.a, s.b, r.a) * sign(s.a, s.b, r.b) <= 0;
+    const auto foot = [](Point2 p, Segment g) {
+        const double dx = geometry2d::x(g.b) - geometry2d::x(g.a);
+        const double dy = geometry2d::y(g.b) - geometry2d::y(g.a);
+        const double t = std::clamp((((geometry2d::x(p) - geometry2d::x(g.a)) * dx) +
+                                     ((geometry2d::y(p) - geometry2d::y(g.a)) * dy)) /
+                                        ((dx * dx) + (dy * dy)),
+                                    0.0, 1.0);
+        return Point2{geometry2d::x(g.a) + (t * dx), geometry2d::y(g.a) + (t * dy)};
+    };
+    std::pair<double, Point2> best{std::numeric_limits<double>::infinity(), r.a};
+    for (const auto& [p, g] :
+         {std::pair{r.a, s}, std::pair{r.b, s}, std::pair{s.a, r}, std::pair{s.b, r}}) {
+        const Point2 f = foot(p, g);
+        const double d = geometry2d::length(geometry2d::x(p) - geometry2d::x(f),
+                                            geometry2d::y(p) - geometry2d::y(f));
+        if (d < best.first) {
+            best = {d, Point2{(geometry2d::x(p) + geometry2d::x(f)) / 2,
+                              (geometry2d::y(p) + geometry2d::y(f)) / 2}};
+        }
     }
+    return cross && best.first > 0.0 ? std::pair{0.0, best.second} : best;
+}
+
+} // namespace
+
+namespace {
+
+// The first pair along the chain of segments not next to each other within tol (a sweep along x).
+std::optional<Contact> first_contact(const std::vector<Segment>& segments, double tol) {
     const auto low_x = [&](std::size_t i) {
         return std::min(geometry2d::x(segments.at(i).a), geometry2d::x(segments.at(i).b));
     };
     const auto high_x = [&](std::size_t i) {
         return std::max(geometry2d::x(segments.at(i).a), geometry2d::x(segments.at(i).b));
     };
+    std::vector<std::size_t> order(segments.size());
+    std::iota(order.begin(), order.end(), std::size_t{0});
     std::ranges::stable_sort(order, {}, low_x);
-    // Each pair whose x ranges meet within tol, either way round (a sweep along x).
-    std::optional<Point2> found;
-    for (std::size_t p = 0; p < order.size() && !found; ++p) {
+    std::optional<Contact> found;
+    for (std::size_t p = 0; p < order.size(); ++p) {
         for (std::size_t q = p + 1;
-             q < order.size() && !found && low_x(order.at(q)) <= high_x(order.at(p)) + tol; ++q) {
-            const Segment r = segments.at(order.at(p));
-            const Segment s = segments.at(order.at(q));
-            found = overlap(r, s, tol);
-            found = found ? found : overlap(s, r, tol);
+             q < order.size() && low_x(order.at(q)) <= high_x(order.at(p)) + tol; ++q) {
+            const std::size_t i = std::min(order.at(p), order.at(q));
+            const std::size_t j = std::max(order.at(p), order.at(q));
+            const std::pair<std::size_t, std::size_t> pair{i, j};
+            if (j > i + 1 && (!found || pair < found->pair)) {
+                const auto [d, at] = apart(segments.at(i), segments.at(j));
+                found = d <= tol ? std::optional{Contact{.at = at, .fold = false, .pair = pair}}
+                                 : found;
+            }
         }
     }
     return found;
+}
+
+} // namespace
+
+std::optional<Contact> find_contact(std::span<const double> points, double tol) {
+    const std::size_t n = points.size() / 2;
+    std::vector<Segment> segments;
+    for (std::size_t i = 0; i + 1 < n; ++i) {
+        segments.push_back({geometry2d::point(points, i), geometry2d::point(points, i + 1)});
+    }
+    // A fold: a segment running back over the one before it, the first along the chain.
+    for (std::size_t i = 0; i + 1 < segments.size(); ++i) {
+        const auto fold = overlap(segments.at(i), segments.at(i + 1), tol);
+        if (fold) {
+            return Contact{.at = *fold, .fold = true};
+        }
+    }
+    return first_contact(segments, tol); // SRC-030, Def. 5.3
 }
 
 } // namespace splintercam::offset2d

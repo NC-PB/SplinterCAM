@@ -202,6 +202,9 @@ void bind_side(nb::module_& m) {
         "limit, the join step limit, eps_len); flags per piece: 1 closed, 2 enclosed; return "
         "(status, points, pieces), the counts it needed; an open piece has one ID fewer than "
         "vertices.");
+}
+
+void bind_chain_checks(nb::module_& m) {
     m.def(
         "keep_chain",
         [](const PointRows& points, double threshold, const FlagsOut& keep_out) {
@@ -215,16 +218,21 @@ void bind_side(nb::module_& m) {
         "Which points of a chain to keep so that no segment is threshold or shorter: the first, "
         "each more than threshold from the last kept one, and the last.");
     m.def(
-        "find_fold",
-        [](const PointRows& points, double tol) {
+        "find_contact",
+        [](const PointRows& points, double tol) -> std::optional<std::tuple<double, double, bool>> {
             if (!finite(view(points)) || !std::isfinite(tol) || !(tol >= 0.0)) {
                 throw nb::value_error("finite points; tol >= 0");
             }
-            return find_fold(view(points), tol);
+            const std::optional<Contact> found = find_contact(view(points), tol);
+            if (!found) {
+                return std::nullopt;
+            }
+            return std::tuple{std::get<0>(found->at), std::get<1>(found->at), found->fold};
         },
         nb::arg("points"), nb::arg("tol"),
-        "Where a chain runs back over itself (two segments in opposite directions within tol of "
-        "each other's line, overlapping by more than tol), or None.");
+        "Where an open chain is not simple: (x, y, fold), a fold where a segment runs back over "
+        "the one before it, else a contact of two segments not next to each other within tol; "
+        "None for a simple chain.");
 }
 
 } // namespace
@@ -267,6 +275,7 @@ void bind(nb::module_& m) {
     bind_clip(m);
     bind_grow(m);
     bind_side(m);
+    bind_chain_checks(m);
 }
 
 } // namespace splintercam::offset2d
