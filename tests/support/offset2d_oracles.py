@@ -155,6 +155,36 @@ def distance_to_curves(points: ArrayLike, loops: CurveRows) -> NDArray[np.float6
     return out
 
 
+def dense_loops(loops: CurveRows, sagitta_mm: float) -> list[Points]:
+    """Each loop as a closed polygon (last vertex not repeated) whose vertices lie on the true
+    curves, arcs cut into equal steps of sagitta at most `sagitta_mm` = s, so the polygon and the
+    true curves lie within s of each other both ways, or about 1.56·s where an arc's end is left
+    out below; 2s bounds both (test 20 hands it to shapely; `test_offset2d_dense_loops.py`)."""
+    cv = _curves(loops)
+    m = np.asarray(loops.rows).shape[0]
+    pieces: list[list[Points]] = [[] for _ in range(cv.loop_count)]
+    arc_of = np.full(m, -1, dtype=np.int64)
+    arc_of[cv.arc_rows] = np.arange(cv.arc_rows.size)
+    for row in range(m):  # a test helper over a few hundred rows, not the product's kernel
+        out = pieces[int(cv.edge_loop[row])]
+        k = int(arc_of[row])
+        if k < 0:
+            out.append(cv.edge_a[row : row + 1])
+            continue
+        r, turn = float(cv.radius[k]), float(cv.turn[k])
+        step = 2.0 * math.acos(max(-1.0, 1.0 - sagitta_mm / r))  # chord with that sagitta
+        n = max(1, math.ceil(turn / step))
+        v0 = cv.edge_a[row] - cv.centre[k]
+        angles = math.atan2(v0[1], v0[0]) + cv.direction[k] * turn * np.arange(n) / n
+        out.append(cv.centre[k] + r * np.column_stack([np.cos(angles), np.sin(angles)]))
+        out[-1][0] = cv.edge_a[row]  # P0 itself, not its rounded copy
+        # E, then the radial connector to P1; an E within s of P1 is left out (a near duplicate
+        # vertex breaks GEOS's noding): the last chord then ends up to s off, about 1.56·s.
+        if math.dist(cv.edge_b[row], cv.edge_b[m + row]) > sagitta_mm:
+            out.append(cv.edge_b[row : row + 1])
+    return [np.concatenate(p) for p in pieces]
+
+
 def _one_hot(index: NDArray[np.int64], k: int) -> NDArray[np.int64]:
     return (index[:, None] == np.arange(k)).astype(np.int64)
 

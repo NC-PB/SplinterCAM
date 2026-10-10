@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # tools/bootstrap: check the prerequisites, then install the pinned Python and dependencies and build
 # the kernels with one `uv sync` (tools/README.md). Run it after cloning and after pulling changes.
+# `uv sync` installs the default groups of pyproject.toml, dev and test-oracle (shapely, ADR 0010).
 cd "$(dirname "$0")/.." || exit 2
 missing=()
 command -v uv >/dev/null 2>&1 || missing+=("uv (https://docs.astral.sh/uv/)")

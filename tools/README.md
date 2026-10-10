@@ -37,7 +37,7 @@ What each one wraps:
 
 | Command | Wraps |
 | --- | --- |
-| `bootstrap` | Checks for uv and git-lfs, then `uv sync --locked`: installs the pinned uv-managed Python, the dependencies, and builds the kernels through scikit-build-core |
+| `bootstrap` | Checks for uv and git-lfs, then `uv sync --locked`: installs the pinned uv-managed Python, the dependencies with the default groups `dev` and `test-oracle` (shapely for differential tests, [ADR 0010](../docs/adr/0010-shapely-geos-test-only.md)), and builds the kernels through scikit-build-core |
 | `build` | `uv sync --locked`. The project is installed editable and built without isolation into `build/<wheel tag>/`; uv rebuilds it when a file listed under `[tool.uv] cache-keys` in `pyproject.toml` changes, and CMake recompiles only what changed |
 | `format` | `ruff format` and `ruff check --select I --fix` (import order), `clang-format`; `--check` checks every file |
 | `lint` | `ruff check`, `pyright --warnings` (strict), `clang-tidy --verify-config`, `clang-tidy` on the kernel sources with the build's `compile_commands.json` (on macOS with the SDK from `xcrun`; skipped on Windows, where the Visual Studio generator writes no compile database) |

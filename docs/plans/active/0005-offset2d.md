@@ -51,11 +51,22 @@ Released with the SPEC (Peter, 2026-10-08). Steps 2 and 3 follow his answers 2 a
 - [x] 6. **Source IDs with classes, pinch points, order** (REQ-OFF-034, 037, 038, 011, 010). Tests 14, 17, 19. Size: about 150 + 350.
 - [x] 7. **Booleans** (REQ-OFF-030, 031, 033, 035, and the pinch tests of 036). Tests 1 to 5 and 15, Vatti note test 7. The stock update: `machined_area` and `stock_layer` (REQ-OFF-032, 044; research 02's answer to RR-001, released 2026-10-09). Test 22. Size: about 200 + 400.
 - [x] 8. **Open chains** (REQ-OFF-027 to 029). Tests 12 and 13. Size: about 260 + 350.
-- [ ] 9. **Golden case and differential.** `pocket-island-touching-wall` (test 16; a person approves the golden files); ADR 0010 (accepted 2026-10-09) applied: the group `test-oracle` with shapely in `pyproject.toml` and `uv.lock`, installed by `tools/bootstrap` (DEC-OFF-003); then test 20. Size: about 0 + 250.
+- [x] 9. **Golden case and differential.** `pocket-island-touching-wall` (test 16; a person approves the golden files; as a unit test for now, the golden case with the pocket strategy, DEC-OFF-023); ADR 0010 (accepted 2026-10-09) applied: the group `test-oracle` with shapely in `pyproject.toml` and `uv.lock`, installed by `tools/bootstrap` (DEC-OFF-003); then test 20. Size: about 0 + 250.
 
 Total: about 1230 added lines of code (about 1050 NLOC) and 2080 of tests, in nine steps.
 
 ## Progress log
+
+### 2026-10-10, step 9, part 2 (test 16, the budget)
+
+- Peter, 2026-10-10: test 16 as a unit test now, the golden case `pocket-island-touching-wall` with the pocket strategy and the golden tools (no runner, `golden-diff` or `golden-approve` exists, and docs/dev/06's zoo cases are whole operations); offset2d's budget raised to 1600 NLOC (DEC-OFF-023).
+- Test 16 (`tests/offset2d/unit/test_offset_region_touching.py`): the island touching the pocket's top, square and rounded corners, a vertex at the touch point or not; one loop, at least 3 from each loop, within the band, test 9's oracle at 10⁴ points. Mutation: a clearance of 2.99 fails all four cases.
+
+### 2026-10-10, step 9, part 1 (ADR 0010 applied, test 20)
+
+- ADR 0010 applied: the group `test-oracle` with shapely 2.2.0 (GEOS 3.14.1) in `pyproject.toml` and `uv.lock`, made a default group (`[tool.uv] default-groups`), so every `uv sync` installs it: `tools/bootstrap`, `tools/build`, the sanitizer environment and CI; otherwise `tools/build`'s sync would remove it again. The wheel carries GEOS as `shapely/.dylibs/libgeos*.dylib` with `LICENSE_GEOS` (checked on macOS, as the ADR asked).
+- Test 20 (`tests/offset2d/differential/test_offset_region_differential.py`, DEC-OFF-022): test 10's regions, clearances and tolerances, our result against GEOS's round-joined buffer at 10⁴ points outside the band widened by 3u for GEOS's own error; the densifier `dense_loops` has its own known-answer tests. 1000 examples pass; a GEOS `TopologyException` on a 1e-15 mm radial connector, found by that run, is fixed in the densifier. Mutation: a clearance 0.2 % too large fails at once.
+- Left for part 2: the golden case `pocket-island-touching-wall`, which needs a format and a runner first (question for Peter in the pull request).
 
 ### 2026-10-10, step 8, part 2 (one side of a chain)
 
@@ -143,3 +154,4 @@ Total: about 1230 added lines of code (about 1050 NLOC) and 2080 of tests, in ni
 - RR-002 (`docs/research/REQUESTS.md`): five corrections to research 02, for Project Spike.
 - A property test for `offset_chain_side` (final test audit of step 8): random chains on the 2^-20 grid, checking the band [t, t + a + 6u] (plus t_topo where a point merged), the tool side only, IDs from the input, flags and determinism, with `find_contact` and `keep_chain` reached through the API, the generators drawing simple chains or expecting `CHAIN_FOLDS` / `CHAIN_SELF_CONTACT`; with step 9's differential test. Also the shared middles and ties of `finish_region` and the side's labels (simplifier), which would save one nearest-segment pass.
 
+- The golden case `pocket-island-touching-wall` (research 02, test 16): with the pocket strategy (topic 04) and the golden tools (`tools/golden-diff`, `tools/golden-approve`, the zoo runner), a person approving the files (DEC-OFF-023). Test 16 checks offset2d's output until then.
