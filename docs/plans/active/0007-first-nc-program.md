@@ -44,6 +44,8 @@ Stop after each step for Peter's review of its pull request.
 
 ## Decisions
 
+- 2026-10-13: gaps between DXF entities up to 0.01 mm are repaired with a warning naming the place; larger gaps stop the import naming the place (Peter, answer 1 on the io SPEC draft). Read in `src/splintercam/io/DECISIONS.md`, DEC-IO-001: open chains stop the import too.
+- 2026-10-13: a job unit that differs from the DXF file's unit stops the import; a file without a unit (`$INSUNITS` 0 or missing) follows `docs/research/21-geometry-input.md`, Method 2: the job's unit is used, and without one the import stops with `DXF_NO_UNITS` (Peter, answer 2; DEC-IO-002). A unit io does not read, such as feet, stops the import (ours, DEC-IO-002).
 - 2026-10-11: the slice's machine is the Heidenhain iTNC 530 (`machines/heidenhain-itnc530.toml` in NCXchange), Peter's pick after step 1 showed that all three shipped mill files compile the slice's program (question 2). Peter's dry run (step 8) is on that control.
 - 2026-10-11: the writer always emits `OFFSET:LEN` with the tool number in the tool-change block, although the iTNC 530 applies the length with `TOOL CALL` anyway: the NCX stays the same for every controller (D-148), and on the Fanuc file a tool change without it never activates `G43` (research 26, Checked against NCXchange; NCXchange request R1-13).
 - 2026-10-11: plan approved; Peter's answers to questions 1 to 5 as recommended (outside profile first; the machine picked from those that compile cleanly; `ncx` built in CI from a pinned NCXchange commit, skipped locally with a message when absent; clearance-height retract between depth passes, feed down outside the stock; Peter's dry run as the last check).
@@ -63,6 +65,12 @@ Stop after each step for Peter's review of its pull request.
 - Size: the draft estimates about 300 NLOC, 50 % over the step's 200, so it stops here for Peter (docs/dev/12, section 3).
 - Questions for Peter (the SPEC's Open questions): (1) gap limit 0.01 mm at finishing tolerance, and the parameter in foundation's `tolerance_defaults.toml`; (2) a job unit that differs from the file's unit stops the import (provisional); (3) ADR 0011; (4) the size, and `io`'s budget in `architecture/modules.yaml`; (5) array forms of `arc_from_bulge` and the bounding box in geometry2d's kernel, a pull request of its own before io.
 - Next: on approval, the implementation pull request: `pyproject.toml`, `uv.lock` and `NOTICE` (ADR 0011), the foundation parameter, `src/splintercam/io/` with `AGENTS.md` and `DECISIONS.md`, and tests first.
+
+### 2026-10-13, step 2 (SPEC reviewed)
+
+- Peter answered the five questions: gap limit 0.01 mm, larger gaps stop the import; a unit mismatch stops it, a file without a unit takes the job's as research 21 says (both under Decisions); ADR 0011 accepted; `io`'s budget 360 in `architecture/modules.yaml`; the three array functions go into geometry2d's kernel in their own pull request before io, kept to the functions, their tests and the interface change (DEC-G2D, recorded with that pull request).
+- `src/splintercam/io/SPEC.md` Reviewed; `src/splintercam/io/DECISIONS.md` started (DEC-IO-001 to 004). RR-004 gains items 5 and 6.
+- Next: the geometry2d pull request (array forms of `arc_from_bulge`, of an arc from end points and sweep, and of the bounding box of curve rows), then io's implementation.
 
 ## Backlog
 

@@ -1,7 +1,7 @@
 # ADR 0011: ezdxf as the DXF reader of io
 
-- Status: Proposed
-- Date: 2026-10-12
+- Status: Accepted (Peter, 2026-10-13)
+- Date: 2026-10-12; accepted 2026-10-13
 - Deciders: Peter Burgener
 - Drafted by: Claude Code (plan 0007, step 2)
 
