@@ -36,7 +36,7 @@ modules:
 
   geometry2d:             { layer: 1, kernel: true,  depends_on: [foundation], kernel_interface: [exact.hpp, distance.hpp, grid.hpp], research: ["03"], budget: 4000 }
   geometry3d:             { layer: 1, kernel: true,  depends_on: [foundation], research: ["06", "07"] }
-  io:                     { layer: 1, kernel: false, depends_on: [foundation, geometry2d, geometry3d], research: ["21"] }
+  io:                     { layer: 1, kernel: false, depends_on: [foundation, geometry2d, geometry3d], research: ["21"], budget: 360 }
   offset2d:               { layer: 1, kernel: true,  depends_on: [foundation, geometry2d], kernel_includes: [geometry2d], research: ["02"], budget: 1600 }
 
   model:                  { layer: 2, kernel: false, depends_on: [foundation], research: ["23"] }
