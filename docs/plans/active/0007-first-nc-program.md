@@ -56,6 +56,14 @@ Stop after each step for Peter's review of its pull request.
 - NCXchange `main` at f74559c built and run on the slice's sample program: `format --check`, `check --strict` and `compile --strict` pass on all three mill files when `OFFSET:LEN` is written, the program name has no spaces and coordinates have at most three decimals; with more decimals `compile` warns `CMP020` until NCXchange implements its D363, so `compile` runs without `--strict` and accepts only `CMP020` (research 27, The ncx call in plan 0007).
 - Next: step 2, `io`: DXF to curve rows (research 21).
 
+### 2026-10-12, step 2 (SPEC draft, for Peter's review)
+
+- `io` had no SPEC and ezdxf was not yet a dependency, so step 2 starts with documents only: `src/splintercam/io/SPEC.md` drafted from research 21 with `/research-to-spec` (30 requirements, REQ-IO-001 to 030, all Draft), and `docs/adr/0011-ezdxf-dxf-reader.md` (Proposed). No code until both are approved.
+- Spec reviews (two rounds): two blockers fixed in the draft. 2D POLYLINE vertices are OCS points like LWPOLYLINE's, so a mirrored polyline would have been read un-mirrored. ezdxf reports 3D, mesh and spline-fit polylines as `POLYLINE` too. Research 21's midpoint gap rule keeps an arc's sweep, so on a near-full arc a 0.005 mm end move shifts the arc by about 0.5 mm: now the row that magnifies less moves (a line before an arc), each row's move is bounded exactly by B = (|ΔP0| + |ΔP1|)·D/c, silent only up to 3·eps_len (REQ-IO-020 to 022). Arc constructions must run in C++ with libm, not NumPy (D-055), which needs array entries in geometry2d (open question 5). Corrections to research 21 filed as RR-004.
+- Size: the draft estimates about 300 NLOC, 50 % over the step's 200, so it stops here for Peter (docs/dev/12, section 3).
+- Questions for Peter (the SPEC's Open questions): (1) gap limit 0.01 mm at finishing tolerance, and the parameter in foundation's `tolerance_defaults.toml`; (2) a job unit that differs from the file's unit stops the import (provisional); (3) ADR 0011; (4) the size, and `io`'s budget in `architecture/modules.yaml`; (5) array forms of `arc_from_bulge` and the bounding box in geometry2d's kernel, a pull request of its own before io.
+- Next: on approval, the implementation pull request: `pyproject.toml`, `uv.lock` and `NOTICE` (ADR 0011), the foundation parameter, `src/splintercam/io/` with `AGENTS.md` and `DECISIONS.md`, and tests first.
+
 ## Backlog
 
 ## Blockers
