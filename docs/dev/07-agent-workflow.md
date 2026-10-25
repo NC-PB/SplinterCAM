@@ -65,9 +65,13 @@ Peter is the domain expert for machining, not for computational geometry or nume
 
 **Machining terms.** A box 1 question says what happens on the machine or for the user under each option, recommends one, and names the safe default already taken: "A pocket with an island tangent to its wall: with A it is machined, with B the operation stops with an error. Recommended: A." If a question cannot be phrased like that, it is not a box 1 question.
 
+**Look first.** Before asking anything, search Project Spike (`~/project_spike` when it is readable: `DECISIONS.md`, `research/`, `sources/register.md`; otherwise `docs/spike/` and `docs/research/`). An answer found there is used and cited, not asked.
+
+**The question file.** Box 1 questions, and any question the step waits on, go into `docs/agents/QUESTIONS.md` as AQ-NNN entries, with the recommendation and the safe default taken; box 3 requests stay in `docs/research/REQUESTS.md` and are linked from an AQ entry only when the step waits on them. The Project Spike session answers there, bringing box 1 questions to Peter and writing his answer; the agent resumes from the file. A question that exists only in a chat or a run's last message is lost when the session ends (Peter, 2026-10-25).
+
 **Never block on a question.** Take the conservative option (the one that cannot gouge, collide or silently drop material), record it as provisional in `DECISIONS.md`, keep working, and flag it. Stop only where every option could harm a part or a machine, or where the box 1 list says so explicitly.
 
-**Still stop at once** when: a test looks wrong or passing it would need a looser tolerance; the same approach has failed three times; the code needs something no requirement covers (propose the requirement instead); a plan step passes its size estimate by 50 %. These go into the plan's progress log, sorted into a box like any other question.
+**Still stop at once** when: a test looks wrong or passing it would need a looser tolerance; the same approach has failed three times; the code needs something no requirement covers (propose the requirement instead); a plan step passes its size estimate by 50 %. These go into the plan's progress log and `docs/agents/QUESTIONS.md`, sorted into a box like any other question.
 
 ## File references
 
