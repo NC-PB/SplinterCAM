@@ -121,6 +121,15 @@ Stop after each step for Peter's review of its pull request.
 - Size: 358 NLOC of the budget 360; tests 95 (`tools/test-one model`). `tools/check` passes.
 - Next: step 4, `cl`, after this pull request is merged. From step 4 on, estimates are about 1.5 times the first count (Decisions).
 
+### 2026-10-25, step 4 (SPEC draft, for Peter's review)
+
+- `cl` had no SPEC and no budget, so step 4 starts with documents only: `src/splintercam/cl/SPEC.md` drafted from research 26 (the subset, Structure, Arcs, Links and heights, tests 1, 2 and 5), research 10 (Method: the first move along the axis, link heights on rapids) and the feature map, section 6 (name and note as comments): 21 requirements, REQ-CL-001 to 021, all Draft. `src/splintercam/cl/DECISIONS.md` holds DEC-CL-001 to 006 (provisional). No code until the SPEC is Reviewed.
+- Design: moves as columns of NumPy arrays, checked vectorised (split rule, DEC-CL-001); a broken record raises `ValueError`, as it is written by code after `model` has checked the user's values (DEC-CL-002); no fields for spindle direction, coolant, compensation mode, plane or tol (DEC-CL-003); exact height comparisons (DEC-CL-004).
+- Spec review, one round: the must-fix findings folded into the draft. Moves 0 and 1 had no defined start, and a diagonal rapid from the tool change down to the approach point passed; move 1 now ends at the clearance height. A full circle could end up to eps_len off its start, and a tiny arc would print as a full circle; both are refused (DEC-CL-006). A reversed arc at the limit could raise inside the strategy; the producer checks it after reversing. `make_cl_data` checks every operation again; the check order is fixed. Gaps folded in: tol in the header for the writer's rounding allowance (DEC-CL-003); a point other than k = 1 left to the writer (AQ-005, item 4); research 10 test 1's stock checks named as step 5's; whether `RAPID Z` alone is valid NCX added to RR-005. Fix check: the check order made exact for `make_cl_data` too, which now rebuilds every operation into read-only copies; the tiny-arc floor named as a sanity check, the guarantee on printed values given to the writer (step 6).
+- Size: first count about 205 NLOC, by the 1.5 rule about 310, against the plan's 150 (225 by the rule): 38 % over, within the 50 % stop.
+- Questions for Peter: AQ-005 (the SPEC review), AQ-006 (the arc check through geometry2d, a new dependency), AQ-007 (`cl`'s budget 310 and research 26, 10), AQ-008 (the note: `model` has no field and no room; recommended: no note in the slice). Research request RR-005 (quotes and length of NCX strings).
+- Next: on the answers, with AQ-006 (a) a geometry2d pull request (`check_arc_rows`), then cl's implementation on a new branch from `main`, tests in `tests/cl/` first.
+
 ## Backlog
 
 ## Blockers

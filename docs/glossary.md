@@ -54,6 +54,9 @@
 | CL data | `ClData` | CL-Daten | Neutral cutter-location output before the post | 13 |
 | driven point | `driven_point` | Führungspunkt | The tool point a path is programmed for | 19 |
 | measurement point | `MeasurementPoint` (`number`, `axial_offset_mm`, `register_radius_mm`) | Messpunkt | A point on the tool the shop measures into the control's registers: number k, axial offset a from the tip, register radius r; an operation uses one (D-154, D-155). Replaces "driven point" for milling tools | 26 |
+| move role | `Role` (`LINK`, `APPROACH`, `CUT`, `RETRACT`, …) | Bewegungsart | What a move of the toolpath record is for; the linker may replace only LINK and AIR moves (research 26, Roles) | 26 |
+| feed class | `feed_class` | Vorschubklasse | A named feed of an operation (`cut`, `plunge`, …); every LINE and ARC names one (research 26) | 26 |
+| link height | `link_height_mm` | Verbindungshöhe | The height a link's rapids run at or above (D-062, D-087); carried on every RAPID of the record | 10, 26 |
 | work offset | `work_offset` | Nullpunktverschiebung | Index of the datum a setup uses, NCX `ORIGIN`; an index, not a G code (D-078; research 26, trap 13) | 26, 27 |
 | parameter declaration | `ParameterDeclaration` | Parameterdeklaration | A strategy's declared input: name, unit, default or none, range, source; operation panels and job checks come from it (D-018, D-049) | dev/03 |
 | work frame | `work_frame` | Werkstücknullpunkt | Coordinate frame the program refers to (G54 and similar) | 19 |
