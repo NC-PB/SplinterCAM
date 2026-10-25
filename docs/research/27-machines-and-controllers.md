@@ -159,6 +159,7 @@ From the NCXchange compilers and machine files at commit 9a1fb19 (SRC-112):
 12. **Arc radius check**: NCXchange rejects an arc whose start and end radius differ by more than 0.01 mm (`VM230`); the record keeps them equal within 1e-6 mm, and rounding to 0.001 mm keeps them well inside.
 13. **Names with umlauts** are transliterated in comments and replaced in Siemens program names.
 14. **Plausible defaults** in the shipped machine files are not measured values (NCXchange D100); a time estimate built on them is an estimate.
+15. **Brackets in comments on Fanuc** (checked 2026-10-25 against NCXchange main f74559c, our build): a `SECTION` or `COMMENT` string holding `(` or `)` is written inside the Fanuc comment `( ... )` unchanged, so the first `)` ends the comment early and the rest of the line is read as code; `ncx check --strict` and `compile` give no message. NCX strings take `\"` for a quote, and the three compilers write it as a plain `"`; Heidenhain writes `SECTION` as `* - ...` and `COMMENT` as `; ...`, Siemens both as `; ...`. A string of 120 characters went through all three unchanged; neither NCX nor the machine files state a length limit. A `RAPID Z=` block without X and Y is valid NCX; on the Fanuc file it becomes the block that switches on `G43` (`G0 G17 G43 Z50. H1`). So the CAM refuses `(`, `)`, `"` and control characters in names and note lines until NCXchange escapes or refuses them (NCXchange request R1-14).
 
 ## Tests
 
