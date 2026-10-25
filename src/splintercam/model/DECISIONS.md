@@ -78,3 +78,12 @@
 - Why: D-155 fixes only "1 for the tool's first point"; gaps or a reordered list would make "the first point" and "point 1" differ. A job without operations would reach `ncx` as a program without moves.
 - Rejected: free numbering with uniqueness only (two meanings of "the default point"); an empty job as a valid result (no step of the slice needs it).
 - Where: REQ-MDL-005, 009.
+
+## DEC-MDL-009: Containers and elements of the wrong type are reported at their owner
+
+- Date: 2026-10-25; decided by: ours (implementation, plan 0007 step 3)
+- Status: Active
+- Decision: REQ-MDL-027 names a location per element, but a container that is not a tuple, or an element that is not of its class, has no element of its own to name. Such a `VALUE_TYPE_INVALID` is located at the owner, the message naming the field and index: `job` for `tools` (a location REQ-MDL-027 does not list), the tool for `points`, `setup` for `operations`, the operation for `parameters`. A point's k in its location is its position from 1, which equals its number whenever the numbering is valid (REQ-MDL-005). The location of a tool whose number has the wrong type shows the value found, as `tool 1 (TTrue)`. Repeated declared names raise `ValueError` before the cancellation check, so a programming error is not hidden by a cancelled run. An operation naming a tool whose number is invalid still gets `OP_TOOL_UNKNOWN`; the tool's own error comes first.
+- Why: these are the cases REQ-MDL-027 does not reach; the owner is the nearest element a user can find in the job file, and the field and index in the message point inside it. Not skipping `OP_TOOL_UNKNOWN` keeps the cross-check independent of the tool's own checks (fewer branches) and says truthfully that the operation has no usable tool.
+- Rejected: a location per container (`tools`, `points`): not in REQ-MDL-027's list either, and longer; skipping the operation's tool check when some tool is invalid (a second "which tools are invalid" set for one message).
+- Where: REQ-MDL-014, 019, 027, 029.

@@ -103,6 +103,15 @@ Stop after each step for Peter's review of its pull request.
 - Peter answered AQ-002 and AQ-003 (under Decisions). Item 3 applied: REQ-MDL-006 now takes any a ≥ 0 (D-154) and reports `TOOL_POINT_ABOVE_FLUTE` (warning, the point kept) above the flute length, naming the shift of every Z; DEC-MDL-004 rewritten as Peter's decision, DEC-MDL-001, 002 and 006 no longer provisional. `src/splintercam/model/SPEC.md` Reviewed, REQ-MDL-001 to 029 all Reviewed; `model`'s budget 260 in `architecture/modules.yaml`.
 - Next: after pull request #75 is merged, the implementation on a new branch from `main` (docs/dev/07, no stacked pull requests): `src/splintercam/model/` with `__init__.py` and `AGENTS.md`, tests in `tests/model/` first, tagged with REQ-MDL IDs.
 
+### 2026-10-25, step 3 (model implementation, stopped on size)
+
+- Implemented `src/splintercam/model/` against the Reviewed SPEC: `_types.py` (the data types, `ParameterDeclaration` raising on an invalid declaration), `_check.py` (`check_job`), `__init__.py`, `AGENTS.md`; DEC-MDL-009 records the locations of containers and elements of the wrong type, which REQ-MDL-027 does not reach. All 29 requirements, REQ-MDL-001 to 029.
+- Tests first: `tests/model/unit/test_check_job.py` (84 unit tests, every requirement and the SPEC's example parts) and `tests/model/property/test_check_job_properties.py` (3 property tests: a valid job comes back completed and idempotent; a broken field gives its code once at its location; the fixed order). Shared builders in `tests/support/model_jobs.py`. `tools/test-one model`: 87 passed. ruff and pyright strict clean on the module and its tests.
+- Size: 344 NLOC against the budget 260 (hard limit 312) and the SPEC's estimate 220, 56 % over, past the 50 % stop. The `simplifier` found about 15 NLOC to remove (applied, from 352) and judged the rest intrinsic to REQ-MDL-026, 027 and 029. `tools/check` therefore fails on size-check; not pushed, no pull request.
+- Not yet run: `spec-reviewer` and `test-auditor` (they run on the final diff after the answer); step 3 is not ticked.
+- Question: AQ-004 (raise `model`'s budget to 360, recommended, or narrow REQ-MDL-029).
+- Next: on the answer, the SPEC's size estimate, the reviews, `tools/check`, push and the pull request from `model/impl-0007-step3`.
+
 ## Backlog
 
 ## Blockers
