@@ -44,6 +44,7 @@ Stop after each step for Peter's review of its pull request.
 
 ## Decisions
 
+- 2026-10-25: the `model` SPEC approved (Peter, AQ-002): the drawing's origin is the datum of work offset 1, no placement in the slice; spindle clockwise and coolant on without fields; strategy parameters declared in `model`, numbers only; a measurement point's axial offset is any a ≥ 0 (D-154), above the flute length with a warning naming the shift of every Z. `model`'s budget 260 and research 26, 22, 27, 10, 23 (AQ-003).
 - 2026-10-25: `io`'s budget is 820 NLOC in `architecture/modules.yaml` (Peter, on the agent's question 1). The implementation came to 795 against the 360 set on 2026-10-13; the size is the reviewed SPEC's gap repair with its move bound, five OCS entity types and exact diagnostics, which the simplifier found intrinsic. Splitting the chaining into a module of its own was not taken: a new SPEC for no gain in the slice.
 - 2026-10-13: gaps between DXF entities up to 0.01 mm are repaired with a warning naming the place; larger gaps stop the import naming the place (Peter, answer 1 on the io SPEC draft). Read in `src/splintercam/io/DECISIONS.md`, DEC-IO-001: open chains stop the import too.
 - 2026-10-13: a job unit that differs from the DXF file's unit stops the import; a file without a unit (`$INSUNITS` 0 or missing) follows `docs/research/21-geometry-input.md`, Method 2: the job's unit is used, and without one the import stops with `DXF_NO_UNITS` (Peter, answer 2; DEC-IO-002). A unit io does not read, such as feet, stops the import (ours, DEC-IO-002).

@@ -41,8 +41,8 @@ Entry format:
   3. **A measurement point's axial offset a must lie between 0 and the flute length** (DEC-MDL-004, provisional). A shop that measures a flat end mill above its flutes gets `TOOL_POINT_INVALID` and must measure at the tip. Without the limit, a typing error in a (10 for 1.0) shifts every Z of the program by that amount (research 26, test 10). Recommended: keep the limit; it can be widened when tool assemblies come.
   4. **The parameter declarations live in model** (DEC-MDL-001): each strategy declares its parameters (name, unit, default or none, range, source) with model's `ParameterDeclaration`, and `check_job` refuses a job with a missing, misspelt, repeated or out-of-range value, naming it. Numbers only in the slice (mm, mm/min, dimensionless); the panel fields of docs/dev/11 come with the desktop app. Recommended: as drafted.
 - Recommendation: approve the SPEC as drafted, with 1 to 4 as recommended. Safe default meanwhile: nothing is implemented; the draft's choices stand as provisional.
-- Status: Open
-- Answer:
+- Status: Answered 2026-10-25
+- Answer: SPEC approved with 1, 2 and 4 as recommended (Peter). Item 3 changed (Peter, as Project Spike recommended): D-154 says the user can enter any point, so the axial offset a is any value ≥ 0, not limited to the flute length; a above the flute length is accepted with a warning (not an error) that names the shift of every Z, for example "every Z is output 40 mm above the tip", so a typing error is seen; the setup sheet states the point (D-151). Apply item 3 to `src/splintercam/model/SPEC.md` and DEC-MDL-004, then mark the SPEC Reviewed; recorded in `docs/plans/active/0007-first-nc-program.md`, Decisions.
 
 ## AQ-003: model's budget and research list in architecture/modules.yaml
 
@@ -52,5 +52,5 @@ Entry format:
 - Recommendation: replace the `model` line with exactly:
   `  model:                  { layer: 2, kernel: false, depends_on: [foundation], research: ["26", "22", "27", "10", "23"], budget: 260 }`
   (23 kept for the cutting data that comes later). Safe default meanwhile: no code, so no size to check.
-- Status: Open
-- Answer:
+- Status: Answered 2026-10-25
+- Answer: as recommended (Peter); applied to `architecture/modules.yaml` by the Project Spike session.
