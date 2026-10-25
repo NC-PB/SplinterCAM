@@ -108,6 +108,7 @@ def test_values_are_completed_in_declaration_order_whatever_the_input_order() ->
     assert result.value.setup.operations[0].parameters[-1] == ("air_gap_ratio", 1.0)
 
 
+@pytest.mark.req("REQ-MDL-024")
 def test_values_are_immutable_and_a_checked_job_is_hashable() -> None:
     # model SPEC, Invariants: immutable values, held in memory.
     result = _check(example_job())
