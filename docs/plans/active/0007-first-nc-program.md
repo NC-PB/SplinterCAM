@@ -44,6 +44,7 @@ Stop after each step for Peter's review of its pull request.
 
 ## Decisions
 
+- 2026-10-25: the `model` SPEC approved (Peter, AQ-002): the drawing's origin is the datum of work offset 1, no placement in the slice; spindle clockwise and coolant on without fields; strategy parameters declared in `model`, numbers only; a measurement point's axial offset is any a ≥ 0 (D-154), above the flute length with a warning naming the shift of every Z. `model`'s budget 260 and research 26, 22, 27, 10, 23 (AQ-003).
 - 2026-10-25: `io`'s budget is 820 NLOC in `architecture/modules.yaml` (Peter, on the agent's question 1). The implementation came to 795 against the 360 set on 2026-10-13; the size is the reviewed SPEC's gap repair with its move bound, five OCS entity types and exact diagnostics, which the simplifier found intrinsic. Splitting the chaining into a module of its own was not taken: a new SPEC for no gain in the slice.
 - 2026-10-13: gaps between DXF entities up to 0.01 mm are repaired with a warning naming the place; larger gaps stop the import naming the place (Peter, answer 1 on the io SPEC draft). Read in `src/splintercam/io/DECISIONS.md`, DEC-IO-001: open chains stop the import too.
 - 2026-10-13: a job unit that differs from the DXF file's unit stops the import; a file without a unit (`$INSUNITS` 0 or missing) follows `docs/research/21-geometry-input.md`, Method 2: the job's unit is used, and without one the import stops with `DXF_NO_UNITS` (Peter, answer 2; DEC-IO-002). A unit io does not read, such as feet, stops the import (ours, DEC-IO-002).
@@ -87,6 +88,20 @@ Stop after each step for Peter's review of its pull request.
 
 - Question 1: Peter raised `io`'s budget to 820 (under Decisions). Question 2: offset2d is right on that example and GEOS's buffer is not (8 points 9.02 to 9.29 mm from every curve left out of a C 0.3 to 0.7 mm wide); test 20 now lets research 02 test 9's exact oracle decide where the two disagree, in its own pull request (`offset2d/test-20-oracle`, DEC-OFF-025). NOTICE gains ezdxf, fontTools and pyparsing (ADR 0011).
 - Step 2 done; the pull request follows. Next: step 3, `model`.
+
+### 2026-10-25, step 3 (SPEC draft, for Peter's review)
+
+- `model` had no SPEC and no budget, so step 3 starts with documents only: `src/splintercam/model/SPEC.md` drafted from research 26 (the subset and Structure), 22 (Scope, Parameters), 27 (Datum and Program rows) and 10, with D-154, D-155, D-018 and D-049: 29 requirements, REQ-MDL-001 to 029, all Draft. `src/splintercam/model/DECISIONS.md` holds DEC-MDL-001 to 008. No code until the SPEC is Reviewed.
+- One spec review round and one fix check (D-159): three must-fix findings addressed in the draft: integer and float fields accepted `bool` and other types (JSON's `true` would pass as T1 or tol 1 mm; REQ-MDL-029), the profile could not declare research 22's air gap factor (a dimensionless unit added), and a parameter dict kept a checked job mutable (pairs instead). Spec gaps folded in: a setup without operations is refused, dependent checks skipped, cancellation and declaration errors made exact.
+- Left to other steps, named in the SPEC's Scope: the stock containing the part, z_bottom below z_top, the step-down against the flute length and the allowance above −R (step 5, the profile); heights from the stock top (`toolpath`); program name and number (steps 6 and 7).
+- Size: about 220 NLOC estimated against the step's 200, under the 50 % stop.
+- Questions for Peter: AQ-002 (the SPEC review, with four choices: drawing frame as work frame, spindle CW and coolant on without fields, the range of a point's a, declarations in model) and AQ-003 (`model`'s budget 260 and research list in `architecture/modules.yaml`), in `docs/agents/QUESTIONS.md`.
+- Next: on approval, the implementation pull request: `src/splintercam/model/` with `__init__.py`, `AGENTS.md` and tests first.
+
+### 2026-10-25, step 3 (SPEC reviewed)
+
+- Peter answered AQ-002 and AQ-003 (under Decisions). Item 3 applied: REQ-MDL-006 now takes any a ≥ 0 (D-154) and reports `TOOL_POINT_ABOVE_FLUTE` (warning, the point kept) above the flute length, naming the shift of every Z; DEC-MDL-004 rewritten as Peter's decision, DEC-MDL-001, 002 and 006 no longer provisional. `src/splintercam/model/SPEC.md` Reviewed, REQ-MDL-001 to 029 all Reviewed; `model`'s budget 260 in `architecture/modules.yaml`.
+- Next: after pull request #75 is merged, the implementation on a new branch from `main` (docs/dev/07, no stacked pull requests): `src/splintercam/model/` with `__init__.py` and `AGENTS.md`, tests in `tests/model/` first, tagged with REQ-MDL IDs.
 
 ## Backlog
 
