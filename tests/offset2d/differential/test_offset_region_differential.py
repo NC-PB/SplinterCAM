@@ -18,7 +18,7 @@ import os
 import numpy as np
 import pytest
 import shapely
-from hypothesis import HealthCheck, given, reject, settings
+from hypothesis import HealthCheck, example, given, reject, settings
 from hypothesis import strategies as st
 from numpy.typing import NDArray
 
@@ -26,6 +26,7 @@ from geometry2d_checks import codes
 from offset2d_oracles import (
     DistanceBand,
     dense_loops,
+    in_offset,
     polygon_rows,
     sample_outside_band,
     true_curve_band_mm,
@@ -67,12 +68,28 @@ def _reference(
     )
 
 
+def _narrow_c_case() -> RegionCase:
+    """A 12-gon pocket of radius 20 with one concave arc side and a round island of
+    radius 1; at t = 9 the result is a C 0.3 to 0.7 mm wide that GEOS's buffer partly loses."""
+    corners = [
+        (20.0 * math.cos(k * math.pi / 6), 20.0 * math.sin(k * math.pi / 6)) for k in range(12)
+    ]
+    nan = math.nan
+    wall = [[*corners[k], *corners[k + 1], nan, nan, 0.0] for k in range(11)]
+    wall.append(
+        [*corners[11], 20.0, 0.0, 26.84601792673328, -7.1933688234596325, -1.0966698044786352]
+    )
+    island = [[1.0, 0.0, -1.0, 0.0, 0.0, 0.0, math.pi], [-1.0, 0.0, 1.0, 0.0, 0.0, 0.0, math.pi]]
+    return RegionCase(loops=[wall, island], kind=RegionKind.AIR)
+
+
 @pytest.mark.req("REQ-OFF-020", "REQ-OFF-022", "REQ-OFF-025")
 @settings(
     suppress_health_check=[HealthCheck.function_scoped_fixture],
     deadline=None,
     max_examples=EXAMPLES,
 )
+@example(case=_narrow_c_case(), t_mm=9.0, tol_mm=0.01, seed=0)
 @given(
     case=regions(),
     t_mm=clearances(),
@@ -110,4 +127,9 @@ def test_the_offset_agrees_with_geos_outside_the_band(
         return
     located = point_in_region(points, polygon_rows(ours.points, ours.loop_starts), ctx)
     disagree = np.flatnonzero((located == PointLocation.IN) != expected)
-    assert disagree.size == 0, points[disagree[:5]]
+    # GEOS is a reference, not the definition: its buffer can lose a narrow part of the result
+    # (the case of `_narrow_c_case`: points 9.02 to 9.29 mm from every curve left out at t = 9).
+    # Where the two disagree, test 9's exact oracle decides (p in R and d(p, B) >= t for air).
+    by_definition = in_offset(points[disagree], loops, case.kind, t_mm)
+    wrong = disagree[by_definition != (located[disagree] == PointLocation.IN)]
+    assert wrong.size == 0, points[wrong[:5]]
