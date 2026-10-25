@@ -65,4 +65,5 @@ Entry format:
 - Recommendation: (a). Replace the `model` line of `architecture/modules.yaml` with exactly:
   `  model:                  { layer: 2, kernel: false, depends_on: [foundation], research: ["26", "22", "27", "10", "23"], budget: 360 }`
   and I change the SPEC's size estimate to about 345 NLOC when I resume. The same pull request also passes the change limit: 473 lines of non-test code against 400 (`tools/size-check --change origin/main`; docs/dev/12, section 3). Recommended: the label `large-change` on it, since the module is one unit and splitting the types from `check_job` would leave a first pull request with nothing that checks them. Safe default meanwhile: the work is committed on the branch `model/impl-0007-step3`, not pushed; no requirement is narrowed.
-- Status: Open
+- Status: Answered 2026-10-25
+- Answer: (a), as recommended (Peter): `model`'s budget 360 in `architecture/modules.yaml` (applied by the Project Spike session) and the `large-change` label on the pull request. REQ-MDL-029 stays as reviewed. Also (Peter): from step 4 on, size estimates in a SPEC or plan step are about 1.5 times the first count, for the decomposition the strict lint forces; recorded in `docs/plans/active/0007-first-nc-program.md`, Decisions.
