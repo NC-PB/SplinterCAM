@@ -29,7 +29,7 @@
 - Why it matters: the SPEC already follows the corrected readings; the research text should not lead the next reader back to the old ones.
 - What is known: each item is measured or derived in the DEC entries named.
 - Provisional choice: the SPEC's readings (Peter accepted the deviations of the draft, DEC-OFF-005; the rest are box 2 decisions).
-- Status: Open for items 1 to 6, for Project Spike. Items 7 to 9 answered on 2026-10-10 by Peter: `docs/research/02-offsets-and-booleans.md`, Open chains, corrected in pull request 58 (round ends, one open piece for the C, chains that are not simple refused; DEC-OFF-018 to 021).
+- Status: Answered. Items 1 to 6 on 2026-10-25 by Project Spike: taken into `docs/research/02-offsets-and-booleans.md` as the SPEC reads them (the kernel call, step 3, with the guard of DEC-OFF-011; Open chains, grown path δ = t + t_flat + a + 3u; Source IDs before clean-up; tests 15, 17 and 22; the stock bound with a). Items 7 to 9 answered on 2026-10-10 by Peter: `docs/research/02-offsets-and-booleans.md`, Open chains, corrected in pull request 58 (round ends, one open piece for the C, chains that are not simple refused; DEC-OFF-018 to 021).
 
 
 ## RR-003: Open profiles along a spike that turns back by nearly 180°
