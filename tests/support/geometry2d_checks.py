@@ -10,7 +10,7 @@ from numpy.typing import NDArray
 
 from splintercam import _kernels
 from splintercam.foundation import Context, Result, ToleranceSet
-from splintercam.geometry2d import CurveRows, LoopTree, curve_rows
+from splintercam.geometry2d import Curve, CurveRows, Line, LoopTree, RowStatus, curve_rows
 
 
 def with_length_eps(ctx: Context, length_eps_mm: float) -> Context:
@@ -99,3 +99,25 @@ def nearest_ties(
         out = np.empty((count, 2), dtype=np.int64)
         assert kernel.nearest_ties(q, points, loop_starts, limit_mm, eps_mm, out) == count
     return out[:count]
+
+
+def curve_row(curve: Curve) -> NDArray[np.float64]:
+    """A line or arc as a curve row; a line's centre NaN and its sweep 0 (REQ-G2D-188)."""
+    if isinstance(curve, Line):
+        return np.array([*curve.p0, *curve.p1, math.nan, math.nan, 0.0])
+    return np.array([*curve.p0, *curve.p1, *curve.centre, curve.sweep_rad])
+
+
+def scalar_row(result: Result[Curve]) -> tuple[NDArray[np.float64], int]:
+    """A per-curve result as the array functions give it: the curve row and its `RowStatus`
+    (REQ-G2D-243); a failed result is a NaN row with the status of its first error code."""
+    if result.value is None:
+        return np.full(7, math.nan), RowStatus[codes(result)[0]]
+    return curve_row(result.value), 0
+
+
+def same_bits(a: NDArray[np.float64], b: NDArray[np.float64]) -> bool:
+    """Equal value for value, NaN to NaN and the sign of zeros included."""
+    return bool(
+        np.array_equal(a, b, equal_nan=True) and np.array_equal(np.signbit(a), np.signbit(b))
+    )

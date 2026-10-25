@@ -62,6 +62,16 @@ def check_arcs(rows: Annotated[NDArray[numpy.float64], dict(shape=(None, 7), ord
     Write per curve row 0 (consistent), 1 (P1 off the circle) or 2 (sweep does not fit).
     """
 
+def rows_from_ends(p0: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], p1: Annotated[NDArray[numpy.float64], dict(shape=(None, 2), order='C', device='cpu', writable=False)], values: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu', writable=False)], values_are_sweeps: bool, length_eps_mm: float, rows: Annotated[NDArray[numpy.float64], dict(shape=(None, 7), order='C', device='cpu')], status: Annotated[NDArray[numpy.int8], dict(shape=(None,), order='C', device='cpu')]) -> None:
+    """
+    Write the curve rows from end points and bulges or sweeps, and per row 0 (ok), 1 (curve invalid) or 2 (arc inconsistent) (DEC-G2D-044).
+    """
+
+def row_boxes(rows: Annotated[NDArray[numpy.float64], dict(shape=(None, 7), order='C', device='cpu', writable=False)], boxes: Annotated[NDArray[numpy.float64], dict(shape=(None, 4), order='C', device='cpu')]) -> None:
+    """
+    Write per curve row its bounding box [x_min, y_min, x_max, y_max] (DEC-G2D-044).
+    """
+
 def basic_atan2(y: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu', writable=False)], x: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu', writable=False)], out: Annotated[NDArray[numpy.float64], dict(shape=(None,), order='C', device='cpu')]) -> None:
     """The arctangent the kernel decides with, for tests (REQ-G2D-018)."""
 

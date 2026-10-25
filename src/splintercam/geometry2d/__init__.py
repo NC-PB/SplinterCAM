@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """geometry2d: planar curves, exact signs and the algorithms on them (see SPEC.md)."""
 
+from ._arcrows import BuiltRows, RowStatus, row_boxes, rows_from_bulges, rows_from_sweeps
 from ._area import signed_area
 from ._box import Box, bounding_box
 from ._build import build_region
@@ -22,6 +23,7 @@ __all__ = [
     "AirSide",
     "Arc",
     "Box",
+    "BuiltRows",
     "Circle",
     "ClosestPoint",
     "Curve",
@@ -34,6 +36,7 @@ __all__ = [
     "PointLocation",
     "PolygonRegion",
     "RegionKind",
+    "RowStatus",
     "arc_from_bulge",
     "are_parallel",
     "bounding_box",
@@ -54,5 +57,8 @@ __all__ = [
     "orient2d",
     "point_in_region",
     "polygon_region",
+    "row_boxes",
+    "rows_from_bulges",
+    "rows_from_sweeps",
     "signed_area",
 ]
