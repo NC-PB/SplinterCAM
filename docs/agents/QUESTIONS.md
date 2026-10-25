@@ -64,5 +64,5 @@ Entry format:
   - (b) Narrow REQ-MDL-029 so that a tool or operation with any field of the wrong type gets only `VALUE_TYPE_INVALID` and none of its other checks: the user fixes the types, runs again, and only then sees range errors. That saves about 30 NLOC, which is just enough for the hard limit of 312 and not for the budget of 260.
 - Recommendation: (a). Replace the `model` line of `architecture/modules.yaml` with exactly:
   `  model:                  { layer: 2, kernel: false, depends_on: [foundation], research: ["26", "22", "27", "10", "23"], budget: 360 }`
-  and I change the SPEC's size estimate to about 345 NLOC when I resume. Safe default meanwhile: the work is committed on the branch `model/impl-0007-step3`, not pushed; no requirement is narrowed.
+  and I change the SPEC's size estimate to about 345 NLOC when I resume. The same pull request also passes the change limit: 473 lines of non-test code against 400 (`tools/size-check --change origin/main`; docs/dev/12, section 3). Recommended: the label `large-change` on it, since the module is one unit and splitting the types from `check_job` would leave a first pull request with nothing that checks them. Safe default meanwhile: the work is committed on the branch `model/impl-0007-step3`, not pushed; no requirement is narrowed.
 - Status: Open
