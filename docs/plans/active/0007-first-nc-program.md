@@ -32,7 +32,7 @@ Answered 2026-10-11: all as recommended. For question 2, step 1 checks the three
 <!-- Each step has a size estimate (kept code + tests). At 50 % over it, stop and ask (docs/dev/12, section 3). -->
 
 - [x] 1. **Research pull** (Project Spike): topics 21 (DXF part), 22 (outside profile), 10 (clearance-height links only), 26 (the record subset: rapid, linear, arc, feed, spindle, tool, work offset, comment) and 27 (the NCX words for that subset, and how `ncx` is called) at L4 for these parts, moved to `docs/research/`. Size: docs only.
-- [ ] 2. **`io`: DXF to curve rows.** ezdxf; closed chains of lines, arcs and bulges in millimetres; a file without units refused with a diagnostic (D-033); part size reported. Size: about 200 + 250.
+- [x] 2. **`io`: DXF to curve rows.** ezdxf; closed chains of lines, arcs and bulges in millimetres; a file without units refused with a diagnostic (D-033); part size reported. Size: about 200 + 250.
 - [ ] 3. **`model`: the slice's job data.** Tool (flat end mill, measurement point), stock box, setup (work offset, frame), operation parameters as declarations (D-018), held in memory. Size: about 200 + 200.
 - [ ] 4. **`cl`: the toolpath record subset** of topic 26: moves, feeds, spindle, tool, work offset, comments, operation name and note (feature map, section 6). Size: about 150 + 200.
 - [ ] 5. **`strategies/profile` with the slice's `toolpath` links.** `offset_region` GROW of the material contour by R + allowance; depth passes; start point; climb; clearance-height retract. Size: about 250 + 300.
@@ -44,6 +44,7 @@ Stop after each step for Peter's review of its pull request.
 
 ## Decisions
 
+- 2026-10-25: `io`'s budget is 820 NLOC in `architecture/modules.yaml` (Peter, on the agent's question 1). The implementation came to 795 against the 360 set on 2026-10-13; the size is the reviewed SPEC's gap repair with its move bound, five OCS entity types and exact diagnostics, which the simplifier found intrinsic. Splitting the chaining into a module of its own was not taken: a new SPEC for no gain in the slice.
 - 2026-10-13: gaps between DXF entities up to 0.01 mm are repaired with a warning naming the place; larger gaps stop the import naming the place (Peter, answer 1 on the io SPEC draft). Read in `src/splintercam/io/DECISIONS.md`, DEC-IO-001: open chains stop the import too.
 - 2026-10-13: a job unit that differs from the DXF file's unit stops the import; a file without a unit (`$INSUNITS` 0 or missing) follows `docs/research/21-geometry-input.md`, Method 2: the job's unit is used, and without one the import stops with `DXF_NO_UNITS` (Peter, answer 2; DEC-IO-002). A unit io does not read, such as feet, stops the import (ours, DEC-IO-002).
 - 2026-10-11: the slice's machine is the Heidenhain iTNC 530 (`machines/heidenhain-itnc530.toml` in NCXchange), Peter's pick after step 1 showed that all three shipped mill files compile the slice's program (question 2). Peter's dry run (step 8) is on that control.
@@ -81,6 +82,11 @@ Stop after each step for Peter's review of its pull request.
   1. **size-check, hard**: module `io` is 795 NLOC, over the budget + 20 % (432) of its 360 budget. The two-stage matching, the move bound B, the five OCS entity types and the diagnostic ordering the SPEC reviews added, together with the strict lint (≤ 5 args, complexity ≤ 10) that forces decomposition, put io at ~26 NLOC per requirement. Raising `io`'s budget in `architecture/modules.yaml` is Peter's call (question 1 below).
   2. **pytest**: `tests/offset2d/differential/test_offset_region_differential.py::test_the_offset_agrees_with_geos_outside_the_band` fails on a Hypothesis counterexample (an AIR region at `t_mm=9.0`, `tol_mm=0.01`). This is in offset2d, not io; the diff touches no offset2d or geometry2d source, so `offset_region` is byte-identical to `main` and fails identically there for this input. A pre-existing latent offset2d issue surfaced because the foundation change made `tools/check` run all dependents. Not fixed here (out of scope; no test weakened). Reported as question 2 below.
 - Not pushed: `tools/check` fails on the two items above, both needing Peter. The branch `io/dxf-import-0007-step2` holds the work.
+
+### 2026-10-25, step 2 (answers, Project Spike session)
+
+- Question 1: Peter raised `io`'s budget to 820 (under Decisions). Question 2: offset2d is right on that example and GEOS's buffer is not (8 points 9.02 to 9.29 mm from every curve left out of a C 0.3 to 0.7 mm wide); test 20 now lets research 02 test 9's exact oracle decide where the two disagree, in its own pull request (`offset2d/test-20-oracle`, DEC-OFF-025). NOTICE gains ezdxf, fontTools and pyparsing (ADR 0011).
+- Step 2 done; the pull request follows. Next: step 3, `model`.
 
 ## Backlog
 
