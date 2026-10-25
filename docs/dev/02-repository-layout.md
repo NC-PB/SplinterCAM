@@ -28,6 +28,7 @@ SplinterCAM/
 │   ├── plans/
 │   │   ├── active/            execution plans with progress logs
 │   │   └── completed/
+│   ├── agents/QUESTIONS.md    questions from coding agents and their answers (AQ-NNN)
 │   ├── glossary.md            domain terms and the code names for them
 │   └── generated/             produced by tools; never edited by hand
 ├── schemas/                   JSON schemas: job, tool, machine, CL data, test case
