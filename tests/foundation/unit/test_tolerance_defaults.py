@@ -131,3 +131,16 @@ def test_offset_parameters_are_declared_and_fixed(
     assert parameter.unit == unit
     assert parameter.source == source
     assert parameter.range == (default, default)
+
+
+@pytest.mark.req("REQ-FND-014")
+def test_dxf_gap_close_is_declared_adjustable_with_zero_allowed() -> None:
+    # The DXF import's gap limit (io SPEC, REQ-IO-022): 0.01 mm by default, 0 disables it, so the
+    # range includes 0 and the parameter is adjustable (not fixed at both ends).
+    parameter = TOLERANCE_DEFAULTS["dxf_gap_close_mm"]
+    assert parameter.default == 0.01
+    assert parameter.unit == "mm"
+    low, high = parameter.range
+    assert low == 0.0
+    assert low < high
+    assert parameter.source.strip()

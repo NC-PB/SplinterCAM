@@ -48,3 +48,8 @@ flatten_step_max_rad = { default = 1.5707963267948966, unit = "rad", range = [1.
 # turn a round join may take (research 02, Parameters).
 offset_bias_grid_units = { default = 3, unit = "grid units", range = [3, 3], source = "D-132" }
 join_steps_max = { default = 65536, unit = "steps per turn", range = [65536, 65536], source = "research 02, Parameters (prototype REQ-OFF-014)" }
+
+# Declared here for io (REQ-IO-022): the largest gap between curve-row ends that the DXF import
+# closes with a warning; 0 disables gap closing. Default 0.01 mm, the finishing tolerance (DEC-IO-001,
+# plan 0007 answer 1; research 21, Parameters). User-adjustable, so not a fixed value.
+dxf_gap_close_mm = { default = 0.01, unit = "mm", range = [0.0, 1.0], source = "DEC-IO-001 (plan 0007 answer 1); research 21, Parameters" }

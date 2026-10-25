@@ -11,5 +11,13 @@ Jonathan Richard Shewchuk, "Routines for Arbitrary Precision Floating-point Arit
 Fast Robust Geometric Predicates", 1996, https://www.cs.cmu.edu/~quake/robust.html.
 Placed in the public domain by its author; vendored unchanged.
 
+ezdxf (https://ezdxf.mozman.at/), DXF reader used in src/splintercam/io (ADR 0011)
+Copyright (c) 2020 Manfred Moitzi. MIT License.
+Its runtime dependencies, also under the MIT License:
+  fontTools (https://github.com/fonttools/fonttools), Copyright (c) 2017 Just van Rossum.
+  pyparsing (https://github.com/pyparsing/pyparsing), Copyright (c) 2003-2025 Paul McGuire.
+The MIT License text ships with each package in its dist-info folder and is reproduced in
+binary distributions.
+
 Planned (ADR 0004): Open CASCADE Technology through OCP, Qt through PySide6,
 NumPy, Clipper2, Boost.Polygon, nanobind.
