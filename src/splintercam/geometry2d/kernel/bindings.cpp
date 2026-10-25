@@ -36,6 +36,8 @@ using DoubleOut = nb::ndarray<double, nb::shape<-1>, nb::c_contig, nb::device::c
 using PointsOut = nb::ndarray<double, nb::shape<-1, 2>, nb::c_contig, nb::device::cpu>;
 using PointRows = nb::ndarray<const double, nb::shape<-1, 2>, nb::c_contig, nb::device::cpu>;
 using Int8Out = nb::ndarray<std::int8_t, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
+using RowsOut = nb::ndarray<double, nb::shape<-1, row_width>, nb::c_contig, nb::device::cpu>;
+using BoxesOut = nb::ndarray<double, nb::shape<-1, 4>, nb::c_contig, nb::device::cpu>;
 using Flags = nb::ndarray<const std::uint8_t, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
 using Counts = nb::ndarray<const std::int64_t, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
 using CountsOut = nb::ndarray<std::int64_t, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
@@ -474,6 +476,29 @@ void bind(nb::module_& m) {
         },
         nb::arg("rows"), nb::arg("length_eps_mm"), nb::arg("out"),
         "Write per curve row 0 (consistent), 1 (P1 off the circle) or 2 (sweep does not fit).");
+    m.def(
+        "rows_from_ends",
+        [](const PointRows& p0, const PointRows& p1, const Values& values, bool values_are_sweeps,
+           double length_eps_mm, const RowsOut& rows, const Int8Out& status) {
+            check_rows(p0.shape(0), {p1.shape(0), values.shape(0), rows.shape(0), status.shape(0)});
+            rows_from_ends({.points0 = view(p0),
+                            .points1 = view(p1),
+                            .values = view(values),
+                            .values_are_sweeps = values_are_sweeps},
+                           length_eps_mm, view(rows), view(status));
+        },
+        nb::arg("p0"), nb::arg("p1"), nb::arg("values"), nb::arg("values_are_sweeps"),
+        nb::arg("length_eps_mm"), nb::arg("rows"), nb::arg("status"),
+        "Write the curve rows from end points and bulges or sweeps, and per row 0 (ok), "
+        "1 (curve invalid) or 2 (arc inconsistent) (DEC-G2D-044).");
+    m.def(
+        "row_boxes",
+        [](const Rows& rows, const BoxesOut& boxes) {
+            check_rows(rows.shape(0), {boxes.shape(0)});
+            row_boxes(view(rows), view(boxes));
+        },
+        nb::arg("rows"), nb::arg("boxes"),
+        "Write per curve row its bounding box [x_min, y_min, x_max, y_max] (DEC-G2D-044).");
     m.def(
         "basic_atan2",
         [](const Values& y, const Values& x, const DoubleOut& out) {
