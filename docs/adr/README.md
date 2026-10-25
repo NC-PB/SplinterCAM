@@ -16,3 +16,4 @@ One file per decision, numbered, never edited after acceptance (a new ADR supers
 | [0008](0008-deterministic-output.md) | Deterministic output | Accepted 2026-09-27 |
 | [0009](0009-vendored-shewchuk-predicates.md) | Vendor Shewchuk's predicates.c for the exact predicates | Proposed 2026-10-02 |
 | [0010](0010-shapely-geos-test-only.md) | shapely and GEOS as a test-only differential reference | Accepted 2026-10-09 |
+| [0011](0011-ezdxf-dxf-reader.md) | ezdxf as the DXF reader of io | Accepted 2026-10-13 |
