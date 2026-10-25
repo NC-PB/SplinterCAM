@@ -54,3 +54,16 @@ Entry format:
   (23 kept for the cutting data that comes later). Safe default meanwhile: no code, so no size to check.
 - Status: Answered 2026-10-25
 - Answer: as recommended (Peter); applied to `architecture/modules.yaml` by the Project Spike session.
+
+## AQ-004: model's size, 344 NLOC against the budget 260 (plan 0007, step 3)
+
+- Asked: 2026-10-25, plan 0007 step 3, by the coding agent (headless run)
+- Box: 1 (Peter's judgement: `architecture/modules.yaml`, and the Reviewed requirements if they are narrowed)
+- Question: the `model` implementation is done and all 29 requirements pass their tests (87 tests in `tests/model/`), but it comes to 344 NLOC (`tools/size-check`) against the budget of 260 (hard limit 312) and the SPEC's estimate of 220. That is 56 % over the estimate, past the 50 % stop of docs/dev/12, section 3, so `tools/check` fails and nothing is pushed. The `simplifier` found about 15 NLOC to remove (applied: 352 to 344) and judged the rest intrinsic to the Reviewed SPEC. The estimate gave `check_job` about 110 NLOC; it is about 230, because of REQ-MDL-029 (a type check on every field, each wrong field skipping only its own checks), REQ-MDL-026 (type errors first, a fixed order, `PARAM_REPEATED` at its position) and REQ-MDL-027 (a location for every element); about 40 NLOC of imports and `__all__` were not in the estimate. For the user nothing changes between the options: both report the same errors for a job file with one mistake. They differ for a job file with several mistakes in one tool or operation:
+  - (a) Raise the budget, keep the SPEC: every wrong value is reported at once, as now.
+  - (b) Narrow REQ-MDL-029 so that a tool or operation with any field of the wrong type gets only `VALUE_TYPE_INVALID` and none of its other checks: the user fixes the types, runs again, and only then sees range errors. That saves about 30 NLOC, which is just enough for the hard limit of 312 and not for the budget of 260.
+- Recommendation: (a). Replace the `model` line of `architecture/modules.yaml` with exactly:
+  `  model:                  { layer: 2, kernel: false, depends_on: [foundation], research: ["26", "22", "27", "10", "23"], budget: 360 }`
+  and I change the SPEC's size estimate to about 345 NLOC when I resume. The same pull request also passes the change limit: 473 lines of non-test code against 400 (`tools/size-check --change origin/main`; docs/dev/12, section 3). Recommended: the label `large-change` on it, since the module is one unit and splitting the types from `check_job` would leave a first pull request with nothing that checks them. Safe default meanwhile: the work is committed on the branch `model/impl-0007-step3`, not pushed; no requirement is narrowed.
+- Status: Answered 2026-10-25
+- Answer: (a), as recommended (Peter): `model`'s budget 360 in `architecture/modules.yaml` (applied by the Project Spike session) and the `large-change` label on the pull request. REQ-MDL-029 stays as reviewed. Also (Peter): from step 4 on, size estimates in a SPEC or plan step are about 1.5 times the first count, for the decomposition the strict lint forces; recorded in `docs/plans/active/0007-first-nc-program.md`, Decisions.

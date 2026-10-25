@@ -33,7 +33,7 @@ Answered 2026-10-11: all as recommended. For question 2, step 1 checks the three
 
 - [x] 1. **Research pull** (Project Spike): topics 21 (DXF part), 22 (outside profile), 10 (clearance-height links only), 26 (the record subset: rapid, linear, arc, feed, spindle, tool, work offset, comment) and 27 (the NCX words for that subset, and how `ncx` is called) at L4 for these parts, moved to `docs/research/`. Size: docs only.
 - [x] 2. **`io`: DXF to curve rows.** ezdxf; closed chains of lines, arcs and bulges in millimetres; a file without units refused with a diagnostic (D-033); part size reported. Size: about 200 + 250.
-- [ ] 3. **`model`: the slice's job data.** Tool (flat end mill, measurement point), stock box, setup (work offset, frame), operation parameters as declarations (D-018), held in memory. Size: about 200 + 200.
+- [x] 3. **`model`: the slice's job data.** Tool (flat end mill, measurement point), stock box, setup (work offset, frame), operation parameters as declarations (D-018), held in memory. Size: about 200 + 200.
 - [ ] 4. **`cl`: the toolpath record subset** of topic 26: moves, feeds, spindle, tool, work offset, comments, operation name and note (feature map, section 6). Size: about 150 + 200.
 - [ ] 5. **`strategies/profile` with the slice's `toolpath` links.** `offset_region` GROW of the material contour by R + allowance; depth passes; start point; climb; clearance-height retract. Size: about 250 + 300.
 - [ ] 6. **`ncx`: the writer and the call.** NCX at the resolution of D-149; `ncx check --strict` and `ncx compile` run as a subprocess; NCXchange's messages mapped to the operation (feature map, section 8). Size: about 200 + 250.
@@ -44,6 +44,7 @@ Stop after each step for Peter's review of its pull request.
 
 ## Decisions
 
+- 2026-10-25: `model`'s budget 360 and the `large-change` label for its pull request (Peter, AQ-004); REQ-MDL-029's type checks stay. From step 4 on, every size estimate is about 1.5 times the first count (Peter): `io` came to about four times the plan's figure and `model` to 1.56 times its SPEC's, because the strict lint (at most 5 arguments, complexity at most 10) splits the code into many small functions. The plan's figures for steps 4 to 7 are read that way.
 - 2026-10-25: the `model` SPEC approved (Peter, AQ-002): the drawing's origin is the datum of work offset 1, no placement in the slice; spindle clockwise and coolant on without fields; strategy parameters declared in `model`, numbers only; a measurement point's axial offset is any a ≥ 0 (D-154), above the flute length with a warning naming the shift of every Z. `model`'s budget 260 and research 26, 22, 27, 10, 23 (AQ-003).
 - 2026-10-25: `io`'s budget is 820 NLOC in `architecture/modules.yaml` (Peter, on the agent's question 1). The implementation came to 795 against the 360 set on 2026-10-13; the size is the reviewed SPEC's gap repair with its move bound, five OCS entity types and exact diagnostics, which the simplifier found intrinsic. Splitting the chaining into a module of its own was not taken: a new SPEC for no gain in the slice.
 - 2026-10-13: gaps between DXF entities up to 0.01 mm are repaired with a warning naming the place; larger gaps stop the import naming the place (Peter, answer 1 on the io SPEC draft). Read in `src/splintercam/io/DECISIONS.md`, DEC-IO-001: open chains stop the import too.
@@ -102,6 +103,23 @@ Stop after each step for Peter's review of its pull request.
 
 - Peter answered AQ-002 and AQ-003 (under Decisions). Item 3 applied: REQ-MDL-006 now takes any a ≥ 0 (D-154) and reports `TOOL_POINT_ABOVE_FLUTE` (warning, the point kept) above the flute length, naming the shift of every Z; DEC-MDL-004 rewritten as Peter's decision, DEC-MDL-001, 002 and 006 no longer provisional. `src/splintercam/model/SPEC.md` Reviewed, REQ-MDL-001 to 029 all Reviewed; `model`'s budget 260 in `architecture/modules.yaml`.
 - Next: after pull request #75 is merged, the implementation on a new branch from `main` (docs/dev/07, no stacked pull requests): `src/splintercam/model/` with `__init__.py` and `AGENTS.md`, tests in `tests/model/` first, tagged with REQ-MDL IDs.
+
+### 2026-10-25, step 3 (model implementation, stopped on size)
+
+- Implemented `src/splintercam/model/` against the Reviewed SPEC: `_types.py` (the data types, `ParameterDeclaration` raising on an invalid declaration), `_check.py` (`check_job`), `__init__.py`, `AGENTS.md`; DEC-MDL-009 records the locations of containers and elements of the wrong type, which REQ-MDL-027 does not reach. All 29 requirements, REQ-MDL-001 to 029.
+- Tests first: `tests/model/unit/test_check_job.py` (84 unit tests, every requirement and the SPEC's example parts) and `tests/model/property/test_check_job_properties.py` (3 property tests: a valid job comes back completed and idempotent; a broken field gives its code once at its location; the fixed order). Shared builders in `tests/support/model_jobs.py`. `tools/test-one model`: 87 passed. ruff and pyright strict clean on the module and its tests.
+- Size: 344 NLOC against the budget 260 (hard limit 312) and the SPEC's estimate 220, 56 % over, past the 50 % stop. The `simplifier` found about 15 NLOC to remove (applied, from 352) and judged the rest intrinsic to REQ-MDL-026, 027 and 029. `tools/check` therefore fails on size-check; not pushed, no pull request.
+- Not yet run: `spec-reviewer` and `test-auditor` (they run on the final diff after the answer); step 3 is not ticked.
+- Question: AQ-004 (raise `model`'s budget to 360, recommended, or narrow REQ-MDL-029).
+- Next: on the answer, the SPEC's size estimate, the reviews, `tools/check`, push and the pull request from `model/impl-0007-step3`.
+
+### 2026-10-25, step 3 (reviews, done)
+
+- AQ-004 answered (Peter): budget 360, REQ-MDL-029 kept, the `large-change` label on the pull request. `src/splintercam/model/SPEC.md`: "Verified by" names the tests, the size section the measured size.
+- `spec-reviewer`, must fix: a `setup` or `stock` of the wrong type raised `AttributeError` (now `VALUE_TYPE_INVALID`). Spec gaps decided in DEC-MDL-009 and fixed: `PARAM_REPEATED` before the range check within one parameter (REQ-MDL-026), every repeated value checked (REQ-MDL-025), a point located by its number as given (REQ-MDL-027), DEC-MDL-009's text on `OP_TOOL_UNKNOWN` corrected; the empty-container test no longer compares a wrong-typed container with `()`. Not fixed: ints of more than 4300 digits (json refuses them first; recorded), `:g` in range texts, a bool default in a declaration (code, typed).
+- `test-auditor`, must fix, all done: REQ-MDL-018 cases isolated (default None, each matching its own message); closed range ends tested (REQ-MDL-023); r NaN and inf (REQ-MDL-006); the SPEC's first invariant checked on every returned job and 7 more breakers (every error code now generated). Nice to have done: the dimension named, the flute-length skip, extent equal to eps_len and a non-finite low corner, the order within a tool and an operation.
+- Size: 358 NLOC of the budget 360; tests 95 (`tools/test-one model`). `tools/check` passes.
+- Next: step 4, `cl`, after this pull request is merged. From step 4 on, estimates are about 1.5 times the first count (Decisions).
 
 ## Backlog
 
