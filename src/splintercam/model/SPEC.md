@@ -6,7 +6,7 @@
 
 | | |
 | --- | --- |
-| Status | Draft (2026-10-25), for Peter's review (`docs/agents/QUESTIONS.md`, AQ-002). Nothing is implemented. Choices marked "(ours)" are in `src/splintercam/model/DECISIONS.md` |
+| Status | Reviewed (2026-10-25, Peter: AQ-002 and AQ-003 in `docs/agents/QUESTIONS.md`; plan 0007, Decisions). Nothing is implemented. Choices marked "(ours)" are in `src/splintercam/model/DECISIONS.md` and stand as the contract |
 | Layer | 2 (see architecture/modules.yaml) |
 | Depends on | foundation (`Context`, `Result`, `Diagnostic`, `Severity`, `CANCELLED`, `ToleranceSet`) |
 | Research | [26][r26], sections The subset plan 0007 uses, Structure (setup and operation header); [22][r22], Scope and Parameters; [27][r27], Datum and Program rows of the controller table; [10][r10], Method (heights from the stock top) |
@@ -108,35 +108,35 @@ def check_job(job: JobData, declarations: Mapping[str, Sequence[ParameterDeclara
 
 | ID | Requirement (EARS) | Verified by | Status |
 | --- | --- | --- | --- |
-| REQ-MDL-001 | THE model module SHALL hold a flat end mill as its number, diameter and flute length in mm and an ordered tuple of measurement points, with the tip `TIP` (k = 1, a = 0, r = 0) as the default (research 22, Scope; research 26 subset; D-154). | unit | Draft |
-| REQ-MDL-002 | IF a tool's number is below 1, THEN `check_job` SHALL report `TOOL_NUMBER_INVALID` (error) (ours: NCX `TOOL=n`; the upper limit is the machine's, which NCXchange reports, D-148). | unit | Draft |
-| REQ-MDL-003 | IF a tool's diameter or flute length is not finite or not above 0, THEN `check_job` SHALL report `TOOL_DIMENSION_INVALID` (error) naming the dimension and its value. | unit | Draft |
-| REQ-MDL-004 | IF two tools have the same number, THEN `check_job` SHALL report `TOOL_NUMBER_DUPLICATE` (error) on the second (ours: a T number names one tool of the job). | unit | Draft |
-| REQ-MDL-005 | IF a tool has no measurement point, or its points are not numbered 1, 2, …, n in their order, THEN `check_job` SHALL report `TOOL_POINT_NUMBERS` (error) (D-155: 1 for the tool's first point; numbering the rest in order ours, DEC-MDL-008). | unit | Draft |
-| REQ-MDL-006 | IF a point's axial offset a is not finite or lies outside [0, flute length], or its register radius r is not finite or lies outside [0, R], THEN `check_job` SHALL report `TOOL_POINT_INVALID` (error) naming the point, the value and the range (r ≤ R: D-154, r is not larger than the radius that cuts, which for a flat end mill is R along the whole flute; the range of a ours, provisional, DEC-MDL-004). The check is skipped for a tool with `TOOL_DIMENSION_INVALID`. | unit | Draft |
-| REQ-MDL-007 | THE model module SHALL hold the stock as an axis-aligned box in the work frame, by its two corners in mm, with its top as the largest z (D-026; research 10, Method, the heights from the stock top). | unit | Draft |
-| REQ-MDL-008 | IF a stock corner coordinate is not finite, or the box's extent along any axis is not above eps_len, THEN `check_job` SHALL report `STOCK_BOX_INVALID` (error) naming the axis. | unit | Draft |
-| REQ-MDL-009 | THE model module SHALL hold one setup with its work offset, its stock and its operations in the user's order (D-078, D-126); the work frame is the part's frame, the drawing's coordinates (research 26 subset: placement the identity; DEC-MDL-002). IF the setup has no operation, THEN `check_job` SHALL report `SETUP_NO_OPERATION` (error) (ours: a program without moves is not a result). | unit | Draft |
-| REQ-MDL-010 | IF the work offset is below 1, THEN `check_job` SHALL report `SETUP_WORK_OFFSET_INVALID` (error) (research 26, Structure: an integer ≥ 1; trap 13: an index, not a G code; the upper limit per controller is NCXchange's, research 27, Datum row, D-148). | unit | Draft |
-| REQ-MDL-011 | THE model module SHALL hold an operation as its name, strategy id, tool number, point number (1 by default, D-154), spindle speed in 1/min, tolerance tol in mm and parameter values by name (D-052; research 26, operation header). | unit | Draft |
-| REQ-MDL-012 | IF an operation's name is empty or holds a character other than an ASCII letter, a digit or an underscore, THEN `check_job` SHALL report `OP_NAME_INVALID` (error) (research 26 subset: `name` in letters, digits and underscores; checked condition 2). | unit | Draft |
-| REQ-MDL-013 | IF two operations have the same name, THEN `check_job` SHALL report `OP_NAME_DUPLICATE` (error) on the second (ours, DEC-MDL-005: NCXchange's messages are mapped back to the operation by its section, plan 0007 step 6). | unit | Draft |
-| REQ-MDL-014 | IF an operation's tool number names no tool of the job, THEN `check_job` SHALL report `OP_TOOL_UNKNOWN` (error); IF it names a tool that has no point with the operation's point number, THEN `OP_POINT_UNKNOWN` (error). | unit | Draft |
-| REQ-MDL-015 | IF an operation's spindle speed is not finite or not above 0, THEN `check_job` SHALL report `OP_SPINDLE_INVALID` (error) (research 22, Parameters: > 0; the machine's maximum later, feature map, machine limits). | unit | Draft |
-| REQ-MDL-016 | THE `check_job` function SHALL check each operation's tol with `ToleranceSet.for_operation` and report its error diagnostics with the operation as location; IF tol is not finite, THEN it SHALL report `OP_TOL_INVALID` (error) instead of calling it (REQ-FND-009, 010: no range of its own; `for_operation` raises on a non-finite tol). | unit | Draft |
-| REQ-MDL-017 | THE model module SHALL provide `ParameterDeclaration`: name, unit (mm, mm/min or dimensionless, D-028; rad and 1/min come with the first parameter that needs them), default or none, a range whose ends are each inclusive or exclusive and may be infinite, and source (D-049; D-018: the operation panels are generated from these). Values are float64 in the declared unit. | unit | Draft |
-| REQ-MDL-018 | IF a declaration's name is not a Python identifier, its unit is not a `Unit`, its source is empty, an end of its range is NaN, its range contains no finite value, or its default is not finite or lies outside the range, THEN constructing it SHALL raise `ValueError` (a programming error in the strategy). | unit | Draft |
-| REQ-MDL-019 | IF a strategy's declarations repeat a name, THEN `check_job` SHALL raise `ValueError` before it checks anything (a programming error in the strategy, not a diagnostic of the job). | unit | Draft |
-| REQ-MDL-020 | IF an operation's strategy id is not a key of `declarations`, THEN `check_job` SHALL report `OP_STRATEGY_UNKNOWN` (error) and check none of its parameter values. | unit | Draft |
-| REQ-MDL-021 | IF an operation gives a value for a name its strategy does not declare, THEN `check_job` SHALL report `PARAM_UNKNOWN` (error) naming it (ours: a misspelt name would otherwise leave the default in force unseen); IF it gives a name twice, THEN `PARAM_REPEATED` (error). | unit | Draft |
-| REQ-MDL-022 | IF a declared parameter without a default has no value, THEN `check_job` SHALL report `PARAM_MISSING` (error) naming it and its unit. | unit: research 22, Parameters (step-down and feeds have no default) | Draft |
-| REQ-MDL-023 | IF a value is not finite or lies outside its declared range, THEN `check_job` SHALL report `PARAM_OUT_OF_RANGE` (error) naming the parameter, the value, the range with its open or closed ends, and the unit. | unit: research 22, Parameters (feeds > 0) | Draft |
-| REQ-MDL-024 | WHEN `check_job` reports no error, THE returned job SHALL equal the input except that each operation's `parameters` holds every declared parameter of its strategy, in declaration order, the default where the operation gave no value. | unit, property | Draft |
-| REQ-MDL-025 | THE `check_job` function SHALL check every element and return every diagnostic, not only the first, and SHALL return no value when any is an error (ours, as io). | unit | Draft |
-| REQ-MDL-026 | THE `check_job` function SHALL return its diagnostics in this order: tools in job order; the stock; the setup (work offset, then `SETUP_NO_OPERATION`); operations in the user's order. Within a tool or an operation, `VALUE_TYPE_INVALID` first, then in the order of the requirements above; parameters in declaration order, then unknown names sorted by code point; `PARAM_REPEATED` at the repeated name's position (ours, D-055). | unit, property | Draft |
-| REQ-MDL-027 | THE `check_job` function SHALL give every diagnostic a location naming its element: `tool <index> (T<number>)`, `tool <index> (T<number>), point <k>`, `stock`, `setup`, `operation <index> (<name>)`, `operation <index> (<name>), parameter <name>`; indexes from 1 (ours). | unit | Draft |
-| REQ-MDL-028 | WHEN `ctx.cancel` is set at entry, THE `check_job` function SHALL return no value and `CANCELLED` alone (REQ-FND-013; the check is too short to poll again). | unit | Draft |
-| REQ-MDL-029 | IF a field or parameter value is not of its type (numbers k, T, work offset and the operation's tool and point: `int`, not `bool`; lengths, speeds, tol and parameter values: `int` or `float`, not `bool`, and an `int` that converts to a finite float; names and the strategy id: `str`; the stock corners: tuples of three numbers; the tools, points and operations: tuples of their types; each parameter entry: a pair of a `str` and a number), THEN `check_job` SHALL report `VALUE_TYPE_INVALID` (error) naming the field and the type found, and skip that field's other checks (ours, DEC-MDL-003: JSON's `true` reaches Python as `True`, an `int`, which would pass as tool number 1 or tol 1 mm). | unit, property | Draft |
+| REQ-MDL-001 | THE model module SHALL hold a flat end mill as its number, diameter and flute length in mm and an ordered tuple of measurement points, with the tip `TIP` (k = 1, a = 0, r = 0) as the default (research 22, Scope; research 26 subset; D-154). | unit | Reviewed |
+| REQ-MDL-002 | IF a tool's number is below 1, THEN `check_job` SHALL report `TOOL_NUMBER_INVALID` (error) (ours: NCX `TOOL=n`; the upper limit is the machine's, which NCXchange reports, D-148). | unit | Reviewed |
+| REQ-MDL-003 | IF a tool's diameter or flute length is not finite or not above 0, THEN `check_job` SHALL report `TOOL_DIMENSION_INVALID` (error) naming the dimension and its value. | unit | Reviewed |
+| REQ-MDL-004 | IF two tools have the same number, THEN `check_job` SHALL report `TOOL_NUMBER_DUPLICATE` (error) on the second (ours: a T number names one tool of the job). | unit | Reviewed |
+| REQ-MDL-005 | IF a tool has no measurement point, or its points are not numbered 1, 2, …, n in their order, THEN `check_job` SHALL report `TOOL_POINT_NUMBERS` (error) (D-155: 1 for the tool's first point; numbering the rest in order ours, DEC-MDL-008). | unit | Reviewed |
+| REQ-MDL-006 | IF a point's axial offset a is not finite or is below 0, or its register radius r is not finite or lies outside [0, R], THEN `check_job` SHALL report `TOOL_POINT_INVALID` (error) naming the point, the value and the range (a ≥ 0: D-154, the user can enter any point, measured from the tip up; r ≤ R: D-154, r is not larger than the radius that cuts, which for a flat end mill is R along the whole flute; Peter, AQ-002, DEC-MDL-004). WHERE a lies above the flute length, THE `check_job` function SHALL report `TOOL_POINT_ABOVE_FLUTE` (warning) naming the point and the shift of every Z, as in "every Z is output 40 mm above the tip", and keep the point (Peter, AQ-002: so a typing error is seen; the setup sheet states the point, D-151). Both checks are skipped for a tool with `TOOL_DIMENSION_INVALID`. | unit | Reviewed |
+| REQ-MDL-007 | THE model module SHALL hold the stock as an axis-aligned box in the work frame, by its two corners in mm, with its top as the largest z (D-026; research 10, Method, the heights from the stock top). | unit | Reviewed |
+| REQ-MDL-008 | IF a stock corner coordinate is not finite, or the box's extent along any axis is not above eps_len, THEN `check_job` SHALL report `STOCK_BOX_INVALID` (error) naming the axis. | unit | Reviewed |
+| REQ-MDL-009 | THE model module SHALL hold one setup with its work offset, its stock and its operations in the user's order (D-078, D-126); the work frame is the part's frame, the drawing's coordinates (research 26 subset: placement the identity; DEC-MDL-002). IF the setup has no operation, THEN `check_job` SHALL report `SETUP_NO_OPERATION` (error) (ours: a program without moves is not a result). | unit | Reviewed |
+| REQ-MDL-010 | IF the work offset is below 1, THEN `check_job` SHALL report `SETUP_WORK_OFFSET_INVALID` (error) (research 26, Structure: an integer ≥ 1; trap 13: an index, not a G code; the upper limit per controller is NCXchange's, research 27, Datum row, D-148). | unit | Reviewed |
+| REQ-MDL-011 | THE model module SHALL hold an operation as its name, strategy id, tool number, point number (1 by default, D-154), spindle speed in 1/min, tolerance tol in mm and parameter values by name (D-052; research 26, operation header). | unit | Reviewed |
+| REQ-MDL-012 | IF an operation's name is empty or holds a character other than an ASCII letter, a digit or an underscore, THEN `check_job` SHALL report `OP_NAME_INVALID` (error) (research 26 subset: `name` in letters, digits and underscores; checked condition 2). | unit | Reviewed |
+| REQ-MDL-013 | IF two operations have the same name, THEN `check_job` SHALL report `OP_NAME_DUPLICATE` (error) on the second (ours, DEC-MDL-005: NCXchange's messages are mapped back to the operation by its section, plan 0007 step 6). | unit | Reviewed |
+| REQ-MDL-014 | IF an operation's tool number names no tool of the job, THEN `check_job` SHALL report `OP_TOOL_UNKNOWN` (error); IF it names a tool that has no point with the operation's point number, THEN `OP_POINT_UNKNOWN` (error). | unit | Reviewed |
+| REQ-MDL-015 | IF an operation's spindle speed is not finite or not above 0, THEN `check_job` SHALL report `OP_SPINDLE_INVALID` (error) (research 22, Parameters: > 0; the machine's maximum later, feature map, machine limits). | unit | Reviewed |
+| REQ-MDL-016 | THE `check_job` function SHALL check each operation's tol with `ToleranceSet.for_operation` and report its error diagnostics with the operation as location; IF tol is not finite, THEN it SHALL report `OP_TOL_INVALID` (error) instead of calling it (REQ-FND-009, 010: no range of its own; `for_operation` raises on a non-finite tol). | unit | Reviewed |
+| REQ-MDL-017 | THE model module SHALL provide `ParameterDeclaration`: name, unit (mm, mm/min or dimensionless, D-028; rad and 1/min come with the first parameter that needs them), default or none, a range whose ends are each inclusive or exclusive and may be infinite, and source (D-049; D-018: the operation panels are generated from these). Values are float64 in the declared unit. | unit | Reviewed |
+| REQ-MDL-018 | IF a declaration's name is not a Python identifier, its unit is not a `Unit`, its source is empty, an end of its range is NaN, its range contains no finite value, or its default is not finite or lies outside the range, THEN constructing it SHALL raise `ValueError` (a programming error in the strategy). | unit | Reviewed |
+| REQ-MDL-019 | IF a strategy's declarations repeat a name, THEN `check_job` SHALL raise `ValueError` before it checks anything (a programming error in the strategy, not a diagnostic of the job). | unit | Reviewed |
+| REQ-MDL-020 | IF an operation's strategy id is not a key of `declarations`, THEN `check_job` SHALL report `OP_STRATEGY_UNKNOWN` (error) and check none of its parameter values. | unit | Reviewed |
+| REQ-MDL-021 | IF an operation gives a value for a name its strategy does not declare, THEN `check_job` SHALL report `PARAM_UNKNOWN` (error) naming it (ours: a misspelt name would otherwise leave the default in force unseen); IF it gives a name twice, THEN `PARAM_REPEATED` (error). | unit | Reviewed |
+| REQ-MDL-022 | IF a declared parameter without a default has no value, THEN `check_job` SHALL report `PARAM_MISSING` (error) naming it and its unit. | unit: research 22, Parameters (step-down and feeds have no default) | Reviewed |
+| REQ-MDL-023 | IF a value is not finite or lies outside its declared range, THEN `check_job` SHALL report `PARAM_OUT_OF_RANGE` (error) naming the parameter, the value, the range with its open or closed ends, and the unit. | unit: research 22, Parameters (feeds > 0) | Reviewed |
+| REQ-MDL-024 | WHEN `check_job` reports no error, THE returned job SHALL equal the input except that each operation's `parameters` holds every declared parameter of its strategy, in declaration order, the default where the operation gave no value. | unit, property | Reviewed |
+| REQ-MDL-025 | THE `check_job` function SHALL check every element and return every diagnostic, not only the first, and SHALL return no value when any is an error (ours, as io). | unit | Reviewed |
+| REQ-MDL-026 | THE `check_job` function SHALL return its diagnostics in this order: tools in job order; the stock; the setup (work offset, then `SETUP_NO_OPERATION`); operations in the user's order. Within a tool or an operation, `VALUE_TYPE_INVALID` first, then in the order of the requirements above; parameters in declaration order, then unknown names sorted by code point; `PARAM_REPEATED` at the repeated name's position (ours, D-055). | unit, property | Reviewed |
+| REQ-MDL-027 | THE `check_job` function SHALL give every diagnostic a location naming its element: `tool <index> (T<number>)`, `tool <index> (T<number>), point <k>`, `stock`, `setup`, `operation <index> (<name>)`, `operation <index> (<name>), parameter <name>`; indexes from 1 (ours). | unit | Reviewed |
+| REQ-MDL-028 | WHEN `ctx.cancel` is set at entry, THE `check_job` function SHALL return no value and `CANCELLED` alone (REQ-FND-013; the check is too short to poll again). | unit | Reviewed |
+| REQ-MDL-029 | IF a field or parameter value is not of its type (numbers k, T, work offset and the operation's tool and point: `int`, not `bool`; lengths, speeds, tol and parameter values: `int` or `float`, not `bool`, and an `int` that converts to a finite float; names and the strategy id: `str`; the stock corners: tuples of three numbers; the tools, points and operations: tuples of their types; each parameter entry: a pair of a `str` and a number), THEN `check_job` SHALL report `VALUE_TYPE_INVALID` (error) naming the field and the type found, and skip that field's other checks (ours, DEC-MDL-003: JSON's `true` reaches Python as `True`, an `int`, which would pass as tool number 1 or tol 1 mm). | unit, property | Reviewed |
 
 ## Invariants
 
@@ -150,7 +150,7 @@ None spent. eps_len is the only tolerance read (REQ-MDL-008); tol is checked, no
 
 ## Failure modes and diagnostics
 
-All diagnostics are errors; with any of them the result has no value (REQ-MDL-025).
+All diagnostics are errors except `TOOL_POINT_ABOVE_FLUTE` (warning) and `CANCELLED`; with any error the result has no value (REQ-MDL-025).
 
 | Situation | Diagnostic |
 | --- | --- |
@@ -158,7 +158,8 @@ All diagnostics are errors; with any of them the result has no value (REQ-MDL-02
 | Diameter or flute length not finite or not above 0 | `TOOL_DIMENSION_INVALID` |
 | Same tool number twice | `TOOL_NUMBER_DUPLICATE` |
 | No point, or points not numbered 1 … n | `TOOL_POINT_NUMBERS` |
-| a outside [0, flute length], r outside [0, R], or not finite | `TOOL_POINT_INVALID` |
+| a below 0, r outside [0, R], or not finite | `TOOL_POINT_INVALID` |
+| a above the flute length | `TOOL_POINT_ABOVE_FLUTE` (warning), the point kept |
 | Stock corner not finite, or extent ≤ eps_len | `STOCK_BOX_INVALID` |
 | Work offset below 1 | `SETUP_WORK_OFFSET_INVALID` |
 | Operation name empty or with other characters | `OP_NAME_INVALID` |
@@ -207,20 +208,21 @@ None: a job holds a handful of tools and operations.
 
 ## Size estimate
 
-About 220 NLOC of Python (the types about 70, the declaration and its check about 40, `check_job` with the type checks about 110) and about 250 lines of tests: the plan's 200 + 200, with the type checks and the property tests of the spec review added, 10 % over and under the 50 % stop (docs/dev/12, section 3). Recommended module budget: 260 (AQ-003).
+About 220 NLOC of Python (the types about 70, the declaration and its check about 40, `check_job` with the type checks about 110) and about 250 lines of tests: the plan's 200 + 200, with the type checks and the property tests of the spec review added, 10 % over and under the 50 % stop (docs/dev/12, section 3). Module budget: 260 (Peter, AQ-003).
 
 ## Open questions
 
-Box 1, for Peter (`docs/agents/QUESTIONS.md`):
+None open. Peter's answers of 2026-10-25 (`docs/agents/QUESTIONS.md`; plan 0007, Decisions):
 
-- AQ-002: review of this SPEC, with four choices that change what the user enters: the part's frame is the work frame (no placement in the slice); spindle CW and coolant on without fields; a point's a limited to [0, flute length]; the parameter declarations live in model, numbers only.
-- AQ-003: model's budget and research list in `architecture/modules.yaml`.
+- AQ-002: SPEC approved. The drawing's frame is the work frame (DEC-MDL-002); spindle CW and coolant on without fields (DEC-MDL-006); the declarations live in model, numbers only (DEC-MDL-001). Item 3 changed: a is any value ≥ 0 (D-154), above the flute length with a warning naming the shift of every Z (REQ-MDL-006, DEC-MDL-004).
+- AQ-003: budget 260 and research 26, 22, 27, 10, 23 in `architecture/modules.yaml`.
 
 Box 2 choices are in `src/splintercam/model/DECISIONS.md`.
 
 ## Change log
 
 - 2026-10-25: drafted for plan 0007, step 3, from research 26, 22, 27 and 10 and D-154, D-155, D-018, D-049. Revised after the spec review the same day: Python types checked (REQ-MDL-029), a setup without operations refused, parameters as pairs, a dimensionless unit for the air gap, dependent checks skipped, cancellation and the declaration errors made exact.
+- 2026-10-25: Reviewed (Peter, AQ-002 and AQ-003): REQ-MDL-006 changed to any a ≥ 0 with `TOOL_POINT_ABOVE_FLUTE` (warning) above the flute length; budget 260.
 
 [r10]: ../../../docs/research/10-linking.md
 [r22]: ../../../docs/research/22-2d-operations.md

@@ -98,6 +98,11 @@ Stop after each step for Peter's review of its pull request.
 - Questions for Peter: AQ-002 (the SPEC review, with four choices: drawing frame as work frame, spindle CW and coolant on without fields, the range of a point's a, declarations in model) and AQ-003 (`model`'s budget 260 and research list in `architecture/modules.yaml`), in `docs/agents/QUESTIONS.md`.
 - Next: on approval, the implementation pull request: `src/splintercam/model/` with `__init__.py`, `AGENTS.md` and tests first.
 
+### 2026-10-25, step 3 (SPEC reviewed)
+
+- Peter answered AQ-002 and AQ-003 (under Decisions). Item 3 applied: REQ-MDL-006 now takes any a ≥ 0 (D-154) and reports `TOOL_POINT_ABOVE_FLUTE` (warning, the point kept) above the flute length, naming the shift of every Z; DEC-MDL-004 rewritten as Peter's decision, DEC-MDL-001, 002 and 006 no longer provisional. `src/splintercam/model/SPEC.md` Reviewed, REQ-MDL-001 to 029 all Reviewed; `model`'s budget 260 in `architecture/modules.yaml`.
+- Next: after pull request #75 is merged, the implementation on a new branch from `main` (docs/dev/07, no stacked pull requests): `src/splintercam/model/` with `__init__.py` and `AGENTS.md`, tests in `tests/model/` first, tagged with REQ-MDL IDs.
+
 ## Backlog
 
 ## Blockers
