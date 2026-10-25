@@ -88,6 +88,15 @@ Stop after each step for Peter's review of its pull request.
 - Question 1: Peter raised `io`'s budget to 820 (under Decisions). Question 2: offset2d is right on that example and GEOS's buffer is not (8 points 9.02 to 9.29 mm from every curve left out of a C 0.3 to 0.7 mm wide); test 20 now lets research 02 test 9's exact oracle decide where the two disagree, in its own pull request (`offset2d/test-20-oracle`, DEC-OFF-025). NOTICE gains ezdxf, fontTools and pyparsing (ADR 0011).
 - Step 2 done; the pull request follows. Next: step 3, `model`.
 
+### 2026-10-25, step 3 (SPEC draft, for Peter's review)
+
+- `model` had no SPEC and no budget, so step 3 starts with documents only: `src/splintercam/model/SPEC.md` drafted from research 26 (the subset and Structure), 22 (Scope, Parameters), 27 (Datum and Program rows) and 10, with D-154, D-155, D-018 and D-049: 29 requirements, REQ-MDL-001 to 029, all Draft. `src/splintercam/model/DECISIONS.md` holds DEC-MDL-001 to 008. No code until the SPEC is Reviewed.
+- One spec review round and one fix check (D-159): three must-fix findings addressed in the draft: integer and float fields accepted `bool` and other types (JSON's `true` would pass as T1 or tol 1 mm; REQ-MDL-029), the profile could not declare research 22's air gap factor (a dimensionless unit added), and a parameter dict kept a checked job mutable (pairs instead). Spec gaps folded in: a setup without operations is refused, dependent checks skipped, cancellation and declaration errors made exact.
+- Left to other steps, named in the SPEC's Scope: the stock containing the part, z_bottom below z_top, the step-down against the flute length and the allowance above −R (step 5, the profile); heights from the stock top (`toolpath`); program name and number (steps 6 and 7).
+- Size: about 220 NLOC estimated against the step's 200, under the 50 % stop.
+- Questions for Peter: AQ-002 (the SPEC review, with four choices: drawing frame as work frame, spindle CW and coolant on without fields, the range of a point's a, declarations in model) and AQ-003 (`model`'s budget 260 and research list in `architecture/modules.yaml`), in `docs/agents/QUESTIONS.md`.
+- Next: on approval, the implementation pull request: `src/splintercam/model/` with `__init__.py`, `AGENTS.md` and tests first.
+
 ## Backlog
 
 ## Blockers

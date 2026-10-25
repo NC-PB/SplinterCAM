@@ -30,3 +30,27 @@ Entry format:
 - Recommendation: raise the budget to 820; a split needs a new SPEC for no gain in the slice.
 - Status: Answered 2026-10-25
 - Answer: budget 820 (Peter); recorded in `architecture/modules.yaml` and `docs/plans/active/0007-first-nc-program.md`, Decisions.
+
+## AQ-002: Review of the model SPEC draft (plan 0007, step 3)
+
+- Asked: 2026-10-25, plan 0007 step 3, by the coding agent (headless run)
+- Box: 1 (Peter's judgement: a reviewed SPEC is a human gate; interfaces between modules)
+- Question: `src/splintercam/model/SPEC.md` (29 requirements, REQ-MDL-001 to 029, all Draft) holds the slice's job data: one flat end mill with its measurement points, a box stock, one setup with its work offset, the operations with their parameter values, checked once by `check_job`. Four choices change what the user enters or sees; please confirm or change each:
+  1. **The drawing's frame is the work frame** (DEC-MDL-002). The setup has no placement: the DXF's origin is the datum of work offset 1, and the part sits where it is drawn. With a placement, the user could move the datum without editing the DXF, but the profile would have to transform the contour, a path the slice does not test. Recommended: no placement in the slice, as plan 0007's scope says ("the part at the origin").
+  2. **Spindle CW and coolant on for every operation, without fields** (DEC-MDL-006). The user cannot switch coolant off or run a left-hand tool. With a direction field, a CCW spindle would turn the climb profile into conventional milling unless the profile refuses it. Recommended: no fields in the slice.
+  3. **A measurement point's axial offset a must lie between 0 and the flute length** (DEC-MDL-004, provisional). A shop that measures a flat end mill above its flutes gets `TOOL_POINT_INVALID` and must measure at the tip. Without the limit, a typing error in a (10 for 1.0) shifts every Z of the program by that amount (research 26, test 10). Recommended: keep the limit; it can be widened when tool assemblies come.
+  4. **The parameter declarations live in model** (DEC-MDL-001): each strategy declares its parameters (name, unit, default or none, range, source) with model's `ParameterDeclaration`, and `check_job` refuses a job with a missing, misspelt, repeated or out-of-range value, naming it. Numbers only in the slice (mm, mm/min, dimensionless); the panel fields of docs/dev/11 come with the desktop app. Recommended: as drafted.
+- Recommendation: approve the SPEC as drafted, with 1 to 4 as recommended. Safe default meanwhile: nothing is implemented; the draft's choices stand as provisional.
+- Status: Open
+- Answer:
+
+## AQ-003: model's budget and research list in architecture/modules.yaml
+
+- Asked: 2026-10-25, plan 0007 step 3, by the coding agent (headless run)
+- Box: 1 (Peter's judgement: `architecture/modules.yaml`)
+- Question: `model` has no budget, and its research list names topic 23 (cutting data), which the slice does not use; the SPEC builds on topics 26, 22, 27 and 10. The SPEC estimates about 220 NLOC (`src/splintercam/model/SPEC.md`, Size estimate), 10 % over the plan's 200 because of the type checks the spec review added. Without a budget, `tools/size-check` cannot hold the module to its estimate.
+- Recommendation: replace the `model` line with exactly:
+  `  model:                  { layer: 2, kernel: false, depends_on: [foundation], research: ["26", "22", "27", "10", "23"], budget: 260 }`
+  (23 kept for the cutting data that comes later). Safe default meanwhile: no code, so no size to check.
+- Status: Open
+- Answer:
