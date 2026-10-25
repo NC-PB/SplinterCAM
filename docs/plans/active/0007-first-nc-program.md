@@ -33,7 +33,7 @@ Answered 2026-10-11: all as recommended. For question 2, step 1 checks the three
 
 - [x] 1. **Research pull** (Project Spike): topics 21 (DXF part), 22 (outside profile), 10 (clearance-height links only), 26 (the record subset: rapid, linear, arc, feed, spindle, tool, work offset, comment) and 27 (the NCX words for that subset, and how `ncx` is called) at L4 for these parts, moved to `docs/research/`. Size: docs only.
 - [x] 2. **`io`: DXF to curve rows.** ezdxf; closed chains of lines, arcs and bulges in millimetres; a file without units refused with a diagnostic (D-033); part size reported. Size: about 200 + 250.
-- [ ] 3. **`model`: the slice's job data.** Tool (flat end mill, measurement point), stock box, setup (work offset, frame), operation parameters as declarations (D-018), held in memory. Size: about 200 + 200.
+- [x] 3. **`model`: the slice's job data.** Tool (flat end mill, measurement point), stock box, setup (work offset, frame), operation parameters as declarations (D-018), held in memory. Size: about 200 + 200.
 - [ ] 4. **`cl`: the toolpath record subset** of topic 26: moves, feeds, spindle, tool, work offset, comments, operation name and note (feature map, section 6). Size: about 150 + 200.
 - [ ] 5. **`strategies/profile` with the slice's `toolpath` links.** `offset_region` GROW of the material contour by R + allowance; depth passes; start point; climb; clearance-height retract. Size: about 250 + 300.
 - [ ] 6. **`ncx`: the writer and the call.** NCX at the resolution of D-149; `ncx check --strict` and `ncx compile` run as a subprocess; NCXchange's messages mapped to the operation (feature map, section 8). Size: about 200 + 250.
@@ -112,6 +112,14 @@ Stop after each step for Peter's review of its pull request.
 - Not yet run: `spec-reviewer` and `test-auditor` (they run on the final diff after the answer); step 3 is not ticked.
 - Question: AQ-004 (raise `model`'s budget to 360, recommended, or narrow REQ-MDL-029).
 - Next: on the answer, the SPEC's size estimate, the reviews, `tools/check`, push and the pull request from `model/impl-0007-step3`.
+
+### 2026-10-25, step 3 (reviews, done)
+
+- AQ-004 answered (Peter): budget 360, REQ-MDL-029 kept, the `large-change` label on the pull request. `src/splintercam/model/SPEC.md`: "Verified by" names the tests, the size section the measured size.
+- `spec-reviewer`, must fix: a `setup` or `stock` of the wrong type raised `AttributeError` (now `VALUE_TYPE_INVALID`). Spec gaps decided in DEC-MDL-009 and fixed: `PARAM_REPEATED` before the range check within one parameter (REQ-MDL-026), every repeated value checked (REQ-MDL-025), a point located by its number as given (REQ-MDL-027), DEC-MDL-009's text on `OP_TOOL_UNKNOWN` corrected; the empty-container test no longer compares a wrong-typed container with `()`. Not fixed: ints of more than 4300 digits (json refuses them first; recorded), `:g` in range texts, a bool default in a declaration (code, typed).
+- `test-auditor`, must fix, all done: REQ-MDL-018 cases isolated (default None, each matching its own message); closed range ends tested (REQ-MDL-023); r NaN and inf (REQ-MDL-006); the SPEC's first invariant checked on every returned job and 7 more breakers (every error code now generated). Nice to have done: the dimension named, the flute-length skip, extent equal to eps_len and a non-finite low corner, the order within a tool and an operation.
+- Size: 358 NLOC of the budget 360; tests 95 (`tools/test-one model`). `tools/check` passes.
+- Next: step 4, `cl`, after this pull request is merged. From step 4 on, estimates are about 1.5 times the first count (Decisions).
 
 ## Backlog
 

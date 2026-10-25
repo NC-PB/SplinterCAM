@@ -137,10 +137,11 @@ def test_tool_number_below_1() -> None:
 @pytest.mark.req("REQ-MDL-003")
 @pytest.mark.parametrize("value", [0.0, -1.0, math.nan, math.inf])
 def test_tool_dimension_not_finite_or_not_above_0(value: float) -> None:
-    for tool in (FlatEndMill(1, value, 30.0), FlatEndMill(1, 10.0, value)):
-        result = _check(_with_tool(tool))
+    for field in ("diameter_mm", "flute_length_mm"):
+        result = _check(_with_tool(replace(FlatEndMill(1, 10.0, 30.0), **{field: value})))
         _only(result, "TOOL_DIMENSION_INVALID")
         assert repr(value) in result.diagnostics[0].message
+        assert field in result.diagnostics[0].message
 
 
 @pytest.mark.req("REQ-MDL-004", "REQ-MDL-026")
@@ -159,8 +160,10 @@ def test_points_numbered_other_than_1_to_n(numbers: tuple[int, ...]) -> None:
 
 @pytest.mark.req("REQ-MDL-006", "REQ-MDL-027")
 @pytest.mark.parametrize(
-    ("a", "r"), [(-0.1, 0.0), (math.nan, 0.0), (math.inf, 0.0), (0.0, -0.1), (0.0, 5.1)]
-)
+    ("a", "r"),
+    [(-0.1, 0.0), (math.nan, 0.0), (math.inf, 0.0), (0.0, -0.1), (0.0, 5.1), (0.0, math.nan),
+     (0.0, math.inf)],
+)  # fmt: skip
 def test_point_outside_its_range(a: float, r: float) -> None:
     point = MeasurementPoint(2, a, r)
     location = _only(_check(_with_tool(FlatEndMill(1, 10.0, 30.0, (TIP, point)))),
@@ -188,8 +191,18 @@ def test_point_above_the_flute_is_kept_with_a_warning_naming_the_shift() -> None
 
 @pytest.mark.req("REQ-MDL-006")
 def test_point_checks_are_skipped_for_an_invalid_dimension() -> None:
-    tool = FlatEndMill(1, -10.0, 30.0, (MeasurementPoint(1, -1.0, 9.0),))
-    assert _codes(_check(_with_tool(tool))) == ["TOOL_DIMENSION_INVALID"]
+    points = (MeasurementPoint(1, -1.0, 9.0),)
+    for tool in (FlatEndMill(1, -10.0, 30.0, points), FlatEndMill(1, 10.0, math.nan, points)):
+        assert _codes(_check(_with_tool(tool))) == ["TOOL_DIMENSION_INVALID"]
+
+
+@pytest.mark.req("REQ-MDL-006", "REQ-MDL-027")
+def test_a_point_is_located_by_its_number() -> None:
+    result = _check(_with_tool(FlatEndMill(1, 10.0, 30.0, (TIP, MeasurementPoint(3, -1.0, 0.0)))))
+    assert [(d.code, d.location) for d in result.diagnostics] == [
+        ("TOOL_POINT_NUMBERS", "tool 1 (T1)"),
+        ("TOOL_POINT_INVALID", "tool 1 (T1), point 3"),
+    ]
 
 
 # --- stock and setup (REQ-MDL-008 to 010) ---------------------------------------------------------
@@ -203,6 +216,16 @@ def test_stock_extent_not_above_eps_or_not_finite(axis: int, top: float) -> None
     result = _check(_with_setup(stock=StockBox((0.0, 0.0, 0.0), (corner[0], corner[1], corner[2]))))
     assert _only(result, "STOCK_BOX_INVALID") == "stock"
     assert f"{'xyz'[axis]} " in result.diagnostics[0].message
+
+
+@pytest.mark.req("REQ-MDL-008")
+def test_stock_extent_equal_to_eps_or_a_non_finite_low_corner() -> None:
+    eps = make_context().tolerances.length_eps_mm
+    for low, high in (((0.0, 0.0, -math.inf), (10.0, 10.0, 10.0)),
+                      ((0.0, 0.0, 0.0), (10.0, 10.0, eps))):  # fmt: skip
+        result = _check(_with_setup(stock=StockBox(low, high)))
+        assert _only(result, "STOCK_BOX_INVALID") == "stock"
+        assert "z " in result.diagnostics[0].message
 
 
 @pytest.mark.req("REQ-MDL-009")
@@ -264,15 +287,20 @@ def test_a_declaration_holds_its_fields() -> None:
 
 @pytest.mark.req("REQ-MDL-018")
 @pytest.mark.parametrize(
-    "changes",
-    [{"name": "step down"}, {"name": ""}, {"unit": "mm"}, {"source": ""}, {"low": math.nan},
-     {"high": math.nan}, {"low": math.inf}, {"low": 1.0, "high": 0.0},
-     {"low": 1.0, "high": 1.0, "low_open": True}, {"low": -math.inf, "high": -math.inf},
-     {"default": math.nan}, {"default": -1.0}, {"low": 0.0, "low_open": True, "default": 0.0}],
+    ("changes", "problem"),
+    [({"name": "step down"}, "identifier"), ({"name": ""}, "identifier"),
+     ({"unit": "mm"}, "Unit"), ({"source": ""}, "source"),
+     ({"low": math.nan}, "NaN"), ({"high": math.nan}, "NaN"),
+     ({"low": math.inf}, "no finite value"), ({"low": 1.0, "high": 0.0}, "no finite value"),
+     ({"low": 1.0, "high": 1.0, "low_open": True}, "no finite value"),
+     ({"low": -math.inf, "high": -math.inf}, "no finite value"),
+     ({"default": math.nan}, "default"), ({"default": -1.0}, "default"),
+     ({"low_open": True, "default": 0.0}, "default")],
 )  # fmt: skip
-def test_an_invalid_declaration_raises(changes: dict[str, object]) -> None:
-    with pytest.raises(ValueError, match="parameter declaration"):
-        replace(PROFILE[0], **{"low": 0.0, **changes})
+def test_an_invalid_declaration_raises(changes: dict[str, object], problem: str) -> None:
+    # The default is None unless the case sets it, so only the check under test can raise.
+    with pytest.raises(ValueError, match=f"parameter declaration .*{problem}"):
+        replace(PROFILE[0], **{"low": 0.0, "default": None, **changes})
 
 
 @pytest.mark.req("REQ-MDL-018")
@@ -318,6 +346,16 @@ def test_a_value_outside_its_range_names_value_range_and_unit(feed: float) -> No
     assert all(s in result.diagnostics[0].message for s in (repr(feed), "(0, inf)", "mm/min"))
 
 
+@pytest.mark.req("REQ-MDL-023")
+def test_a_closed_end_takes_its_value_and_is_named_with_a_bracket(ctx: Context) -> None:
+    ratio = ParameterDeclaration("ratio", Unit.RATIO, None, 0.0, 1.0, False, False, "ours")
+    declarations = {"profile": (*PROFILE, ratio)}
+    for value, ok in ((0.0, True), (1.0, True), (1.5, False)):
+        result = check_job(_with_params(*PARAMETERS, ("ratio", value)), declarations, ctx)
+        assert result.ok is ok
+        assert ok or "[0, 1]" in result.diagnostics[0].message
+
+
 # --- order, locations, cancellation, types (REQ-MDL-025 to 029) -----------------------------------
 
 
@@ -341,6 +379,28 @@ def test_every_diagnostic_in_the_fixed_order_with_its_location() -> None:
     assert result.value is None
 
 
+@pytest.mark.req("REQ-MDL-021", "REQ-MDL-025", "REQ-MDL-026")
+def test_the_order_within_a_tool_and_within_an_operation() -> None:
+    tools = (FlatEndMill(1, 10.0, 30.0), FlatEndMill(1, -6.0, 20.0, ()))
+    params = (*PARAMETERS[:3], ("step_down_mm", -1.0), ("step_down_mm", -2.0), *PARAMETERS[4:],
+              ("zz", 1.0), ("zz", 2.0))  # fmt: skip
+    op = replace(operation("A B", params), spindle_rpm="fast")
+    at = "operation 1 (A B), parameter"
+    result = _check(replace(example_job((op,)), tools=tools))
+    assert [(d.code, d.location) for d in result.diagnostics] == [
+        ("TOOL_DIMENSION_INVALID", "tool 2 (T1)"),
+        ("TOOL_NUMBER_DUPLICATE", "tool 2 (T1)"),
+        ("TOOL_POINT_NUMBERS", "tool 2 (T1)"),
+        ("VALUE_TYPE_INVALID", "operation 1 (A B)"),
+        ("OP_NAME_INVALID", "operation 1 (A B)"),
+        ("PARAM_REPEATED", f"{at} step_down_mm"),
+        ("PARAM_OUT_OF_RANGE", f"{at} step_down_mm"),
+        ("PARAM_OUT_OF_RANGE", f"{at} step_down_mm"),
+        ("PARAM_UNKNOWN", f"{at} zz"),
+        ("PARAM_REPEATED", f"{at} zz"),
+    ]
+
+
 @pytest.mark.req("REQ-MDL-028")
 def test_cancelled_at_entry(ctx: Context) -> None:
     ctx.cancel.cancel()
@@ -361,6 +421,8 @@ def test_cancelled_at_entry(ctx: Context) -> None:
         _with_setup(stock=StockBox((0.0, 0.0), (1.0, 1.0, 1.0))),  # type: ignore[arg-type]
         _with_setup(work_offset=1.0),
         _with_setup(operations=[operation()]),
+        _with_setup(stock=None),
+        replace(example_job(), setup=None),
         _with_op(tol_mm=True),
         _with_op(spindle_rpm=10**400),
         _with_op(name=1),

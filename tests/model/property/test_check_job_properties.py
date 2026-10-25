@@ -61,9 +61,18 @@ def test_a_valid_job_comes_back_completed_and_checking_it_again_changes_nothing(
     result = check_job(job, DECLARATIONS, make_context())
     assert result.ok
     assert result.value is not None
-    names = [d.name for d in DECLARATIONS["profile"]]
+    # model SPEC, Invariants: a returned job is consistent.
+    tools = {tool.number: tool for tool in result.value.tools}
+    assert len(tools) == len(result.value.tools)
+    assert all(number >= 1 for number in tools)
+    declared = DECLARATIONS["profile"]
     for op in result.value.setup.operations:
-        assert [name for name, _ in op.parameters] == names
+        assert op.point_number in {p.number for p in tools[op.tool_number].points}
+        assert [name for name, _ in op.parameters] == [d.name for d in declared]
+        for (_, value), declaration in zip(op.parameters, declared, strict=True):
+            low, high = declaration.low, declaration.high
+            assert low <= value <= high
+            assert not (declaration.low_open and value == low)
     again = check_job(result.value, DECLARATIONS, make_context())
     assert again.value == result.value
     assert hash(again.value) == hash(result.value)
@@ -97,10 +106,26 @@ _BREAKERS: list[tuple[Callable[[JobData], JobData], str, Callable[[JobData], str
      "PARAM_OUT_OF_RANGE", lambda j: "operation 1 (OP_1), parameter step_down_mm"),
     (lambda j: _first_op(j, parameters=PARAMETERS[:5]), "PARAM_MISSING",
      lambda j: "operation 1 (OP_1), parameter plunge_feed_mm_per_min"),
+    (lambda j: replace(j, tools=(*j.tools, j.tools[0])), "TOOL_NUMBER_DUPLICATE",
+     lambda j: f"tool {len(j.tools) + 1} (T1)"),
+    (lambda j: _first_tool(j, points=(replace(j.tools[0].points[0], register_radius_mm=-1.0),
+                                      *j.tools[0].points[1:])),
+     "TOOL_POINT_INVALID", lambda j: "tool 1 (T1), point 1"),
+    (lambda j: replace(j, setup=replace(j.setup, stock=StockBox(
+        j.setup.stock.min_mm, (*j.setup.stock.max_mm[:2], j.setup.stock.min_mm[2])))),
+     "STOCK_BOX_INVALID", lambda j: "stock"),
+    (lambda j: replace(j, setup=replace(j.setup, operations=(*j.setup.operations,
+                                                             j.setup.operations[0]))),
+     "OP_NAME_DUPLICATE", lambda j: f"operation {len(j.setup.operations) + 1} (OP_1)"),
+    (lambda j: _first_op(j, point_number=9), "OP_POINT_UNKNOWN", lambda j: "operation 1 (OP_1)"),
+    (lambda j: _first_op(j, strategy="pocket"), "OP_STRATEGY_UNKNOWN",
+     lambda j: "operation 1 (OP_1)"),
+    (lambda j: _first_op(j, parameters=(*PARAMETERS, ("zz", 1.0))), "PARAM_UNKNOWN",
+     lambda j: "operation 1 (OP_1), parameter zz"),
 ]  # fmt: skip
 
 
-@pytest.mark.req("REQ-MDL-025", "REQ-MDL-026", "REQ-MDL-029")
+@pytest.mark.req("REQ-MDL-022", "REQ-MDL-025", "REQ-MDL-026", "REQ-MDL-029")
 @given(_jobs(), st.sampled_from(_BREAKERS))
 def test_a_broken_field_gives_its_code_once_at_its_location_and_no_value(
     job: JobData, breaker: tuple[Callable[[JobData], JobData], str, Callable[[JobData], str]]

@@ -7,6 +7,7 @@ import re
 import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
+from typing import cast
 
 from splintercam.foundation import CANCELLED, Context, Diagnostic, Result, Severity, ToleranceSet
 
@@ -64,6 +65,16 @@ def _finite_positive(value: float) -> bool:
     return math.isfinite(value) and value > 0.0
 
 
+def _is_empty(value: object) -> bool:
+    # Not `value == ()`: a container of the wrong type, such as a NumPy array, compares otherwise.
+    return isinstance(value, tuple) and not value
+
+
+def _at(location: str, point: MeasurementPoint) -> str:
+    # REQ-MDL-027: k is the point's number as given, whatever its type (DEC-MDL-009).
+    return f"{location}, point {point.number}"
+
+
 class _Checker:
     """Collects the diagnostics of one `check_job` call in the order they are found, which is the
     order of REQ-MDL-026: tools, stock, setup, operations, each element's type errors first."""
@@ -111,9 +122,8 @@ class _Checker:
         """REQ-MDL-002 to 006, in that order."""
         location = f"tool {index} (T{tool.number})"
         bad = self.fields(tool, _TOOL_FIELDS, location)
-        # k is the point's position from 1 (DEC-MDL-009), which equals its number when valid.
         given = self.elements(tool.points, MeasurementPoint, "points", location)
-        points = [(k, p, self.fields(p, _POINT_FIELDS, f"{location}, point {k}")) for k, p in given]
+        points = [(k, p, self.fields(p, _POINT_FIELDS, _at(location, p))) for k, p in given]
         if "number" not in bad and tool.number < 1:
             self.error("TOOL_NUMBER_INVALID", f"tool number {tool.number} is below 1", location)
         dimensions_ok = not bad & {"diameter_mm", "flute_length_mm"}
@@ -125,11 +135,11 @@ class _Checker:
         numbered = [(k, p.number) for k, p, b in points if "number" not in b]
         if "number" not in bad:
             self.tool_number(tool.number, {number for _, number in numbered}, location)
-        if tool.points == () or any(k != number for k, number in numbered):
+        if _is_empty(tool.points) or any(k != number for k, number in numbered):
             message = "the measurement points must be numbered 1, 2, ..., n in order (D-155)"
             self.error("TOOL_POINT_NUMBERS", message, location)
-        for k, point, point_bad in points if dimensions_ok else []:
-            self.point(tool, point, point_bad, f"{location}, point {k}")
+        for _, point, point_bad in points if dimensions_ok else []:
+            self.point(tool, point, point_bad, _at(location, point))
 
     def tool_number(self, number: int, point_numbers: set[int], location: str) -> None:
         if number in self.tool_points:
@@ -155,7 +165,10 @@ class _Checker:
             message = f"register radius r = {r!r} mm lies outside [0, {tool.radius_mm:g}] (D-154)"
             self.error("TOOL_POINT_INVALID", message, location)
 
-    def stock(self, stock: StockBox) -> None:
+    def stock(self, stock: object) -> None:
+        if not isinstance(stock, StockBox):
+            self.type_error("stock", "a StockBox", stock, "stock")
+            return
         if self.fields(stock, _STOCK_FIELDS, "stock"):
             return
         for axis, low, high in zip("xyz", stock.min_mm, stock.max_mm, strict=True):
@@ -169,7 +182,7 @@ class _Checker:
         if not bad and setup.work_offset < 1:
             message = f"work offset {setup.work_offset} is below 1; it is an index, not a G code"
             self.error("SETUP_WORK_OFFSET_INVALID", message, "setup")
-        if setup.operations == ():
+        if _is_empty(setup.operations):
             self.error("SETUP_NO_OPERATION", "the setup has no operation", "setup")
         return operations
 
@@ -244,18 +257,18 @@ class _Checker:
         for declaration in declared:
             at = f"{location}, parameter {declaration.name}"
             values = given.pop(declaration.name, [])
-            value = values[0] if values else declaration.default
-            if not values and value is None:
+            self.repeated(declaration.name, values, at)  # REQ-MDL-021 before 022 and 023
+            if not values and declaration.default is None:
                 message = (f"{declaration.name} has no value and no default; give it in "
                            f"{declaration.unit.value}")  # fmt: skip
                 self.error("PARAM_MISSING", message, at)
-            elif values and value is not None and not in_range(value, declaration):
-                message = (f"{declaration.name} = {value!r} {declaration.unit.value} lies "
-                           f"outside {range_text(declaration)}")  # fmt: skip
-                self.error("PARAM_OUT_OF_RANGE", message, at)
-            if value is not None:
+            for value in values:  # every value, a repeated one too (REQ-MDL-025)
+                if value is not None and not in_range(value, declaration):
+                    message = (f"{declaration.name} = {value!r} {declaration.unit.value} lies "
+                               f"outside {range_text(declaration)}")  # fmt: skip
+                    self.error("PARAM_OUT_OF_RANGE", message, at)
+            if (value := values[0] if values else declaration.default) is not None:
                 completed.append((declaration.name, value))
-            self.repeated(declaration.name, values, at)
         for name in sorted(given):
             at = f"{location}, parameter {name}"
             self.error("PARAM_UNKNOWN", f"the strategy declares no parameter {name}", at)
@@ -287,8 +300,14 @@ def check_job(job: JobData, declarations: Declarations, ctx: Context) -> Result[
     checker = _Checker(declarations, ctx.tolerances.length_eps_mm)
     for index, tool in checker.elements(job.tools, FlatEndMill, "tools", "job"):
         checker.tool(index, tool)
-    checker.stock(job.setup.stock)
-    operations = tuple(checker.operation(index, op) for index, op in checker.setup(job.setup))
+    setup = cast("object", job.setup)  # user input: any type gets a diagnostic (SPEC interface)
+    if isinstance(setup, Setup):
+        checker.stock(setup.stock)
+        ops = checker.setup(setup)
+    else:
+        checker.type_error("setup", "a Setup", setup, "setup")
+        ops = []
+    operations = tuple(checker.operation(index, op) for index, op in ops)
     diagnostics = tuple(checker.out)
     if any(diagnostic.severity is Severity.ERROR for diagnostic in diagnostics):
         return Result(None, diagnostics)
