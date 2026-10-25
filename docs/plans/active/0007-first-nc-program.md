@@ -72,6 +72,16 @@ Stop after each step for Peter's review of its pull request.
 - `src/splintercam/io/SPEC.md` Reviewed; `src/splintercam/io/DECISIONS.md` started (DEC-IO-001 to 004). RR-004 gains items 5 and 6.
 - Next: the geometry2d pull request (array forms of `arc_from_bulge`, of an arc from end points and sweep, and of the bounding box of curve rows), then io's implementation.
 
+### 2026-10-25, step 2 (io implementation)
+
+- Implemented the DXF import against the Reviewed `src/splintercam/io/SPEC.md`: `ezdxf` added (ADR 0011); foundation gains the declared parameter `dxf_gap_close_mm` (REQ-FND-014, `tolerance_defaults.toml`); `src/splintercam/io/` with `__init__.py`, `_units.py`, `_diagnostics.py`, `_entities.py`, `_chain.py`, `_read.py`, plus `AGENTS.md` and DEC-IO-005. All 30 requirements REQ-IO-001 to 030 implemented.
+- Tests: `tests/io/unit/test_dxf_import.py` (39 unit tests, one or more per requirement, research 21 tests 1 to 7) and `tests/io/property/test_dxf_chaining.py` (2 property tests: scrambled-polygon chaining and the mirror |area| invariant). All io and foundation tests pass (208). The rectangle-with-fillets reads as 8 rows with area 6000 − (4 − π)·25 mm² (research 21 test 1).
+- Reviews run on the diff (docs/dev/12): `simplifier`, then `spec-reviewer` and `test-auditor`. Findings addressed: every tolerance decision now uses sqrt of a sum of squares, never `hypot` or `sin` (D-055; the magnification D/c for |φ| > π rewritten as 2r/c); REQ-IO-020 and REQ-IO-021 gained tagged unit tests (the line-meets-arc mover rule and the arc-magnified B over the limit), the two property tests gained `@pytest.mark.req` markers, and one tautological assertion was fixed; `box_of_rows` removed a duplicated bounding-box helper; DEC-IO-005 records the sqrt-only rule, the pyright suppressions and the `DXF_LAYER_EMPTY` reading. The simplifier confirmed the remaining size is intrinsic to the Reviewed requirement set, not waste.
+- `tools/check`: ruff format, ruff check, pyright (3 platforms), clang-tidy, build, arch-check all pass. Two steps fail, **neither from io's correctness**:
+  1. **size-check, hard**: module `io` is 795 NLOC, over the budget + 20 % (432) of its 360 budget. The two-stage matching, the move bound B, the five OCS entity types and the diagnostic ordering the SPEC reviews added, together with the strict lint (≤ 5 args, complexity ≤ 10) that forces decomposition, put io at ~26 NLOC per requirement. Raising `io`'s budget in `architecture/modules.yaml` is Peter's call (question 1 below).
+  2. **pytest**: `tests/offset2d/differential/test_offset_region_differential.py::test_the_offset_agrees_with_geos_outside_the_band` fails on a Hypothesis counterexample (an AIR region at `t_mm=9.0`, `tol_mm=0.01`). This is in offset2d, not io; the diff touches no offset2d or geometry2d source, so `offset_region` is byte-identical to `main` and fails identically there for this input. A pre-existing latent offset2d issue surfaced because the foundation change made `tools/check` run all dependents. Not fixed here (out of scope; no test weakened). Reported as question 2 below.
+- Not pushed: `tools/check` fails on the two items above, both needing Peter. The branch `io/dxf-import-0007-step2` holds the work.
+
 ## Backlog
 
 ## Blockers
