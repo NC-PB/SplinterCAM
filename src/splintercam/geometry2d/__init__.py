@@ -1,7 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
 """geometry2d: planar curves, exact signs and the algorithms on them (see SPEC.md)."""
 
-from ._arcrows import BuiltRows, RowStatus, row_boxes, rows_from_bulges, rows_from_sweeps
+from ._arcrows import (
+    BuiltRows,
+    RowStatus,
+    check_arc_rows,
+    row_boxes,
+    rows_from_bulges,
+    rows_from_sweeps,
+)
 from ._area import signed_area
 from ._box import Box, bounding_box
 from ._build import build_region
@@ -43,6 +50,7 @@ __all__ = [
     "build_chain",
     "build_region",
     "bulges_from_arc",
+    "check_arc_rows",
     "circle_through",
     "cleanup",
     "closest_point",

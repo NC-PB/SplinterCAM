@@ -230,6 +230,22 @@ std::array<double, 4> row_box(const CurveRow& row) {
     return box;
 }
 
+// make_arc's checks on a row as given, without its constructions (REQ-G2D-248, DEC-G2D-045): a
+// line needs finite ends only; an arc with r <= eps_len is not one make_arc returns.
+RowStatus row_status(const CurveRow& row, double eps) {
+    const bool ends_finite = std::isfinite(row.x0) && std::isfinite(row.y0) &&
+                             std::isfinite(row.x1) && std::isfinite(row.y1);
+    if (!ends_finite || row.sweep == 0.0) {
+        return ends_finite ? RowStatus::ok : RowStatus::curve_invalid;
+    }
+    if (!std::isfinite(row.cx) || !std::isfinite(row.cy) || !std::isfinite(row.sweep) ||
+        std::abs(row.sweep) > two_pi || distance({row.x0, row.y0}, {row.cx, row.cy}) <= eps) {
+        return RowStatus::curve_invalid;
+    }
+    return check_arc(row, eps) == ArcCheck::consistent ? RowStatus::ok
+                                                       : RowStatus::arc_inconsistent;
+}
+
 } // namespace
 
 CurveRow unpack_row(std::span<const double> row) {
@@ -248,6 +264,16 @@ void check_arcs(std::span<const double> rows, double length_eps_mm, std::span<st
         const bool is_line = row.sweep == 0.0;
         check = static_cast<std::int8_t>(is_line ? ArcCheck::consistent
                                                  : check_arc(row, length_eps_mm));
+    }
+}
+
+void check_arc_rows(std::span<const double> rows, double length_eps_mm,
+                    std::span<std::int8_t> status) {
+    auto row_start = rows.begin();
+    for (std::int8_t& code : status) {
+        code = static_cast<std::int8_t>(
+            row_status(unpack_row(std::span(row_start, row_width)), length_eps_mm));
+        row_start += row_width;
     }
 }
 

@@ -100,3 +100,17 @@ def row_boxes(rows: NDArray[np.float64], ctx: Context) -> NDArray[np.float64]:
     boxes = np.empty((checked.shape[0], 4), dtype=np.float64)
     _kernels.geometry2d.row_boxes(checked, boxes)
     return boxes
+
+
+def check_arc_rows(rows: NDArray[np.float64], ctx: Context) -> NDArray[np.int8]:
+    """Per curve row its `RowStatus`, the row as given: `OK` for a line with finite ends (its
+    centre not read) or a consistent arc; `CURVE_INVALID` for an end, an arc's centre or sweep
+    that is not finite, |sweep| > 2π or a radius at or below eps_len; `ARC_INCONSISTENT` for an
+    arc that breaks REQ-G2D-042 or 043. kernel: arcs.cpp.
+
+    Implements: REQ-G2D-248, REQ-G2D-246, REQ-G2D-247.
+    """
+    checked = _array("rows", rows, (-1, _ROW_WIDTH))
+    status = np.empty(checked.shape[0], dtype=np.int8)
+    _kernels.geometry2d.check_arc_rows(checked, ctx.tolerances.length_eps_mm, status)
+    return status

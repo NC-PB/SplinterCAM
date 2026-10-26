@@ -136,6 +136,13 @@ Stop after each step for Peter's review of its pull request.
 - geometry2d is at 3986 of its 4000 NLOC. A full status per row, decided in the kernel, comes to about 65 NLOC by the 1.5 rule (first count 45), so it would exceed the budget, and the task said to stop there. Question: AQ-009 (budget 4060, or a thin wrapper over `check_arcs` with a precondition). No code written.
 - Next: once AQ-009 is answered, on branch `geometry2d/check-arc-rows`: the SPEC line REQ-G2D-248, tests first, then the wrapper and its export.
 
+### 2026-10-26, step 4 (geometry2d `check_arc_rows`, done)
+
+- Peter answered AQ-009 (a): the full status decided in the kernel, geometry2d's budget 4060.
+- `check_arc_rows(rows, ctx)` in `src/splintercam/geometry2d/_arcrows.py` over the new kernel function `check_arc_rows` in `src/splintercam/geometry2d/kernel/arcs.cpp`, beside `check_arcs`; exported from `src/splintercam/geometry2d/__init__.py`. REQ-G2D-248 (Reviewed, AQ-006 and AQ-009), DEC-G2D-045. Tests first: `tests/geometry2d/unit/test_check_arc_rows.py` (exact eps_len boundaries with eps_len 2^-20, the angle rule at ±0.5 and ±1.5 eps_len, radius at eps_len, line rows, full circles, reversed arcs, non-finite values, shapes) and a property against `make_arc` in `tests/geometry2d/property/test_arc_rows_property.py`.
+- Size: 46 NLOC (first count 45), geometry2d at 4032 of 4060.
+- Next: cl's implementation on a new branch from `main` once this pull request and pull request 79 are merged, tests in `tests/cl/` first.
+
 ## Backlog
 
 ## Blockers

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Property tests: the array forms equal the per-curve functions bit for bit, row by row, in
-mixed batches (REQ-G2D-243 to 246; DEC-G2D-044: bit identity is the requirement, so these compare
-exact floats on purpose)."""
+mixed batches (REQ-G2D-243 to 246, 248; DEC-G2D-044: bit identity is the requirement, so these
+compare exact floats on purpose)."""
 
 import math
 
@@ -16,8 +16,10 @@ from splintercam.geometry2d import (
     Arc,
     Curve,
     Line,
+    RowStatus,
     arc_from_bulge,
     bounding_box,
+    check_arc_rows,
     make_arc,
     row_boxes,
     rows_from_bulges,
@@ -132,3 +134,28 @@ def test_row_boxes_equal_bounding_box(ctx: Context, curves: list[Curve]) -> None
         box = bounding_box(c, ctx)
         expected = np.array([box.x_min_mm, box.y_min_mm, box.x_max_mm, box.y_max_mm])
         assert same_bits(boxes[i], expected), (i, c, boxes[i], expected)
+
+
+def _make_arc_status(c: Arc, ctx: Context) -> int | None:
+    # make_arc's verdict on the row as given; CURVE_INVALID for r <= eps_len, which make_arc
+    # never returns as an arc (DEC-G2D-045); None where it closes the arc into a full circle.
+    if c.radius_mm <= ctx.tolerances.length_eps_mm:
+        return int(RowStatus.CURVE_INVALID)
+    result = make_arc(c.p0, c.p1, c.centre, c.sweep_rad, ctx)
+    if result.value is None:
+        return int(RowStatus[codes(result)[0]])
+    return int(RowStatus.OK) if result.value == (c,) else None
+
+
+@pytest.mark.req("REQ-G2D-248", "REQ-G2D-246")
+@settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
+@given(curves=st.lists(curve(), min_size=1, max_size=12))
+def test_check_arc_rows_agrees_with_make_arc(ctx: Context, curves: list[Curve]) -> None:
+    # The generator's arcs end on their circle, at the sweep's end within rounding, or anywhere,
+    # so batches mix consistent and inconsistent rows with lines and full circles.
+    rows = np.array([curve_row(c) for c in curves])
+    status = check_arc_rows(rows, ctx)
+    for i, c in enumerate(curves):
+        expected = int(RowStatus.OK) if isinstance(c, Line) else _make_arc_status(c, ctx)
+        if expected is not None:
+            assert status[i] == expected, (i, c, status[i])
