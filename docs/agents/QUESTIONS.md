@@ -111,3 +111,14 @@ Entry format:
   - (b) No note in plan 0007: the header keeps the field, every strategy passes `()`, and the note comes with the desktop app's operation dialog. The NC program shows the operation's name only.
 - Recommendation: (b): the slice proves the path to the machine, and a note changes nothing the machine does; (a) when the job file grows. Safe default meanwhile: (b), the note empty in every record.
 - Status: Open
+
+## AQ-009: geometry2d's budget for `check_arc_rows` (plan 0007, step 4)
+
+- Asked: 2026-10-26, plan 0007 step 4, by the coding agent (headless run)
+- Box: 1 (Peter's judgement: `architecture/modules.yaml`)
+- Question: AQ-006 (a) gives geometry2d a public `check_arc_rows(rows, ctx)` that returns the `RowStatus` of each curve row, so `cl` refuses an arc before the control gets one it computes differently. geometry2d is at 3986 of its 4000 NLOC (counted as `tools/size-check` counts), which leaves 14 lines. Options:
+  - (a) A full status, decided in the kernel (`src/splintercam/geometry2d/kernel/arcs.cpp`, a new binding beside `check_arcs`). `CURVE_INVALID` for a value that is not finite, |sweep| > 2π, or a radius at or below eps_len (an arc row `make_arc` never builds, because it turns such an arc into a line). `ARC_INCONSISTENT` when REQ-G2D-042 or 043 fails. `OK` for a line with finite ends or a consistent arc. Every row gets an answer, and the answer is the same on every platform (D-055). First count about 45 NLOC (kernel function and loop 26, binding 8, header 2, Python wrapper and export 9); by the 1.5 rule about 65. That puts geometry2d at about 4051, over 4000. It needs this line in `architecture/modules.yaml`:
+    `  geometry2d:             { layer: 1, kernel: true,  depends_on: [foundation], kernel_interface: [exact.hpp, distance.hpp, grid.hpp], research: ["03"], budget: 4060 }`
+  - (b) A thin Python wrapper over the existing `check_arcs`, about 8 NLOC, within the budget. It answers only `OK` or `ARC_INCONSISTENT`, and only under the precondition that every value is finite and 0 < |sweep| ≤ 2π. Outside that the answer is undefined: an arc with sweep 2π + 0.1 whose end fits at 0.1 rad comes back `OK`. `cl` already refuses those rows itself before the check (REQ-CL-014, 017), and it would add REQ-CL-016's radius rule itself with `sqrt`, so the machine gets the same program either way. But a public geometry2d function that answers `OK` for an invalid arc is a trap for the next caller.
+- Recommendation: (a), budget 4060. Safe default meanwhile: nothing implemented on branch `geometry2d/check-arc-rows`; the run stopped here, as the task asked.
+- Status: Open

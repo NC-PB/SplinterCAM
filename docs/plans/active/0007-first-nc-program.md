@@ -130,6 +130,12 @@ Stop after each step for Peter's review of its pull request.
 - Questions for Peter: AQ-005 (the SPEC review), AQ-006 (the arc check through geometry2d, a new dependency), AQ-007 (`cl`'s budget 310 and research 26, 10), AQ-008 (the note: `model` has no field and no room; recommended: no note in the slice). Research request RR-005 (quotes and length of NCX strings).
 - Next: on the answers, with AQ-006 (a) a geometry2d pull request (`check_arc_rows`), then cl's implementation on a new branch from `main`, tests in `tests/cl/` first.
 
+### 2026-10-26, step 4 (geometry2d `check_arc_rows`, stopped on size)
+
+- Peter answered AQ-005 to 008 as recommended (pull request 79). Under AQ-006 (a), geometry2d's `check_arc_rows` comes in its own pull request before cl's implementation.
+- geometry2d is at 3986 of its 4000 NLOC. A full status per row, decided in the kernel, comes to about 65 NLOC by the 1.5 rule (first count 45), so it would exceed the budget, and the task said to stop there. Question: AQ-009 (budget 4060, or a thin wrapper over `check_arcs` with a precondition). No code written.
+- Next: once AQ-009 is answered, on branch `geometry2d/check-arc-rows`: the SPEC line REQ-G2D-248, tests first, then the wrapper and its export.
+
 ## Backlog
 
 ## Blockers
