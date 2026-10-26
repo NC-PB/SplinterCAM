@@ -376,7 +376,7 @@ Offset_Object finds e2 by turning CCW around the head while the upper clearance 
 
 ## Open items
 
-Readiness **L2**, needed for release **1**. Audit of 2026-09-27: [details](../reviews/2026-09-27-readiness-audit.md#02-2d-offsets-and-booleans). Levels are defined in [AGENTS.md](../AGENTS.md#readiness-levels).
+Readiness **L4**, needed for release **1**. Audit of 2026-09-27: [details](../reviews/2026-09-27-readiness-audit.md#02-2d-offsets-and-booleans). Levels are defined in [AGENTS.md](../AGENTS.md#readiness-levels).
 
 ### Registered questions and assumptions
 
