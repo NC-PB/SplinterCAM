@@ -121,4 +121,5 @@ Entry format:
     `  geometry2d:             { layer: 1, kernel: true,  depends_on: [foundation], kernel_interface: [exact.hpp, distance.hpp, grid.hpp], research: ["03"], budget: 4060 }`
   - (b) A thin Python wrapper over the existing `check_arcs`, about 8 NLOC, within the budget. It answers only `OK` or `ARC_INCONSISTENT`, and only under the precondition that every value is finite and 0 < |sweep| ≤ 2π. Outside that the answer is undefined: an arc with sweep 2π + 0.1 whose end fits at 0.1 rad comes back `OK`. `cl` already refuses those rows itself before the check (REQ-CL-014, 017), and it would add REQ-CL-016's radius rule itself with `sqrt`, so the machine gets the same program either way. But a public geometry2d function that answers `OK` for an invalid arc is a trap for the next caller.
 - Recommendation: (a), budget 4060. Safe default meanwhile: nothing implemented on branch `geometry2d/check-arc-rows`; the run stopped here, as the task asked.
-- Status: Open
+- Status: Answered 2026-10-26
+- Answer: (a), as recommended (Peter): the full status decided in the kernel; geometry2d's budget 4060 in `architecture/modules.yaml` (applied by the Project Spike session).
