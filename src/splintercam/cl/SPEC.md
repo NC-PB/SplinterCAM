@@ -160,7 +160,7 @@ None. AQ-005 to AQ-008 answered 2026-10-26 (all as recommended): SPEC approved; 
 
 - 2026-10-25: drafted for plan 0007, step 4, from research 26 and 10 and the feature map, section 6. Revised after the spec review the same day: the starts of moves 0 and 1 defined, move 1 at the clearance height (a diagonal from the tool change refused), full circles with end = start bit for bit, tiny arcs refused, reversed arcs a producer precondition, `make_cl_data` checks every operation again, the check order fixed, tol in the header for the writer's rounding allowance, k ≠ 1 left to the writer.
 - 2026-10-26: Reviewed (Peter, AQ-005 to AQ-008 as recommended).
-- 2026-10-27: implemented (plan 0007, step 4); "Verified by" names the tests. Three readings of the wording in DEC-CL-007 (−0.0 equals +0.0; ranges, not types; one RAPID passes). AQ-010 asks whether `cl` should also refuse a rapid in the plane below the clearance height.
+- 2026-10-27: implemented (plan 0007, step 4); "Verified by" names the tests. Three readings of the wording in DEC-CL-007 (−0.0 equals +0.0; ranges, not types; one RAPID passes). AQ-018 asks whether `cl` should also refuse a rapid in the plane below the clearance height.
 
 [r10]: ../../../docs/research/10-linking.md
 [r26]: ../../../docs/research/26-toolpath-record.md
