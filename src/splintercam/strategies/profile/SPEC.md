@@ -1,0 +1,164 @@
+# SPEC: strategies/profile
+
+<!-- The outside profile of one closed contour. Drafted on 2026-10-27 for plan 0007, step 5, cut to the slice (D-160):
+     the centre path from offset2d's GROW, equal depth passes, a start point and approach point of our own, climb,
+     the links of toolpath. Inside profiles, open chains, leads, tabs, conventional milling, arc fitting and finishing
+     passes come with later plans. -->
+
+| | |
+| --- | --- |
+| Status | Reviewed (2026-10-27, Peter: AQ-015 to AQ-017 in `docs/agents/questions/`, all as recommended; the typed input `ProfileInput` the pattern for every strategy, AQ-014; plan 0007, Decisions). Choices marked "(ours)" are in `src/splintercam/strategies/profile/DECISIONS.md` and stand as the contract; the readings of research 22's wording in DEC-PRF-001 to 004 stay provisional until RR-007 answers (the behaviour is Peter's, AQ-016) |
+| Layer | 3 (see architecture/modules.yaml) |
+| Depends on | foundation (`Context`, `Result`, `Diagnostic`, `Severity`, `CANCELLED`); geometry2d (`CurveRows`, `PolygonRegion`, `RegionKind`, `row_boxes`, `orient2d`); offset2d (`offset_region`, `SourceClasses`, `EdgeClass`; added to `depends_on`, AQ-017); model (`FlatEndMill`, `StockBox`, `Operation`, `ParameterDeclaration`, `Unit`); cl (`ClHeader`, `ClOperation`, `Role`, by `src/splintercam/cl/SPEC.md`, Reviewed); toolpath (`link_heights`, `LevelPass`, `LinkPlan`, `link_operation`, by `src/splintercam/toolpath/SPEC.md`, Reviewed) |
+| Research | [22][r22], Scope, Method, Parameters, Traps, Tests (the outside profile of plan 0007); [02][r02], the band of `offset_region` (through `src/splintercam/offset2d/SPEC.md`, REQ-OFF-020, 025, 038); [10][r10], Method (the links, through toolpath) |
+| Decisions | D-023 (arcs by arc fitting, not in plan 0007), D-024 and D-154 (the path is the tool centre at the tip), D-025 (n and vf by hand), D-049 (declared parameters), D-079 (air gap 0.2·R), D-150 (allowance, t = R + s > 0), D-055 (determinism); text in [docs/spike/decisions-snapshot.md](../../../docs/spike/decisions-snapshot.md) |
+| Owner | Peter Burgener |
+
+## Purpose
+
+Plans one outside profile: the tool centre path round one closed contour of material at the side allowance, in equal depth passes, climb milling, starting and ending at an approach point beside the stock, as one operation of the toolpath record. It checks the values that need the part, the tool and the stock together, which `model` cannot (model SPEC, Scope). Its user in plan 0007 is `job` (step 7); its output goes to `ncx` (step 6) through `cl`.
+
+## Scope
+
+- In: one closed loop of material from `io` (research 21); a flat end mill of radius R measured at one point; a box stock; research 22's parameters (side allowance s, z_top, z_bottom, largest step-down, cutting and plunge feed, air gap); research 22, Method 1 to 6; its traps 1 to 3 and tests 1 to 5.
+- Out, handled elsewhere: the links, heights and their checks (`toolpath`); the record's rules (`cl`); the values `model` checks (types, ranges, feeds > 0, tol; REQ-MDL-015 to 029); building the `Context` for the operation's tol (`job`, step 7).
+- Later (one line each, no work): G2/G3 from arc fitting (D-023; plan 0007, Out: the moves are lines); inside profiles, open chains (research 02, Open chains), several loops and islands; conventional milling; leads, tabs, ramps; a start point the user picks, and a second candidate when the first approach is blocked; finishing passes and a floor allowance (D-150); control compensation (D-024); cuts below the stock bottom onto a spoil board; source IDs in the record (cl, Later).
+- Non-goals: links of its own (toolpath's); controller knowledge (D-021, D-148); shifting geometry toward a tolerance (D-150).
+
+## Public interface
+
+Lengths in mm, feeds in mm/min, float64 (D-028). All names are proposals (ours). No kernel: the loop's points are handled with vectorised NumPy and geometry2d's vectorised predicates; Python loops run over passes only (split rule; DEC-PRF-006).
+
+```python
+from dataclasses import dataclass
+from splintercam.cl import ClOperation
+from splintercam.foundation import Context, Result
+from splintercam.geometry2d import CurveRows
+from splintercam.model import FlatEndMill, Operation, ParameterDeclaration, StockBox
+
+STRATEGY_ID = "profile"
+DECLARATIONS: tuple[ParameterDeclaration, ...]   # REQ-PRF-001, in this order
+
+@dataclass(frozen=True, slots=True)
+class ProfileInput:
+    contour: CurveRows        # one closed loop of material (io's `DxfContour.loop`)
+    tool: FlatEndMill         # the operation's tool
+    stock: StockBox
+    operation: Operation      # returned by model's check_job: every declared parameter present
+
+def plan_profile(task: ProfileInput, ctx: Context) -> Result[ClOperation]: ...
+```
+
+- Preconditions (programming errors, `ValueError`, DEC-PRF-005): `operation.strategy` is `STRATEGY_ID`; `operation.parameters` holds exactly the declared names in declaration order (REQ-MDL-024); `tool.number` is the operation's tool number and has its point; `contour` has one loop; `ctx.tolerances` is `ToleranceSet.for_operation(operation.tol_mm)`, so offset2d's a = 0.05·tol is the operation's.
+- Expected outcomes are diagnostics (errors, no value): REQ-PRF-003 to 010, 015. offset2d's diagnostics are passed on (REQ-PRF-010).
+- Terms: t = R + s; g = air gap ratio · R; a and u as offset2d's (a = max(0.05·tol, 2u)); "the band" is offset2d's [t, t + a + 6u] from the flattened contour, [t, t + a + 6u + t_flat] from the true lines and arcs (`src/splintercam/offset2d/SPEC.md`, before REQ-OFF-020). "Line row": a source ID whose rows in the contour are all lines (sweep 0).
+
+## Requirements
+
+| ID | Requirement (EARS) | Verified by | Status |
+| --- | --- | --- | --- |
+| REQ-PRF-001 | THE profile strategy SHALL declare, in this order: `allowance_mm` (mm, default 0, (−∞, ∞); D-150), `z_top_mm` (mm, no default, (−∞, ∞); research 22, Scope; no default, since research 22 gives none and 0 is the stock top only by chance, ours), `z_bottom_mm` (mm, no default, (−∞, ∞)), `stepdown_mm` (mm, no default, (0, ∞); the glossary's `stepdown`), `cut_feed_mm_per_min` and `plunge_feed_mm_per_min` (mm/min, no default, (0, ∞); D-025), `air_gap_ratio` (1, default 0.2, (0, ∞); D-079), each with its source (research 22, Parameters; D-049). | unit: the declarations; model's `check_job` accepts the model SPEC's example job (Example parts) with them | Reviewed |
+| REQ-PRF-002 | IF a precondition of the interface does not hold, THEN `plan_profile` SHALL raise `ValueError` naming it (DEC-PRF-005). | unit: one per precondition | Reviewed |
+| REQ-PRF-003 | IF s is not above −R, THEN `plan_profile` SHALL report `PROFILE_ALLOWANCE` (error) naming s and −R (D-150; research 22, test 3). | unit: s = −5 at R = 5 refused; s = −4.9 gives a loop in the band at t = 0.1 | Reviewed |
+| REQ-PRF-004 | IF z_bottom is not below z_top, THEN `plan_profile` SHALL report `PROFILE_DEPTH_INVALID` (error) naming both (research 22, trap 3: an input error, not an empty operation). | unit: equal and reversed | Reviewed |
+| REQ-PRF-005 | IF h_r from `link_heights` is not below its h_c (a stock top so large that the 2 mm vanish in rounding), or the first level z_1 (REQ-PRF-016) is not below h_r, THEN `plan_profile` SHALL report `PROFILE_TOP_TOO_HIGH` (error) naming z_1 and h_r (toolpath's REQ-TP-001 and 010: every descent goes down from h_r). WHERE z_top lies below the stock top, IF the stock top − z_1 exceeds a_p,max + eps_len, THEN it SHALL report `PROFILE_FIRST_PASS_DEEP` (error) naming the depth of the first pass (Peter, AQ-016, item 3 (a): without a stock model the material above z_top may still be there, so the first pass would cut more than the step-down). Levels above the stock top are accepted and cut air. | unit: z_1 = h_r refused; stock top 1e16 refused; stock top 0.5, z_top 0, a_p,max 1, z_bottom −10 refused (first pass 1.5 mm deep); z_top 1 above the stock top accepted | Reviewed |
+| REQ-PRF-006 | IF z_bottom lies below the stock bottom, THEN `plan_profile` SHALL report `PROFILE_BELOW_STOCK` (error) naming both (Peter, AQ-016, item 5 (a): below the stock is the table or the vice; plan 0007 models no fixtures, research 10, trap 1). | unit: z_bottom = bottom − 0.001 refused, = bottom accepted | Reviewed |
+| REQ-PRF-007 | IF the stock top minus z_bottom exceeds the tool's flute length, THEN `plan_profile` SHALL report `PROFILE_TOO_DEEP` (error) naming the depth and the flute length (research 22, Method 3 and test 4; the depth from the stock top, not from z_top, DEC-PRF-004, Peter, AQ-016, item 2). | unit: research 22 test 4; depth equal to the flute length accepted | Reviewed |
+| REQ-PRF-008 | IF the step-down exceeds the tool's flute length, THEN `plan_profile` SHALL report `PROFILE_STEP_DOWN` (error) (research 22, Parameters: at most the flute length). | unit: step-down equal to the flute length accepted, flute length + 0.001 refused | Reviewed |
+| REQ-PRF-009 | IF the contour's bounding box in XY does not lie inside the stock box's XY extent, ends included, THEN `plan_profile` SHALL report `PROFILE_STOCK_SMALL` (error) naming the side (research 22, Method 5 relies on the stock box containing the part; model SPEC, Scope). IF g is not above eps_len, THEN it SHALL report `PROFILE_AIR_GAP` (error) naming g (ours: a gap below eps_len is none, and P would end within rounding of R off the stock, which REQ-TP-012 refuses; DEC-PRF-003). | unit: a contour 0.001 mm past one side refused; touching accepted; air_gap_ratio 1e-7 at R = 5 refused | Reviewed |
+| REQ-PRF-010 | THE centre path SHALL be `offset_region(contour, MATERIAL, t, classes)` with every source ID of the contour of class MATERIAL, its diagnostics passed on in order. WHEN it returns no value, `plan_profile` SHALL return no value with offset2d's diagnostics and add none (`CANCELLED`, `LOOPS_CROSS`, `REGION_TOO_LARGE` stay as offset2d gives them); IF it returns a value that is not exactly one loop, THEN `plan_profile` SHALL report `PROFILE_REGION` (error) naming the loop count (research 22, Method 1; offset2d REQ-OFF-020, 040, 041). | unit: research 22 test 1; a C-shaped part whose gap is narrower than 2t (an outer loop and a hole) refused with count 2; offset2d cancelled gives `CANCELLED` alone | Reviewed |
+| REQ-PRF-011 | THE cut moves SHALL be the loop's edges as LINE moves (D-023: arcs come by arc fitting, out of plan 0007), so every cut point lies in the band, at least t from the true contour (research 22, Method 1 and test 2; offset2d REQ-OFF-025; reading of test 1's "arcs of radius 10", DEC-PRF-001). | test 1: each of the four sides is one edge on its side offset by 5, and the fillet stretches lie within the band of the four arcs of radius 10; test 2: s = 0.5, every edge's exact smallest distance to the true contour at least 5.5 and its points at most 5.5 + a + 6u + t_flat from it, and every vertex and edge in [5.5, 5.5 + a + 6u] from the flattened contour (REQ-OFF-025); test 5: one loop per pass, every vertex and edge in [25, 25 + a + 6u + t_flat] from the centre; property: random convex and non-convex contours of lines and arcs, the same bounds with the exact segment distance (oracle `tests/support/offset2d_oracles.py`) | Reviewed |
+| REQ-PRF-012 | THE loop SHALL run clockwise (climb with the spindle CW, material on the right; research 22, Method 2), each edge keeping its source ID when the CCW loop from offset2d is reversed (trap 2). | unit: the signed area of the cut moves is negative; the start edge of REQ-PRF-013 on test 1 lies on a long side (a source ID shifted by one edge would put it on a fillet) | Reviewed |
+| REQ-PRF-013 | THE start point S SHALL be the midpoint of the loop's longest edge whose source ID is a line row, lengths compared as squared lengths dx·dx + dy·dy, the first such edge in offset2d's CCW order (before the reversal, from its smallest point, REQ-OFF-038) on a tie; WHERE no edge has a line row's ID, S SHALL be the loop's first vertex, offset2d's smallest point. The loop SHALL start and end at S (research 22, Method 4; DEC-PRF-002). | unit: test 1, S is the midpoint of the long side that comes first in offset2d's order; test 5, the circle starts at its smallest vertex; a tie of two equal sides takes the first | Reviewed |
+| REQ-PRF-014 | THE approach point P SHALL be S + d·n, n the unit outward normal at S (of S's edge; at a vertex, the normalised sum of the two edges' unit outward normals), d the smallest d ≥ 0 at which P's distance in XY from the stock box is at least R + g, computed in closed form with `sqrt` only; a side whose normal component is 0 is skipped, not divided by (research 22, Method 5; D-079; DEC-PRF-003). WHERE d is 0, P is S (ours). | unit: test 1, P's centre at least R + g = 6 mm from the stock box; n exactly along an axis; S already clear of the stock gives P = S; P off a box corner; property: random S, n (axis-parallel included) and boxes, the distance at P at least R + g − eps_len and its square above R², at d − eps_len below R + g | Reviewed |
+| REQ-PRF-015 | IF the segment from S to P touches or crosses an edge of the loop other than the two that meet at S (orient2d, exact), THEN `plan_profile` SHALL take S as the loop's smallest vertex instead, as in REQ-PRF-013, and P from it by REQ-PRF-014; IF that segment is blocked too, THEN it SHALL report `PROFILE_APPROACH_BLOCKED` (error) naming S (ours, DEC-PRF-003: on a non-convex part the normal can pass over the part, and the approach at depth would cut it; the smallest vertex's ray runs where the loop has no point, so the error guards a bug). | unit: a U-shaped part whose longest side is inside the U starts at its smallest vertex; test 1 keeps the long side | Reviewed |
+| REQ-PRF-016 | THE passes SHALL be n = ⌈(z_top − z_bottom) / a_p,max⌉ of equal depth Δ = (z_top − z_bottom) / n at z_i = z_top − i·Δ, i = 1 … n, with z_n = z_bottom exactly; WHERE n > 1 and (n − 1)·a_p,max ≥ z_top − z_bottom − eps_len, n is reduced by one (research 22, Method 3; ours, DEC-PRF-004: a quotient one ulp over an integer gives no extra pass). | unit: test 1, −3.333…, −6.666…, −10; z_top 0.1, z_bottom −0.2, step 0.1 gives 3 passes (the quotient lands above 3); depth equal to the step gives 1; depth 5e-7 gives 1 | Reviewed |
+| REQ-PRF-017 | THE pass at z_i SHALL be: WHERE d > 0, P → S, LINE, role APPROACH, plunge feed; the loop from S to S, role CUT, cutting feed; WHERE d > 0, S → P, LINE, role RETRACT, cutting feed (research 22, Method 6 and trap 1). | unit: roles and feed classes of test 1's pass; s = 2, R = 5 and a stock flush with the part: d = 0, the pass is the loop alone | Reviewed |
+| REQ-PRF-018 | THE header SHALL hold the operation's name, an empty note (AQ-008 (b)), the tool number, the point's k and a, the spindle speed, tol, the feed classes (`cut`, cutting feed) and (`plunge`, plunge feed) in that order, and h_c and h_r from `link_heights` as the clearance and retract heights (research 26 subset; `cl` REQ-CL-002, and `retract_height_mm` for REQ-CL-022). | unit: model's example job gives `PROFILE_1`, (), 1, 1, 0, 8000, 0.01, (("cut", 1200), ("plunge", 300)), 5, 3 | Reviewed |
+| REQ-PRF-019 | WHEN no error is found, THE `plan_profile` function SHALL return the record of `link_operation` for P, the tool, the plunge class and the passes in order, with offset2d's warnings (research 10 through toolpath). | unit: test 1's record accepted by `make_operation`; research 10 test 1 on it: the order, no RAPID in the plane below h_c, no move below h_r within R of the stock box but the passes' rows and the descents at P | Reviewed |
+| REQ-PRF-020 | THE `plan_profile` function SHALL check the values first, REQ-PRF-003 to 009 in that order (REQ-PRF-005 skipped when REQ-PRF-004 fails, since there are no levels), report every one that fails with the operation as location (`operation (<name>)`, DEC-PRF-005), and then stop before the offset. After the offset it SHALL stop at the first of REQ-PRF-010 and 015 that fails, after offset2d's diagnostics (ours, D-055; as model's REQ-MDL-025). | unit: s and z_bottom both wrong give both codes in order and no offset is run | Reviewed |
+| REQ-PRF-021 | WHEN `ctx.cancel` is set at entry or after the offset, THE `plan_profile` function SHALL return no value and `CANCELLED` alone (REQ-FND-013). | unit: cancel set before the call gives `CANCELLED` alone and offset2d is not called; cancel set by offset2d's progress callback gives `CANCELLED` alone | Reviewed |
+| REQ-PRF-022 | THE `plan_profile` function SHALL decide the same on every platform: comparisons, sums, products, `sqrt` and geometry2d's exact predicates, no trigonometry; two runs give the same record bit for bit (D-055). | review; unit: test 1 twice | Reviewed |
+
+## Invariants
+
+- Every cut move lies at least t from the true contour and within the band (REQ-PRF-011). Property test.
+- The record runs clockwise round the part from S to S on every pass, all passes at the same S and P, every z_i between z_bottom and z_top, no pass deeper than a_p,max + eps_len (REQ-PRF-012 to 017). Property test.
+- P lies outside the stock box by at least R + g up to rounding, and the approach S → P crosses no other part of the loop (REQ-PRF-014, 015), so toolpath's REQ-TP-012 holds for every plan the profile builds. Property test.
+
+## Tolerance budget
+
+The whole chord share goes to offset2d (a = 0.05·tol for the flattening and ArcTolerance; offset2d's SPEC, Tolerance budget); the profile spends none. eps_len is read for REQ-PRF-005, 009 and 016 (and REQ-PRF-014's property test).
+
+## Failure modes and diagnostics
+
+| Situation | Result | Diagnostic |
+| --- | --- | --- |
+| s ≤ −R | no value | `PROFILE_ALLOWANCE` |
+| z_bottom ≥ z_top | no value | `PROFILE_DEPTH_INVALID` |
+| first level not below h_r, or h_r not below h_c | no value | `PROFILE_TOP_TOO_HIGH` |
+| first pass deeper than the step-down below the stock top | no value | `PROFILE_FIRST_PASS_DEEP` |
+| z_bottom below the stock bottom | no value | `PROFILE_BELOW_STOCK` |
+| stock top − z_bottom > flute length | no value | `PROFILE_TOO_DEEP` |
+| step-down > flute length | no value | `PROFILE_STEP_DOWN` |
+| contour outside the stock in XY | no value | `PROFILE_STOCK_SMALL` |
+| air gap not above eps_len | no value | `PROFILE_AIR_GAP` |
+| offset gives no value | no value | offset2d's diagnostics alone |
+| offset not exactly one loop | no value | `PROFILE_REGION`, after offset2d's own |
+| approach crosses the loop at both candidates | no value | `PROFILE_APPROACH_BLOCKED` |
+| cancelled | no value | `CANCELLED` |
+| precondition broken | raises | `ValueError` (programming error) |
+
+## Algorithms and design inputs
+
+Clean room (D-144): no implementation details of other CAM systems went in.
+
+| Element of the method | Public source, or own design with date |
+| --- | --- |
+| Centre path by GROW of the material region by R + s | research 22, Method 1; research 02 (Held, Def. 7.1, through offset2d) |
+| Clockwise for climb | research 22, Method 2 (the usual definition of down-milling) |
+| Equal depth passes | research 22, Method 3 (ours there); the integer guard ours, 2026-10-27 |
+| Start point, approach point | research 22, Method 4 and 5 (ours there); D-079; the vertex normal, closed form and blocked check ours, 2026-10-27 |
+| Approach at the plunge feed, retract at the cutting feed | research 22, Method 6 and trap 1 |
+| Lines, no arcs | D-023; plan 0007, Out |
+
+## Example parts
+
+- Research 22 test 1: rectangle 100 × 60 from (0, 0), fillets R 5, D 10 with 30 mm of flute, stock (−5, −5, −20) to (105, 65, 0), s = 0, z_top 0, z_bottom −10, step-down 4, feeds 1200 and 300: three passes; S the midpoint of a long side (y = −5 or 65, by offset2d's order); P's centre at least 6 mm (R + 0.2·R) off the stock's side; the loop clockwise, its fillets flattened within the band.
+- Test 5: a circle of radius 20: S at the smallest vertex, n along the vertex normal (about −x), one polygonal circle of radius 20 + R per pass.
+- An L-shaped plate: the longest side is outside, the normal is free: accepted. A U-shaped part whose inner side is the longest: the normal would cross the U's other arm, so S moves to the smallest vertex (REQ-PRF-015).
+- Stock 0.5 mm above z_top (a facing allowance left on), step-down 1: `PROFILE_FIRST_PASS_DEEP`; the user sets z_top to the stock top (AQ-016, item 3 (a)).
+- A through cut with z_bottom 0.5 mm below the stock bottom: `PROFILE_BELOW_STOCK`; a spoil board comes with a later fixture model (AQ-016, item 5 (a)).
+
+## Test plan
+
+- Unit (`tests/strategies/profile/unit/`): one or more tests per requirement, tagged with its ID; research 22 tests 1 to 5; the example parts.
+- Property (`tests/strategies/profile/property/`): random contours of lines and arcs inside random stock boxes (convex and non-convex, with offset2d's generators): every cut point in the band from the true contour (oracle `tests/support/offset2d_oracles.py`), clockwise, P clear of the stock, the record accepted by `make_operation`, bit for bit twice.
+- Golden cases: `profile-rectangle-fillets` comes with step 7 (plan 0007). Differential: none.
+
+## Performance budget
+
+Research 22 test 1 in under 50 ms on the reference machine, offset included (ours). Not checked by a test in this slice.
+
+## Size estimate
+
+First count about 265 NLOC of Python (declarations 18, input type 8, reading parameters 10, the nine value checks with diagnostics 48, offset call, classes and loop check 18, reversal 6, start point 22, normal 10, approach point in closed form 28, blocked check with its fallback 17, pass count 10, pass rows 18, header 12, the entry 20, rounded up); by Peter's rule of 2026-10-25 about 1.5 times that: **about 400 NLOC**, and about 480 lines of tests. With toolpath's 165, step 5 comes to about 565 NLOC against the plan's 250 (375 by the rule): about 51 % over, just past the 50 % stop; Peter accepted the sizes (AQ-017). Module budget 400 in `architecture/modules.yaml` (Peter, AQ-017).
+
+## Open questions
+
+None for Peter. His answers of 2026-10-27 (`docs/agents/questions/`; plan 0007, Decisions):
+
+- AQ-016: SPEC approved, all as recommended: fillets as G1 lines (item 1 (a)); the depth from the stock top (2); a first pass deeper than the step-down refused (3 (a)); S on the longest straight side, with the setup sheet of AQ-015 (4 (a)); cuts below the stock bottom refused (5 (a)); a step-down up to the flute length (6 (a)); straight approach and retract along the normal (7); the smallest-vertex fallback (8). The interface `plan_profile(task: ProfileInput, ctx: Context)` is the pattern for every strategy (AQ-014).
+- AQ-017: budget 400, research 02, 22, 10 and offset2d in `depends_on` in `architecture/modules.yaml`.
+
+Still open (box 3, not blocking): RR-007, research 22's tests 1, 2 and 5, Method 3 to 5 worded for a polygonal centre path; the readings in DEC-PRF-001 to 004 stand meanwhile.
+
+## Change log
+
+- 2026-10-27: drafted for plan 0007, step 5, from research 22 and 02 (through offset2d) and 10 (through toolpath). Revised after the spec and cnc reviews the same day: n never 0; offset2d's no-value diagnostics passed on alone; z_top without default, a first pass deeper than the step-down below the stock top refused, the refusal of z_top above the stock replaced by z_1 below h_r; a blocked approach falls back to the smallest vertex; `PROFILE_AIR_GAP` among the value checks; the tie order, the axis-parallel normal, the d = 0 pass and the property bound made exact.
+- 2026-10-27: Reviewed (Peter, AQ-016 and AQ-017, all as recommended; AQ-014 for the typed input); budget 400.
+- 2026-10-27: `cl`'s header gains `retract_height_mm` and REQ-CL-022 (pull request 85, AQ-018 (c)): REQ-PRF-018's header holds h_r as well.
+
+[r02]: ../../../../docs/research/02-offsets-and-booleans.md
+[r10]: ../../../../docs/research/10-linking.md
+[r22]: ../../../../docs/research/22-2d-operations.md
