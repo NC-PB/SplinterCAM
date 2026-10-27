@@ -41,9 +41,9 @@ def _plan(ctx: Context, **changed: object) -> Result[ClOperation]:
 def test_the_declarations_in_order_with_units_defaults_and_ranges() -> None:
     inf = math.inf
     expected = [
-        ("allowance_mm", Unit.MM, 0.0, -inf, False),
-        ("z_top_mm", Unit.MM, None, -inf, False),
-        ("z_bottom_mm", Unit.MM, None, -inf, False),
+        ("allowance_mm", Unit.MM, 0.0, -inf, True),
+        ("z_top_mm", Unit.MM, None, -inf, True),
+        ("z_bottom_mm", Unit.MM, None, -inf, True),
         ("stepdown_mm", Unit.MM, None, 0.0, True),
         ("cut_feed_mm_per_min", Unit.MM_PER_MIN, None, 0.0, True),
         ("plunge_feed_mm_per_min", Unit.MM_PER_MIN, None, 0.0, True),

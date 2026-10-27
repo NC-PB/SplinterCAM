@@ -108,6 +108,7 @@ The whole chord share goes to offset2d (a = 0.05·tol for the flattening and Arc
 | approach crosses the loop at both candidates | no value | `PROFILE_APPROACH_BLOCKED` |
 | cancelled | no value | `CANCELLED` |
 | precondition broken | raises | `ValueError` (programming error) |
+| offset2d's loop not CCW (its promise broken) | raises | `ValueError` (DEC-PRF-007 (6)) |
 
 ## Algorithms and design inputs
 

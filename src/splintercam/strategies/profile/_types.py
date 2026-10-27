@@ -13,9 +13,8 @@ STRATEGY_ID = "profile"
 
 def _declare(name: str, unit: Unit, default: float | None, low: float, source: str
              ) -> ParameterDeclaration:  # fmt: skip
-    # Open to +inf; open at a finite low end (> 0), closed at -inf (any finite value).
-    return ParameterDeclaration(name, unit, default, low, math.inf, math.isfinite(low), True,
-                                source)  # fmt: skip
+    # Open at both ends: (low, inf), as REQ-PRF-001 writes the ranges; "(-inf, inf)" in messages.
+    return ParameterDeclaration(name, unit, default, low, math.inf, True, True, source)
 
 
 _ANY = -math.inf

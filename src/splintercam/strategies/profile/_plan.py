@@ -6,7 +6,7 @@ import numpy as np
 
 from splintercam.cl import ClHeader, ClOperation
 from splintercam.foundation import CANCELLED, Context, Diagnostic, Result
-from splintercam.geometry2d import PolygonRegion, RegionKind
+from splintercam.geometry2d import PolygonRegion, RegionKind, orient2d
 from splintercam.offset2d import EdgeClass, SourceClasses, offset_region
 from splintercam.toolpath import LinkPlan, link_heights, link_operation
 
@@ -38,14 +38,14 @@ def _link_plan(
     # from P round the clockwise loop (REQ-PRF-012 to 017).
     if (count := region.loop_starts.size) != 1:
         return error(task, "PROFILE_REGION", f"the centre path has {count} loops, not one")
-    x, y = region.points[:, 0], region.points[:, 1]
-    if not np.sum(x * np.roll(y, -1) - np.roll(x, -1) * y) > 0.0:  # DEC-PRF-007 (6)
+    p = region.points  # DEC-PRF-007 (6): the turn at the smallest vertex, convex (REQ-OFF-038)
+    if orient2d(p[-1:], p[:1], p[1:2])[0] <= 0:
         raise ValueError(f"operation {task.operation.name!r}: offset2d's outer loop is not CCW")
     arc_ids = task.contour.ids[task.contour.rows[:, 6] != 0.0]
     r = task.tool.radius_mm
     loop, approach = start_and_approach(region, arc_ids, task.stock, r + v.air_gap_ratio * r)
     if loop is None:
-        text = f"the approach from S {approach!r} crosses the part at both start points"
+        text = f"the approach from the smallest vertex {approach!r} crosses the part"
         return error(task, "PROFILE_APPROACH_BLOCKED", text)
     zs = levels(v.z_top_mm, v.z_bottom_mm, v.stepdown_mm, ctx.tolerances.length_eps_mm)
     return LinkPlan(approach, task.tool, PLUNGE_CLASS, level_passes(loop, approach, zs))
