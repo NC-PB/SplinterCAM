@@ -15,13 +15,17 @@ from ._moves import CENTRE_X, CENTRE_Y, Printed, X, Y
 from ._printer import VALUE_LIMIT
 
 # Research 27, Checked condition 2: names valid as file names on every platform; Microsoft,
-# "Naming Files, Paths, and Namespaces": the device names Windows reserves.
+# "Naming Files, Paths, and Namespaces": the device names Windows reserves (COM0, LPT0: AQ-027).
 _NAME = re.compile(r"[A-Za-z0-9_]+")
 _DEVICES = frozenset(
-    ("CON", "PRN", "AUX", "NUL", *(f"{port}{n}" for port in ("COM", "LPT") for n in range(1, 10)))
+    ("CON", "PRN", "AUX", "NUL", *(f"{port}{n}" for port in ("COM", "LPT") for n in range(10)))
 )
 # DEC-NCX-009: outside printable ASCII, a bracket (ends a Fanuc comment) or NCX's escape `\`.
 _NOT_IN_NOTE = re.compile(r"[^\x20-\x7e]|[()\\]")
+# REQ-NCX-026 (Peter, AQ-026 item 1): the shipped mills' step (research 27, `[format]` decimals
+# 3); an arc shorter than it may end on its start once NCXchange rounds, and a control reads that
+# as a full circle. A constant until NCXchange D363 checks it at the machine's step (DEC-NCX-016).
+_MIN_ARC_CHORD_MM = 0.001
 
 
 def _error(code: str, message: str, location: str) -> Diagnostic:
@@ -42,26 +46,38 @@ def program_errors(name: str, number: int) -> list[Diagnostic]:
     return found
 
 
+def _arcs(operation: ClOperation, columns: Printed) -> NDArray[np.intp]:
+    # The arcs whose start, the previous move's end, is known in the plane (not move 1,
+    # REQ-CL-006) and whose values are printed (too large ones are reported already).
+    arcs = np.flatnonzero(operation.moves.kind == MoveKind.ARC)
+    return arcs[(arcs > 1) & ~columns.too_large[arcs] & ~columns.too_large[arcs - 1]]
+
+
 def _degenerate_arcs(operation: ClOperation, columns: Printed) -> NDArray[np.intp]:
-    # REQ-NCX-016 on the printed counts; the start is the previous move's end, unknown in the
-    # plane for move 1 (REQ-CL-006); moves with a value too large are reported already.
-    moves, counts = operation.moves, columns.counts
-    arcs = np.flatnonzero(moves.kind == MoveKind.ARC)
-    arcs = arcs[(arcs > 1) & ~columns.too_large[arcs] & ~columns.too_large[arcs - 1]]
+    # REQ-NCX-016 on the printed counts.
+    arcs, counts = _arcs(operation, columns), columns.counts
     start, end = counts[arcs - 1][:, [X, Y]], counts[arcs][:, [X, Y]]
     centre = counts[arcs][:, [CENTRE_X, CENTRE_Y]]
 
     def same(a: NDArray[np.int64], b: NDArray[np.int64]) -> NDArray[np.bool_]:
         return np.all(a == b, axis=1)
 
-    partial = np.abs(moves.sweep_rad[arcs]) < math.tau
+    partial = np.abs(operation.moves.sweep_rad[arcs]) < math.tau
     return arcs[(partial & same(end, start)) | same(centre, start) | same(centre, end)]
+
+
+def _short_arcs(operation: ClOperation, columns: Printed) -> NDArray[np.intp]:
+    # REQ-NCX-026 on the record's values: the chord in XY of every arc but a full circle.
+    arcs, values = _arcs(operation, columns), columns.values
+    chord = np.hypot(*(values[arcs, axis] - values[arcs - 1, axis] for axis in (X, Y)))
+    partial = np.abs(operation.moves.sweep_rad[arcs]) < math.tau
+    return arcs[partial & (chord < _MIN_ARC_CHORD_MM)]
 
 
 def operation_errors(
     where: str, operation: ClOperation, first: ClHeader, columns: Printed
 ) -> list[Diagnostic]:
-    """REQ-NCX-003, 010, 013, 015 and 016 for one operation, in that order."""
+    """REQ-NCX-003, 010, 013, 015, 016 and 026 for one operation, in that order."""
     header = operation.header
     found: list[Diagnostic] = []
     if (header.tool_number, header.spindle_rpm) != (first.tool_number, first.spindle_rpm):
@@ -88,4 +104,7 @@ def operation_errors(
     for move in _degenerate_arcs(operation, columns):
         message = f"move {move}: the arc prints with its end at its start or its centre at an end"
         found.append(_error("NCX_ARC_PRINTS_DEGENERATE", message, where))
+    for move in _short_arcs(operation, columns):
+        message = f"move {move}: the arc's chord is below {_MIN_ARC_CHORD_MM} mm (DEC-NCX-016)"
+        found.append(_error("NCX_ARC_CHORD_TOO_SHORT", message, where))
     return found

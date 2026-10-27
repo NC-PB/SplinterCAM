@@ -99,7 +99,7 @@
 ## DEC-NCX-011: A section ends at its operation's last move
 
 - Date: 2026-10-27; decided by: ours (implementation, plan 0007 step 6)
-- Status: Accepted 2026-10-27
+- Status: Accepted 2026-10-27; confirmed by Peter (AQ-027 item 1), the SPEC's `last_line` comment changed to match
 - Decision: `NcxSection.last_line` is the line of the operation's last move. For every section but the last that is the line before the next `SECTION`; for the last, the program end is read as the closing blocks `COOLANT=OFF`, `SPINDLE=OFF`, `PROGRAM=END`, `FILE=END`, so a message on them has the location `program`.
 - Why: REQ-NCX-001 writes the spindle and coolant stop after the operations, not in one, and a message about the program's end blocks (an unknown `SPINDLE=OFF`, RR-006) is not an operation's fault. REQ-NCX-021's `program` location exists for such lines.
 - Rejected: the last section running to the line before `PROGRAM=END` (it would take the program's closing blocks into the last operation).
@@ -108,7 +108,7 @@
 ## DEC-NCX-012: A tol the tolerance set refuses is reported, not swallowed
 
 - Date: 2026-10-27; decided by: ours (implementation)
-- Status: Accepted 2026-10-27
+- Status: Accepted 2026-10-27; confirmed by Peter (AQ-027 item 2), in the SPEC's failure table and REQ-NCX-017
 - Decision: when `ToleranceSet.for_operation(tol)` has no value for an operation's tol (below 2/875 mm or above 1 mm, REQ-FND-010), `write_ncx` returns no program and reports foundation's diagnostic (`TOL_BELOW_MINIMUM`, `TOL_ABOVE_MAXIMUM`) with the operation as its location, after the operation's other errors.
 - Why: `cl` accepts any positive tol (REQ-CL-017), and REQ-NCX-009 needs the reserve share of the operation's tolerance set. A tol without a set has no rounding allowance; no requirement names the case, and errors are never swallowed. In plan 0007 `model` checks tol first, so the case does not occur.
 - Rejected: `0.1·tol` computed directly (a second copy of REQ-FND-009's share); raising `ValueError` (the record itself is valid).
@@ -140,3 +140,12 @@
 - Why: preconditions are programming errors, `ValueError` as in `cl` (DEC-CL-002); a silent wrong coordinate is never acceptable; REQ-NCX-024 says a token set while a step runs ends in `CANCELLED`.
 - Rejected: a diagnostic for a relative path (it is the caller's bug, not an outcome); leaving overflow to `cl` (`cl` has no a + z rule).
 - Where: REQ-NCX-010, 018, 021, 024; `src/splintercam/ncx/_run.py`, `_moves.py`, `_messages.py`.
+
+## DEC-NCX-016: Arcs whose chord is below 0.001 mm are refused
+
+- Date: 2026-10-27; decided by: Peter (AQ-026 item 1)
+- Status: Accepted 2026-10-27; to be replaced by NCXchange's check at the machine's step once its D363 is at the pin (T-039)
+- Decision: `write_ncx` refuses every ARC with |sweep| below 2π whose chord, the distance in XY from the previous move's end to its end in the record's values, is below `_MIN_ARC_CHORD_MM` = 0.001 mm, as `NCX_ARC_CHORD_TOO_SHORT` naming the operation and the move (REQ-NCX-026). Full circles are exempt; their end is their start by REQ-CL-014. An arc that also prints degenerate gets both errors, REQ-NCX-016's first.
+- Why: NCXchange rounds both ends to the machine's step, 0.001 mm on the three shipped mills (research 27, `[format]` decimals 3); an arc shorter than that can end on its start after rounding, and a control reads end = start as a full circle, a 360° pass through the part. D-149 gives the consistency to NCXchange, but D363 is not implemented at f74559c. The constant is the coarsest step of the shipped files, not the machine's own, which D-148 keeps out of `ncx`. The chord is measured on the record, before the writer's rounding, so the rule does not depend on REQ-NCX-016's.
+- Rejected: leaving it to NCXchange alone (unchecked at the pin, AQ-026 option (a)); reading the step from the machine file (D-148).
+- Where: REQ-NCX-026; `src/splintercam/ncx/_refusals.py`.

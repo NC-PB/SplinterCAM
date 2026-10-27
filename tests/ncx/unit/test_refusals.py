@@ -7,7 +7,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from cl_strategies import arc, framed, profile_moves
+from cl_strategies import Move, arc, framed, full_circle, profile_moves
 from ncx_programs import PROFILE, RECT_FILLETS, record, refused, written
 from splintercam.cl import ClHeader, ClOperation
 from splintercam.foundation import Context, Severity
@@ -95,7 +95,8 @@ def test_a_point_other_than_1_is_refused(ctx: Context) -> None:
 
 @pytest.mark.req("REQ-NCX-014")
 @pytest.mark.parametrize(
-    "name", ["RECT FILLETS", "con", "Lpt9", "COM1", "nul", "", "Rect-1", "Teil_Ä", "A.B"]
+    "name",
+    ["RECT FILLETS", "con", "Lpt9", "COM1", "COM0", "lpt0", "nul", "", "Rect-1", "Teil_Ä", "A.B"],
 )
 def test_an_invalid_program_name_is_refused(ctx: Context, name: str) -> None:
     program = ProgramInfo(name, 1001)
@@ -144,10 +145,11 @@ def test_an_arc_that_prints_degenerate_is_refused(ctx: Context) -> None:
     moves = framed(arc((*end, -1.0), centre, sweep), start)
     data = record(ctx, PROFILE, moves=moves)
     found = write_ncx(data, RECT_FILLETS, ctx).diagnostics
-    assert [(d.code, d.location) for d in found] == [
-        ("NCX_ARC_PRINTS_DEGENERATE", "operation 1 (PROFILE_1)")
+    # Its chord is below 0.001 mm as well: REQ-NCX-026 after 016 (REQ-NCX-017).
+    assert [(d.code, d.location, d.message.split(":")[0]) for d in found] == [
+        ("NCX_ARC_PRINTS_DEGENERATE", "operation 1 (PROFILE_1)", "move 4"),
+        ("NCX_ARC_CHORD_TOO_SHORT", "operation 1 (PROFILE_1)", "move 4"),
     ]
-    assert "move 4" in found[0].message
 
 
 @pytest.mark.req("REQ-NCX-016")
@@ -158,7 +160,50 @@ def test_an_arc_whose_centre_prints_on_its_start_is_refused(ctx: Context) -> Non
     moves = framed(arc((*end, -1.0), centre, math.pi), start)
     found = write_ncx(record(ctx, PROFILE, moves=moves), RECT_FILLETS, ctx).diagnostics
     assert [(d.code, d.message.split(":")[0]) for d in found] == [
-        ("NCX_ARC_PRINTS_DEGENERATE", "move 4")
+        ("NCX_ARC_PRINTS_DEGENERATE", "move 4"),
+        ("NCX_ARC_CHORD_TOO_SHORT", "move 4"),
+    ]
+
+
+def _short_arc(chord: float, direction: float) -> list[Move]:
+    # An arc of radius 1 about the origin from (1, 0) whose chord is `chord`; cl accepts it.
+    sweep = direction * 2.0 * math.asin(chord / 2.0)
+    end = (math.cos(sweep), math.sin(sweep), -1.0)
+    return framed(arc(end, (0.0, 0.0), sweep), (1.0, 0.0))
+
+
+@pytest.mark.req("REQ-NCX-026")
+@pytest.mark.parametrize("direction", [1.0, -1.0])
+def test_an_arc_with_a_chord_below_the_machine_step_is_refused(
+    ctx: Context, direction: float
+) -> None:
+    found = write_ncx(record(ctx, PROFILE, moves=_short_arc(0.0009, direction)), RECT_FILLETS, ctx)
+    assert found.value is None
+    assert [(d.code, d.location, d.message.split(":")[0]) for d in found.diagnostics] == [
+        ("NCX_ARC_CHORD_TOO_SHORT", "operation 1 (PROFILE_1)", "move 4")
+    ]
+    written(ctx, PROFILE, moves=_short_arc(0.0011, direction))
+
+
+@pytest.mark.req("REQ-NCX-026")
+def test_a_full_circle_has_no_chord_to_refuse(ctx: Context) -> None:
+    written(ctx, PROFILE, moves=full_circle(math.tau))
+
+
+@pytest.mark.req("REQ-NCX-017", "REQ-NCX-026")
+def test_the_arc_errors_come_by_id_and_the_tol_last(ctx: Context) -> None:
+    header = replace(PROFILE, point_number=2, tol_mm=0.001)
+    start, end, centre = (-4.9e-7, -4.9e-7), (4.9e-7, 4.9e-7), (10.0, -10.0)
+    sweep = math.atan2(end[1] - centre[1], end[0] - centre[0]) - math.atan2(
+        start[1] - centre[1], start[0] - centre[0]
+    )
+    moves = framed(arc((*end, -1.0), centre, sweep), start)
+    found = write_ncx(record(ctx, header, moves=moves), RECT_FILLETS, ctx).diagnostics
+    assert [d.code for d in found] == [
+        "NCX_POINT_UNSUPPORTED",
+        "NCX_ARC_PRINTS_DEGENERATE",
+        "NCX_ARC_CHORD_TOO_SHORT",
+        "TOL_BELOW_MINIMUM",
     ]
 
 

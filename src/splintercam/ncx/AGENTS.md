@@ -37,3 +37,6 @@ are NumPy over the record's columns. Depends on: foundation, cl.
   step. A venv's `python` on Windows is a launcher with a child; killing it leaves the child
   holding the pipes, so the fake uses `sys._base_executable`.
 - `ruff format` on this folder also formats the SPEC's Python block; format only `*.py`.
+- REQ-NCX-026's 0.001 mm (`_MIN_ARC_CHORD_MM`, DEC-NCX-016) is the shipped mills' step, not a
+  tolerance: it goes when NCXchange checks arcs at the machine's step (D363), not when tol
+  changes. A test arc for another rule needs a chord of 0.001 mm or more, or it is refused too.
