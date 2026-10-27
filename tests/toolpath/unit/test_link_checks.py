@@ -17,6 +17,7 @@ from splintercam.toolpath import LevelPass, LinkPlan, link_heights, link_operati
 from toolpath_plans import STOCK, TOOL, profile_plan, refusal, square_pass, square_plan
 
 _EDGE = 2.0**-10  # a dyadic step: the distance test of REQ-TP-012 is exact on these coordinates
+_T2 = replace(TOOL, number=2)  # the header calls T1
 
 
 def _with_top(top: float) -> StockBox:
@@ -77,9 +78,12 @@ def test_header_heights_one_ulp_off_are_refused(ctx: Context, field: str, direct
         (LinkPlan((50.0, math.inf), TOOL, 0, (square_pass(-1.0),)), "approach point"),
         (LinkPlan(P, TOOL, -1, (square_pass(-1.0),)), "plunge feed class"),
         (LinkPlan(P, TOOL, 2**63, (square_pass(-1.0),)), "plunge feed class"),
+        (LinkPlan(P, _T2, 0, (square_pass(-1.0),)), "tool number"),
+        (LinkPlan(P, _T2, -1, (square_pass(-1.0),)), "plunge feed class"),
     ],
     ids=["no pass", "no pass before P", "P NaN before plunge", "P infinite",
-         "plunge class negative", "plunge class beyond int64 (DEC-TP-005)"],
+         "plunge class negative", "plunge class beyond int64 (DEC-TP-005)",
+         "tool number (AQ-020)", "plunge class before tool number"],
 )  # fmt: skip
 def test_a_broken_plan_field_is_refused(ctx: Context, plan: LinkPlan, text: str) -> None:
     with pytest.raises(ValueError, match=refusal("REQ-TP-008") + f" {text}"):
@@ -140,6 +144,20 @@ def test_a_row_role_other_than_approach_cut_retract_is_refused(ctx: Context, rol
 def test_a_level_not_below_h_r_is_refused(ctx: Context, z: float) -> None:
     with pytest.raises(ValueError, match=refusal("REQ-TP-010", 1)):
         link_operation(HEADER, square_plan(-1.0, z), STOCK, ctx)
+
+
+@pytest.mark.req("REQ-TP-010")
+def test_a_level_one_ulp_below_the_stock_bottom_is_refused(ctx: Context) -> None:
+    # AQ-021 (a): below the stock bottom (-15) is the vice or the table.
+    below = math.nextafter(STOCK.min_mm[2], -math.inf)
+    with pytest.raises(ValueError, match=refusal("REQ-TP-010", 1) + " level .* stock bottom"):
+        link_operation(HEADER, square_plan(-1.0, below), STOCK, ctx)
+
+
+@pytest.mark.req("REQ-TP-010")
+def test_a_level_at_the_stock_bottom_passes(ctx: Context) -> None:
+    moves = link_operation(HEADER, square_plan(STOCK.min_mm[2]), STOCK, ctx).moves
+    assert moves.end_mm[3, 2] == STOCK.min_mm[2]
 
 
 @pytest.mark.req("REQ-TP-010")

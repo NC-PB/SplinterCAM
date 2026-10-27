@@ -131,7 +131,8 @@ def _pass(draw: st.DrawFn, at: tuple[float, float], retract: float) -> LevelPass
     roles = draw(st.lists(st.sampled_from((Role.APPROACH, Role.CUT, Role.RETRACT)),
                           min_size=len(rows), max_size=len(rows)))  # fmt: skip
     feeds = draw(st.lists(st.sampled_from((PLUNGE, CUT)), min_size=len(rows), max_size=len(rows)))
-    z = retract - 1.0 - draw(st.integers(0, 2**15)) * _GRID
+    # From the stock bottom (h_r - 18; included, AQ-021) up to one grid step below h_r.
+    z = retract - 18.0 + draw(st.integers(0, 18 * 2**10 - 1)) * _GRID
     return level(z, rows, roles, feeds)
 
 

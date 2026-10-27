@@ -41,7 +41,7 @@ def _header(header: ClHeader, h: LinkHeights) -> str | None:
     return None
 
 
-def _fields(plan: LinkPlan) -> str | None:
+def _fields(plan: LinkPlan, header: ClHeader) -> str | None:
     if not plan.passes:
         return "no pass"
     if not all(math.isfinite(value) for value in plan.approach_xy_mm):
@@ -49,6 +49,8 @@ def _fields(plan: LinkPlan) -> str | None:
     # DEC-TP-005: above the int64 column's range too, which would raise OverflowError later.
     if not 0 <= plan.plunge_feed_class <= _INT64_MAX:
         return f"plunge feed class {plan.plunge_feed_class} is negative or beyond int64"
+    if plan.tool.number != header.tool_number:  # AQ-020 (a): REQ-TP-012's R is this tool's
+        return f"tool number {plan.tool.number} is not the header's {header.tool_number}"
     return None
 
 
@@ -71,11 +73,14 @@ def _columns(level: LevelPass) -> str | None:
     return None
 
 
-def _level(level: LevelPass, retract: float) -> str | None:
-    # Research 10, Method 2: the descent goes down from h_r.
-    if math.isfinite(level.z_mm) and level.z_mm < retract:
-        return None
-    return f"level {level.z_mm!r} is not finite or not below h_r {retract!r}"
+def _level(level: LevelPass, retract: float, bottom: float) -> str | None:
+    # Research 10, Method 2: the descent goes down from h_r. AQ-021 (a): not below the stock
+    # bottom, where the vice or the table is (a backstop for REQ-PRF-006).
+    if not (math.isfinite(level.z_mm) and level.z_mm < retract):
+        return f"level {level.z_mm!r} is not finite or not below h_r {retract!r}"
+    if level.z_mm < bottom:
+        return f"level {level.z_mm!r} is below the stock bottom {bottom!r}"
+    return None
 
 
 def _chain(level: LevelPass, at: tuple[float, float]) -> str | None:
@@ -119,9 +124,9 @@ def plan_breach(header: ClHeader, plan: LinkPlan, stock: StockBox, h: LinkHeight
     rules: tuple[tuple[str, Callable[[], str | None]], ...] = (
         ("REQ-TP-001", lambda: _heights(stock.top_mm, h)),
         ("REQ-TP-007", lambda: _header(header, h)),
-        ("REQ-TP-008", lambda: _fields(plan)),
+        ("REQ-TP-008", lambda: _fields(plan, header)),
         ("REQ-TP-009", lambda: _each(plan, _columns)),
-        ("REQ-TP-010", lambda: _each(plan, lambda level: _level(level, h.retract_mm))),
+        ("REQ-TP-010", lambda: _each(plan, lambda p: _level(p, h.retract_mm, stock.min_mm[2]))),
         ("REQ-TP-011", lambda: _each(plan, lambda level: _chain(level, plan.approach_xy_mm))),
         ("REQ-TP-012", lambda: _descent(plan, stock)),
     )

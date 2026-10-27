@@ -108,7 +108,7 @@ def test_research_10_test_1s_invariants(ctx: Context, drawn: tuple[LinkPlan, Sto
     assert math.hypot(dx, dy) > plan.tool.radius_mm
 
 
-_BREAKS = ("level", "start", "role", "dtype", "approach")
+_BREAKS = ("level", "below", "start", "role", "dtype", "approach")
 
 
 def _broken(plan: LinkPlan, stock: StockBox, how: str, index: int) -> tuple[LinkPlan, str]:
@@ -121,6 +121,9 @@ def _broken(plan: LinkPlan, stock: StockBox, how: str, index: int) -> tuple[Link
         return replace(plan, approach_xy_mm=centre, passes=moved), "REQ-TP-012"
     if how == "level":
         changed = replace(level, z_mm=stock.top_mm + 3.0)
+        requirement = "REQ-TP-010"
+    elif how == "below":  # AQ-021: one ulp below the stock bottom
+        changed = replace(level, z_mm=math.nextafter(stock.min_mm[2], -math.inf))
         requirement = "REQ-TP-010"
     elif how == "start":
         rows = level.rows.copy()
