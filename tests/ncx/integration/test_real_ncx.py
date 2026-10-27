@@ -47,6 +47,10 @@ def test_ncx_accepts_the_program(
     assert result.ok, result.diagnostics
     assert result.value == (NcxStep.FORMAT, NcxStep.CHECK, NcxStep.COMPILE)
     assert {d.code for d in result.diagnostics} <= {"NCX_ROUNDED"}
+    # Z=-3.333333 has more decimals than any shipped mill file: each operation reports its
+    # CMP020s at its own location, so the line-to-operation mapping is checked too (REQ-NCX-021).
+    locations = {d.location for d in result.diagnostics}
+    assert locations == {section.operation for section in program.sections}
     assert any(out.iterdir())
     if machine == "heidenhain-itnc530":
         assert (out / "RECT_FILLETS.h").is_file()

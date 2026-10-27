@@ -20,7 +20,7 @@ class Printed:
     """One operation's values to print, (n, 6) in the column order above; NaN where none."""
 
     values: NDArray[np.float64]
-    too_large: NDArray[np.bool_]  # (n,) a value of 10^9 or more (REQ-NCX-010)
+    too_large: NDArray[np.bool_]  # (n,) a value of 10^9 or more, or not finite (REQ-NCX-010)
     counts: NDArray[np.int64]  # (n, 6) steps of 10^-6; 0 where none or too large
 
 
@@ -28,18 +28,25 @@ def printed(operation: ClOperation) -> Printed:
     """The operation's columns, Z shifted by the axial offset a (D-154, REQ-NCX-007)."""
     header, moves = operation.header, operation.moves
     feeds = np.array([feed for _, feed in header.feed_classes] + [np.nan], dtype=np.float64)
+    with np.errstate(over="ignore"):  # z + a past the double range is reported below
+        shifted = moves.end_mm[:, Z] + header.axial_offset_mm
     values = np.column_stack(
         (
             moves.end_mm[:, X],
             moves.end_mm[:, Y],
-            moves.end_mm[:, Z] + header.axial_offset_mm,
+            shifted,
             moves.centre_mm,
             feeds[moves.feed_class],  # NO_FEED_CLASS (-1) picks the NaN
         )
     )
+    # Where a value is written: X and Y but on move 0, Z always, the centre on arcs, F on feeds.
+    written = np.ones(values.shape, dtype=np.bool_)
+    written[0, [X, Y]] = False
+    written[:, [CENTRE_X, CENTRE_Y]] = (moves.kind == MoveKind.ARC)[:, None]
+    written[:, FEED] = moves.kind != MoveKind.RAPID
     finite = np.isfinite(values)
-    large = finite & (np.abs(np.where(finite, values, 0.0)) >= VALUE_LIMIT)
-    counts = to_steps(np.where(finite & ~large, values, 0.0))
+    large = written & ~(finite & (np.abs(np.where(finite, values, 0.0)) < VALUE_LIMIT))
+    counts = to_steps(np.where(written & ~large, values, 0.0))
     return Printed(values, large.any(axis=1), counts)
 
 
@@ -60,4 +67,5 @@ def move_blocks(operation: ClOperation, columns: Printed) -> list[str]:
     with_feed = np.zeros(len(blocks), dtype=np.bool_)
     with_feed[feed_moves[changes]] = True
     blocks = blocks + np.where(with_feed, " F=" + text[:, FEED], "")
-    return [f"RAPID Z={text[0, Z]}", *(str(block) for block in blocks[1:])]
+    later: list[str] = blocks[1:].tolist()
+    return [f"RAPID Z={text[0, Z]}", *later]

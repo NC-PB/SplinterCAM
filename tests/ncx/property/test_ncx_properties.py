@@ -13,7 +13,7 @@ from hypothesis import strategies as st
 from cl_strategies import HEADER, Move, columns, operations
 from ncx_fake import MakeFake, Step
 from ncx_programs import RECT_FILLETS, exact_text, printed, words
-from splintercam.cl import ClOperation, make_cl_data
+from splintercam.cl import ClOperation, MoveKind, make_cl_data
 from splintercam.foundation import Context
 from splintercam.ncx import NcxProgram, NcxSection, NcxStep, run_ncx, write_ncx
 
@@ -51,6 +51,14 @@ def test_the_program_invariants(ctx: Context, passes: list[list[Move]], offset: 
     expected_z = [move.end[2] + offset for moves in passes for move in moves]
     written_z = [float(words(lines[i])["Z"]) for i in motion]
     np.testing.assert_allclose(written_z, expected_z, rtol=0.0, atol=1e-6)
+    # REQ-NCX-005: the word by kind, CW exactly when the sweep is negative.
+    kinds = {MoveKind.RAPID: "RAPID", MoveKind.LINE: "LINE"}
+    expected_words = [
+        kinds.get(move.kind, "ARC=CW" if move.sweep < 0 else "ARC=CCW")
+        for moves in passes
+        for move in moves
+    ]
+    assert [lines[i].split(" ")[0] for i in motion] == expected_words
 
 
 _any = st.floats(-1e9, 1e9, exclude_min=True, exclude_max=True)
@@ -100,7 +108,7 @@ def test_ok_only_when_every_step_passed(
 
     def passed(index: int) -> bool:
         code, kinds = told[index]
-        strict = index == 2 and "warning" in kinds
+        strict = index == 2 and ("warning" in kinds or "garbage" in kinds)  # DEC-NCX-014 (e)
         return code == 0 and "error" not in kinds and not strict
 
     assert result.ok == all(passed(index) for index in range(3))

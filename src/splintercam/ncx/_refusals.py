@@ -75,7 +75,7 @@ def operation_errors(
         message = f"spindle speed {header.spindle_rpm} 1/min is 10^9 or more"
         found.append(_error("NCX_VALUE_OUT_OF_RANGE", message, where))
     for move in np.flatnonzero(columns.too_large):
-        message = f"move {move}: a coordinate or feed of 10^9 or more"
+        message = f"move {move}: a coordinate or feed of 10^9 or more, or not finite"
         found.append(_error("NCX_VALUE_OUT_OF_RANGE", message, where))
     if header.point_number != 1:
         message = f"point {header.point_number}: only point 1 until NCX has point words (AQ-005)"

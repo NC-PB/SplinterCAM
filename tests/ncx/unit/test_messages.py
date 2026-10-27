@@ -6,11 +6,12 @@ from pathlib import Path
 import pytest
 
 from splintercam.foundation import Diagnostic, Severity
-from splintercam.ncx import NcxSection, NcxStep
+from splintercam.ncx import NcxCall, NcxSection, NcxStep
 from splintercam.ncx._messages import read_messages
 
 _NCX = Path("/jobs/Program Files (x86)/RECT(2).ncx")
 _MACHINE = "/ncxchange/machines/heidenhain-itnc530.toml"
+_CALL = NcxCall(Path("/ncx/ncx"), _NCX.parent, _NCX, Path(_MACHINE), Path("/jobs/out"))
 _SECTIONS = (
     NcxSection("operation 1 (A)", 5, 50, 0.001),
     NcxSection("operation 2 (B)", 51, 90, 0.001),
@@ -18,7 +19,7 @@ _SECTIONS = (
 
 
 def _read(step: NcxStep, *lines: str) -> list[Diagnostic]:
-    return read_messages(step, "\n".join(lines) + "\n", _NCX, _SECTIONS)
+    return read_messages(step, "\n".join(lines) + "\n", _CALL, _SECTIONS)
 
 
 def _at(line: int, rest: str) -> str:
@@ -52,7 +53,7 @@ def test_other_lines_are_kept_verbatim() -> None:
 @pytest.mark.req("REQ-NCX-020")
 def test_windows_line_ends_are_read() -> None:
     stderr = _at(60, "ERROR VM200: motion before UNITS") + "\r\n"
-    found = read_messages(NcxStep.CHECK, stderr, _NCX, _SECTIONS)
+    found = read_messages(NcxStep.CHECK, stderr, _CALL, _SECTIONS)
     assert found == [Diagnostic("VM200", Severity.ERROR, "motion before UNITS", "operation 2 (B)")]
 
 
@@ -114,6 +115,30 @@ def test_another_compile_warning_fails_as_strict() -> None:
         ("NCX_STRICT_FAILED", Severity.ERROR),
     ]
     assert "compile" in found[2].message
+
+
+@pytest.mark.req("REQ-NCX-020", "REQ-NCX-022")
+def test_an_unread_compile_line_fails_as_strict() -> None:
+    # DEC-NCX-014 (e): a warning in a form the parser does not know must not pass compile.
+    found = _read(NcxStep.COMPILE, f"{_NCX}(6,3): warning CMP501: NAME")
+    assert [(d.code, d.severity) for d in found] == [
+        ("NCX_OUTPUT_UNREAD", Severity.WARNING),
+        ("NCX_STRICT_FAILED", Severity.ERROR),
+    ]
+
+
+@pytest.mark.req("REQ-NCX-022")
+def test_a_cmp020_error_is_not_counted() -> None:
+    found = _read(NcxStep.COMPILE, _at(6, "ERROR CMP020: beyond the rounding limit"))
+    assert [(d.code, d.severity) for d in found] == [("CMP020", Severity.ERROR)]
+
+
+@pytest.mark.req("REQ-NCX-021")
+def test_the_ncx_file_is_found_by_its_resolved_path() -> None:
+    roundabout = "/jobs/x/../Program Files (x86)/RECT(2).ncx(7): ERROR VM440: F on a RAPID"
+    bare = "RECT(2).ncx(60): ERROR VM440: F on a RAPID"  # relative to the work folder
+    found = _read(NcxStep.CHECK, roundabout, bare)
+    assert [d.location for d in found] == ["operation 1 (A)", "operation 2 (B)"]
 
 
 @pytest.mark.req("REQ-NCX-022")

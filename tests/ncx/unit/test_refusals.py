@@ -9,9 +9,31 @@ import pytest
 
 from cl_strategies import arc, framed, profile_moves
 from ncx_programs import PROFILE, RECT_FILLETS, record, refused, written
-from splintercam.cl import ClHeader
+from splintercam.cl import ClHeader, ClOperation
 from splintercam.foundation import Context, Severity
 from splintercam.ncx import ProgramInfo, write_ncx
+from splintercam.ncx._moves import printed
+
+
+@pytest.mark.req("REQ-NCX-010")
+def test_a_z_past_the_double_range_is_refused(ctx: Context) -> None:
+    # cl checks z and a apart; z + a can overflow to inf, which must not print as Z=0.0.
+    operation = record(ctx).operations[0]
+    end = operation.moves.end_mm.copy()
+    end[:, 2] = 1.5e308
+    moves = replace(operation.moves, end_mm=end)
+    columns = printed(ClOperation(replace(operation.header, axial_offset_mm=1.5e308), moves))
+    assert columns.too_large.all()
+    assert (columns.counts[:, 2] == 0).all()  # masked, never printed from inf
+
+
+@pytest.mark.req("REQ-NCX-009", "REQ-NCX-017")
+def test_a_tol_without_a_tolerance_set_is_reported(ctx: Context) -> None:
+    # DEC-NCX-012: cl takes any tol above 0; below 2/875 mm there is no rounding allowance.
+    found = refused(ctx, replace(PROFILE, tol_mm=0.001))
+    assert [(d.code, d.location) for d in found] == [
+        ("TOL_BELOW_MINIMUM", "operation 1 (PROFILE_1)")
+    ]
 
 
 def _codes(

@@ -148,3 +148,27 @@ def test_cancelled_while_a_step_runs(ctx: Context, fake_ncx: MakeFake) -> None:
     # Under load the stopped check may not have written its record yet.
     assert fake.ran()[0] == NcxStep.FORMAT
     assert NcxStep.COMPILE not in fake.ran()
+
+
+@pytest.mark.req("REQ-NCX-024")
+def test_cancelled_during_the_last_step(ctx: Context, fake_ncx: MakeFake) -> None:
+    # Set while compile runs; compile then exits 0 before the next poll could stop it.
+    fake = fake_ncx(compile=Step(sleep=1.0))
+    timer = threading.Timer(0.1, ctx.cancel.cancel)
+    timer.start()
+    result = run_ncx(fake.call, _PROGRAM, ctx)
+    timer.join()
+    assert result.value is None
+    assert result.diagnostics[-1:] == (CANCELLED,)
+
+
+@pytest.mark.req("REQ-NCX-018")
+@pytest.mark.parametrize(
+    "field", ["executable", "work_dir", "ncx_file", "machine_file", "output_dir"]
+)
+def test_a_relative_path_is_refused(ctx: Context, fake_ncx: MakeFake, field: str) -> None:
+    fake = fake_ncx()
+    call = replace(fake.call, **{field: Path("relative")})
+    with pytest.raises(ValueError, match=f"REQ-NCX-018: paths not absolute: {field}$"):
+        run_ncx(call, _PROGRAM, ctx)
+    assert fake.ran() == []
