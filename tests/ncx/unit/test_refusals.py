@@ -13,6 +13,7 @@ from splintercam.cl import ClHeader, ClOperation
 from splintercam.foundation import Context, Severity
 from splintercam.ncx import ProgramInfo, write_ncx
 from splintercam.ncx._moves import printed
+from splintercam.ncx._refusals import operation_errors
 
 
 @pytest.mark.req("REQ-NCX-010")
@@ -22,9 +23,12 @@ def test_a_z_past_the_double_range_is_refused(ctx: Context) -> None:
     end = operation.moves.end_mm.copy()
     end[:, 2] = 1.5e308
     moves = replace(operation.moves, end_mm=end)
-    columns = printed(ClOperation(replace(operation.header, axial_offset_mm=1.5e308), moves))
-    assert columns.too_large.all()
+    huge = ClOperation(replace(operation.header, axial_offset_mm=1.5e308), moves)
+    columns = printed(huge)
     assert (columns.counts[:, 2] == 0).all()  # masked, never printed from inf
+    found = operation_errors("operation 1 (PROFILE_1)", huge, huge.header, columns)
+    assert [d.message.split(":")[0] for d in found] == [f"move {i}" for i in range(44)]
+    assert {d.code for d in found} == {"NCX_VALUE_OUT_OF_RANGE"}
 
 
 @pytest.mark.req("REQ-NCX-009", "REQ-NCX-017")
@@ -55,9 +59,12 @@ def test_a_second_tool_or_speed_is_refused(ctx: Context, change: dict[str, float
 def test_a_value_of_1e9_is_refused(ctx: Context) -> None:
     # The first move's z = h_c = 5 becomes 1e9 with a = 1e9 - 5.
     found = refused(ctx, replace(PROFILE, axial_offset_mm=1e9 - 5.0))
-    assert [d.code for d in found][:1] == ["NCX_VALUE_OUT_OF_RANGE"]
-    assert "move 0" in found[0].message
-    assert found[0].location == "operation 1 (PROFILE_1)"
+    # The moves ending at h_c = 5 reach 1e9; every lower z stays below it.
+    at_clearance = [i for i, move in enumerate(profile_moves()) if move.end[2] == 5.0]
+    assert {(d.code, d.location) for d in found} == {
+        ("NCX_VALUE_OUT_OF_RANGE", "operation 1 (PROFILE_1)")
+    }
+    assert [d.message.split(":")[0] for d in found] == [f"move {i}" for i in at_clearance]
     below = float(np.nextafter(1e9, 0.0))
     written(ctx, replace(PROFILE, axial_offset_mm=below - 5.0))
 
@@ -83,7 +90,7 @@ def test_a_speed_of_1e9_is_refused(ctx: Context) -> None:
 def test_a_point_other_than_1_is_refused(ctx: Context) -> None:
     found = refused(ctx, replace(PROFILE, point_number=2))
     assert [d.code for d in found] == ["NCX_POINT_UNSUPPORTED"]
-    assert "2" in found[0].message
+    assert "point 2" in found[0].message
 
 
 @pytest.mark.req("REQ-NCX-014")
@@ -141,6 +148,18 @@ def test_an_arc_that_prints_degenerate_is_refused(ctx: Context) -> None:
         ("NCX_ARC_PRINTS_DEGENERATE", "operation 1 (PROFILE_1)")
     ]
     assert "move 4" in found[0].message
+
+
+@pytest.mark.req("REQ-NCX-016")
+def test_an_arc_whose_centre_prints_on_its_start_is_refused(ctx: Context) -> None:
+    # A half circle of radius about 1.39e-6, above eps_len, so cl accepts it; start and centre
+    # both print as (0.0, 0.0), the end as (0.000001, 0.000001).
+    start, centre, end = (-4.9e-7, -4.9e-7), (4.9e-7, 4.9e-7), (1.47e-6, 1.47e-6)
+    moves = framed(arc((*end, -1.0), centre, math.pi), start)
+    found = write_ncx(record(ctx, PROFILE, moves=moves), RECT_FILLETS, ctx).diagnostics
+    assert [(d.code, d.message.split(":")[0]) for d in found] == [
+        ("NCX_ARC_PRINTS_DEGENERATE", "move 4")
+    ]
 
 
 @pytest.mark.req("REQ-NCX-017")

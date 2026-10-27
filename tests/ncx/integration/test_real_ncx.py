@@ -27,7 +27,7 @@ pytestmark = pytest.mark.skipif(
 _TWO = (PROFILE, replace(PROFILE, name="PROFILE_2", note=("Rohteil 105 x 65",)))
 
 
-@pytest.mark.req("REQ-NCX-001", "REQ-NCX-011")
+@pytest.mark.req("REQ-NCX-001", "REQ-NCX-011", "REQ-NCX-021")
 @pytest.mark.parametrize("machine", ["heidenhain-itnc530", "fanuc-mill-30i", "siemens-840dsl-mill"])
 @pytest.mark.parametrize("headers", [(PROFILE,), _TWO], ids=["one", "two"])
 def test_ncx_accepts_the_program(

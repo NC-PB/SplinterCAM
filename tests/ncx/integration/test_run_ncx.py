@@ -8,9 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from ncx_fake import MakeFake, Step
+import splintercam.ncx._run as run_module
+from ncx_fake import FakeNcx, MakeFake, Step
 from splintercam.foundation import CANCELLED, Context, Diagnostic, Severity
-from splintercam.ncx import NcxProgram, NcxSection, NcxStep, run_ncx
+from splintercam.ncx import NcxCall, NcxProgram, NcxSection, NcxStep, run_ncx
 
 _PROGRAM = NcxProgram("", (NcxSection("operation 1 (A)", 5, 50, 0.001),))
 _ALL = (NcxStep.FORMAT, NcxStep.CHECK, NcxStep.COMPILE)
@@ -20,6 +21,22 @@ _WARNING = "{ncx}(7): WARNING VM300: unused word\n"
 
 def _codes(found: tuple[Diagnostic, ...]) -> list[str]:
     return [d.code for d in found]
+
+
+def _cancel_once(fake: FakeNcx, step: NcxStep, ctx: Context) -> threading.Thread:
+    """A started thread that cancels as soon as the fake has started `step` (not on a fixed
+    clock, so a slow interpreter start under load does not move the cancel into another step);
+    after 60 s it cancels anyway, so a hang fails the test instead of the job."""
+
+    def watch() -> None:
+        deadline = time.monotonic() + 60.0
+        while step not in fake.ran() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        ctx.cancel.cancel()
+
+    thread = threading.Thread(target=watch, daemon=True)
+    thread.start()
+    return thread
 
 
 @pytest.mark.req("REQ-NCX-018")
@@ -46,7 +63,10 @@ def test_the_three_steps_run_with_their_arguments(ctx: Context, fake_ncx: MakeFa
 def test_a_long_output_does_not_block(ctx: Context, fake_ncx: MakeFake) -> None:
     line = "{ncx}(6): WARNING CMP020: X1.0000001 written as X1.0\n"
     fake = fake_ncx(compile=Step(stderr=line * 100_000, stdout="x\n" * 100_000))
+    watchdog = threading.Timer(60.0, ctx.cancel.cancel)  # a pipe deadlock fails, not hangs
+    watchdog.start()
     result = run_ncx(fake.call, _PROGRAM, ctx)
+    watchdog.cancel()
     assert result.ok, result.diagnostics[:3]
     assert _codes(result.diagnostics) == ["NCX_ROUNDED"]
     assert result.diagnostics[0].message.startswith("100000 ")
@@ -137,29 +157,44 @@ def test_cancelled_at_entry_runs_nothing(ctx: Context, fake_ncx: MakeFake) -> No
 @pytest.mark.req("REQ-NCX-024", "REQ-NCX-025")
 def test_cancelled_while_a_step_runs(ctx: Context, fake_ncx: MakeFake) -> None:
     fake = fake_ncx(format=Step(stderr=_WARNING), check=Step(sleep=60.0))
-    timer = threading.Timer(0.5, ctx.cancel.cancel)
     started = time.monotonic()
-    timer.start()
+    watcher = _cancel_once(fake, NcxStep.CHECK, ctx)
     result = run_ncx(fake.call, _PROGRAM, ctx)
-    timer.join()
-    assert time.monotonic() - started < 30.0
+    watcher.join()
+    assert time.monotonic() - started < 50.0  # the check was stopped, not waited for
     assert result.value is None
     assert _codes(result.diagnostics) == ["VM300", "CANCELLED"]
-    # Under load the stopped check may not have written its record yet.
-    assert fake.ran()[0] == NcxStep.FORMAT
-    assert NcxStep.COMPILE not in fake.ran()
+    assert fake.ran() == [NcxStep.FORMAT, NcxStep.CHECK]
 
 
 @pytest.mark.req("REQ-NCX-024")
-def test_cancelled_during_the_last_step(ctx: Context, fake_ncx: MakeFake) -> None:
-    # Set while compile runs; compile then exits 0 before the next poll could stop it.
-    fake = fake_ncx(compile=Step(sleep=1.0))
-    timer = threading.Timer(0.1, ctx.cancel.cancel)
-    timer.start()
+def test_cancelled_during_the_last_step(
+    ctx: Context, fake_ncx: MakeFake, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # DEC-NCX-015 (c): the token is set while compile runs, and compile ends before a poll.
+    run_step = run_module._run_step  # pyright: ignore[reportPrivateUsage]
+
+    def then_cancel(step: NcxStep, call: NcxCall, context: Context) -> object:
+        outcome = run_step(step, call, context)
+        if step is NcxStep.COMPILE:
+            context.cancel.cancel()
+        return outcome
+
+    monkeypatch.setattr(run_module, "_run_step", then_cancel)
+    fake = fake_ncx()
     result = run_ncx(fake.call, _PROGRAM, ctx)
-    timer.join()
+    assert fake.ran() == list(_ALL)
     assert result.value is None
-    assert result.diagnostics[-1:] == (CANCELLED,)
+    assert result.diagnostics == (CANCELLED,)
+
+
+@pytest.mark.req("REQ-NCX-018", "REQ-NCX-020")
+def test_output_is_decoded_as_utf8_with_replacement(ctx: Context, fake_ncx: MakeFake) -> None:
+    fake = fake_ncx(format=Step(stderr="bad \udcff byte\n"))
+    result = run_ncx(fake.call, _PROGRAM, ctx)
+    assert [(d.code, d.message) for d in result.diagnostics] == [
+        ("NCX_OUTPUT_UNREAD", "bad � byte")
+    ]
 
 
 @pytest.mark.req("REQ-NCX-018")

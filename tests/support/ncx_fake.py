@@ -23,10 +23,11 @@ with open({conf!r}, encoding="utf-8") as conf:
     behaviour = json.load(conf)[step]
 with open(os.path.join({log!r}, step + ".json"), "w", encoding="utf-8") as record:
     json.dump({{"argv": sys.argv[1:], "cwd": os.getcwd()}}, record)
-sys.stdout.write(behaviour["stdout"])
-sys.stdout.flush()
-sys.stderr.write(behaviour["stderr"])
-sys.stderr.flush()
+# Bytes in UTF-8 whatever the console's code page; a lone surrogate (\\udcff) becomes the
+# invalid byte it stands for, so a test can send what is not UTF-8.
+for stream, text in ((sys.stdout, behaviour["stdout"]), (sys.stderr, behaviour["stderr"])):
+    stream.buffer.write(text.encode("utf-8", "surrogateescape"))
+    stream.buffer.flush()
 time.sleep(behaviour["sleep"])
 sys.exit(behaviour["exit"])
 """

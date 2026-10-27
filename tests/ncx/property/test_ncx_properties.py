@@ -17,13 +17,14 @@ from splintercam.cl import ClOperation, MoveKind, make_cl_data
 from splintercam.foundation import Context
 from splintercam.ncx import NcxProgram, NcxSection, NcxStep, run_ncx, write_ncx
 
-# The ctx fixture is a frozen value, the same for every example.
-_SETTINGS = settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
+# The ctx fixture is a frozen value, the same for every example; no deadline under load, as
+# geometry2d's property tests.
+_SETTINGS = settings(deadline=None, suppress_health_check=[HealthCheck.function_scoped_fixture])
 _MOTION = ("RAPID", "LINE", "ARC=")
 _offset = st.integers(0, 2**17).map(lambda k: k * 2.0**-10)
 
 
-@pytest.mark.req("REQ-NCX-001", "REQ-NCX-002", "REQ-NCX-004", "REQ-NCX-007")
+@pytest.mark.req("REQ-NCX-001", "REQ-NCX-002", "REQ-NCX-004", "REQ-NCX-005", "REQ-NCX-007")
 @_SETTINGS
 @given(st.lists(operations(), min_size=1, max_size=3), _offset)
 def test_the_program_invariants(ctx: Context, passes: list[list[Move]], offset: float) -> None:
@@ -72,6 +73,7 @@ def _near_ties(draw: st.DrawFn) -> float:
 
 
 @pytest.mark.req("REQ-NCX-008", "REQ-NCX-009")
+@settings(deadline=None)
 @given(st.lists(st.one_of(_any, _near_ties()), min_size=1, max_size=50))
 def test_the_printer_is_exact(values: list[float]) -> None:
     texts = printed(values)
@@ -91,6 +93,8 @@ _step = st.tuples(st.sampled_from((0, 0, 1, 2)), st.lists(st.sampled_from(sorted
 
 
 @pytest.mark.req("REQ-NCX-019", "REQ-NCX-022", "REQ-NCX-023")
+# 12 examples: each starts up to three interpreters (about 0.1 s each), so the default 100
+# would take 30 s; the profiles' larger counts would multiply that (docs/dev/06: about 2 s).
 @settings(
     max_examples=12, deadline=None, suppress_health_check=[HealthCheck.function_scoped_fixture]
 )
@@ -112,6 +116,7 @@ def test_ok_only_when_every_step_passed(
         return code == 0 and "error" not in kinds and not strict
 
     assert result.ok == all(passed(index) for index in range(3))
-    stopped = told[0][0] > 1 or (told[1][0] > 1 and told[0][0] <= 1)
-    if not stopped and not (passed(0) and passed(1)):
-        assert NcxStep.COMPILE not in fake.ran()
+    # SPEC invariant: compile runs exactly when format and check passed; ok means all three ran.
+    assert (NcxStep.COMPILE in fake.ran()) == (passed(0) and passed(1))
+    if result.ok:
+        assert result.value == (NcxStep.FORMAT, NcxStep.CHECK, NcxStep.COMPILE)
