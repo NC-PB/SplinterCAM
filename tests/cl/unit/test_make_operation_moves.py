@@ -81,7 +81,16 @@ def test_an_operation_without_moves_is_refused(ctx: Context) -> None:
         make_operation(HEADER, columns([]), ctx)
 
 
-@pytest.mark.req("REQ-CL-004", "REQ-CL-007")
+@pytest.mark.req("REQ-CL-004")
+def test_a_0d_column_is_refused(ctx: Context) -> None:
+    good = _profile()
+    with pytest.raises(ValueError, match=refusal("REQ-CL-004") + ": column sweep_rad"):
+        make_operation(HEADER, replace(good, sweep_rad=np.float64(0.0)[()]), ctx)
+    with pytest.raises(ValueError, match=refusal("REQ-CL-004") + ": column sweep_rad"):
+        make_operation(HEADER, replace(good, sweep_rad=np.array(0.0)), ctx)
+
+
+@pytest.mark.req("REQ-CL-004")
 def test_a_masked_array_is_refused(ctx: Context) -> None:
     # A masked NaN would hide from REQ-CL-007's check; a subclass of ndarray is refused.
     good = _profile()
@@ -103,7 +112,10 @@ def test_an_operation_of_one_rapid_passes(ctx: Context) -> None:
     ("column", "move", "value"),
     [
         ("kind", _UP, 3),  # not a MoveKind
+        ("kind", _LEAD_IN, 3),  # not a MoveKind, on a row whose role is not LINK
+        ("kind", _LEAD_IN, -1),
         ("role", _LEAD_IN, 4),  # not a Role
+        ("role", _LEAD_IN, -1),
         ("role", _DOWN, Role.APPROACH),  # a RAPID that is not a LINK
         ("role", _PLUNGE, Role.LINK),  # a LINE link (D-087: later)
         ("role", FIRST_ARC, Role.LINK),
@@ -174,7 +186,7 @@ def test_feed_classes_by_kind(move: int, value: int, ctx: Context) -> None:
 @pytest.mark.req("REQ-CL-010")
 @pytest.mark.parametrize(
     ("move", "value"),
-    [(_DOWN, NAN), (_DOWN, math.inf), (_PLUNGE, H_R), (FIRST_ARC, math.inf)],
+    [(_DOWN, NAN), (_DOWN, math.inf), (_DOWN, -math.inf), (_PLUNGE, H_R), (FIRST_ARC, math.inf)],
 )
 def test_link_heights_by_kind(move: int, value: float, ctx: Context) -> None:
     broken = changed(_profile(), "link_height_mm", move, value)
@@ -203,6 +215,16 @@ def test_a_rapid_in_the_plane_below_its_link_height_is_refused(ctx: Context) -> 
 def test_a_rapid_from_p_to_s_below_its_link_height_is_refused(ctx: Context) -> None:
     head = [rapid(NAN, NAN, H_C, H_C), rapid(*P, H_C, H_C), rapid(*P, H_R, H_R)]
     moves = columns([*head, rapid(*S, H_R, H_C), rapid(*S, H_C, H_C)])
+    with pytest.raises(ValueError, match=refusal("REQ-CL-011", 3)):
+        make_operation(HEADER, moves, ctx)
+
+
+@pytest.mark.req("REQ-CL-011")
+def test_a_rapid_changing_only_y_from_below_its_link_height_is_refused(ctx: Context) -> None:
+    # From P at h_r to (P_x, S_y) at h_c, link height h_c: it ends at its link height but
+    # starts below it, moving in y alone.
+    head = [rapid(NAN, NAN, H_C, H_C), rapid(*P, H_C, H_C), rapid(*P, H_R, H_R)]
+    moves = columns([*head, rapid(P[0], S[1], H_C, H_C)])
     with pytest.raises(ValueError, match=refusal("REQ-CL-011", 3)):
         make_operation(HEADER, moves, ctx)
 

@@ -2,7 +2,7 @@
 """Unit tests for the setup's record and its copies (REQ-CL-001, 018, 019)."""
 
 import math
-from dataclasses import replace
+from dataclasses import FrozenInstanceError, replace
 
 import numpy as np
 import pytest
@@ -27,14 +27,20 @@ def _operation(name: str, ctx: Context) -> ClOperation:
 
 @pytest.mark.req("REQ-CL-001")
 def test_operations_and_moves_keep_their_order(ctx: Context) -> None:
-    circle = make_operation(replace(HEADER, name="B"), columns(full_circle(math.tau)), ctx)
-    given = (_operation("A", ctx), circle, _operation("C", ctx))
+    # Not in alphabetical order, so a sort by name would show; the moves compared with what the
+    # producer passed in.
+    produced = (columns(profile_moves()), columns(full_circle(math.tau)), columns(profile_moves()))
+    names = ("C", "A", "B")
+    given = tuple(
+        ClOperation(replace(HEADER, name=name), moves)
+        for name, moves in zip(names, produced, strict=True)
+    )
     data = make_cl_data(3, given, ctx)
     assert data.work_offset == 3
-    assert [op.header.name for op in data.operations] == ["A", "B", "C"]
-    for held, original in zip(data.operations, given, strict=True):
-        np.testing.assert_array_equal(held.moves.kind, original.moves.kind)
-        np.testing.assert_array_equal(held.moves.end_mm, original.moves.end_mm)
+    assert [op.header.name for op in data.operations] == ["C", "A", "B"]
+    for held, moves in zip(data.operations, produced, strict=True):
+        for name in COLUMNS:
+            np.testing.assert_array_equal(getattr(held.moves, name), getattr(moves, name))
 
 
 @pytest.mark.req("REQ-CL-018", "REQ-CL-020")
@@ -67,6 +73,33 @@ def test_an_operation_built_directly_is_checked_again(ctx: Context) -> None:
     operations = (_operation("A", ctx), direct, _operation("A", ctx))
     with pytest.raises(ValueError, match=refusal("REQ-CL-016", FIRST_ARC, name="B")):
         make_cl_data(1, operations, ctx)
+
+
+@pytest.mark.req("REQ-CL-018", "REQ-CL-020")
+def test_the_first_broken_operation_is_named(ctx: Context) -> None:
+    first = changed(columns(profile_moves()), "end_mm", (FIRST_ARC, 0), -5.01)
+    second = changed(columns(profile_moves()), "feed_class", 4, 9)
+    operations = (
+        _operation("A", ctx),
+        ClOperation(replace(HEADER, name="B"), first),
+        ClOperation(replace(HEADER, name="C"), second),
+    )
+    with pytest.raises(ValueError, match=refusal("REQ-CL-016", FIRST_ARC, name="B")):
+        make_cl_data(1, operations, ctx)
+
+
+@pytest.mark.req("REQ-CL-019")
+def test_the_record_is_frozen(ctx: Context) -> None:
+    data = make_cl_data(1, (_operation("A", ctx),), ctx)
+    operation = data.operations[0]
+    with pytest.raises(FrozenInstanceError):
+        data.work_offset = 2  # pyright: ignore[reportAttributeAccessIssue]
+    with pytest.raises(FrozenInstanceError):
+        operation.moves = columns(profile_moves())  # pyright: ignore[reportAttributeAccessIssue]
+    with pytest.raises(FrozenInstanceError):
+        operation.moves.end_mm = np.zeros((44, 3))  # pyright: ignore[reportAttributeAccessIssue]
+    with pytest.raises(FrozenInstanceError):
+        operation.header.tol_mm = 1.0  # pyright: ignore[reportAttributeAccessIssue]
 
 
 @pytest.mark.req("REQ-CL-018")

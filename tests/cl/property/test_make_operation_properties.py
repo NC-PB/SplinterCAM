@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Property tests: generated valid operations pass, read-only and unchanged; each one broken in
-one value raises naming its requirement and move (REQ-CL-007, 011, 012, 016, 017, 019, 020)."""
+one value raises naming its requirement and move (REQ-CL-005, 007, 009, 011 to 014, 016, 017,
+019, 020)."""
 
 import math
 from dataclasses import replace
@@ -11,7 +12,7 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from cl_strategies import COLUMNS, H_C, HEADER, Move, changed, columns, operations, refusal
-from splintercam.cl import MoveKind, make_operation
+from splintercam.cl import NO_FEED_CLASS, MoveKind, Role, make_operation
 from splintercam.foundation import Context
 
 # The ctx fixture is a frozen value, the same for every example.
@@ -86,6 +87,44 @@ def test_an_arc_given_a_longer_sweep_names_its_move(
     longer = sweep + math.copysign(3 * ctx.tolerances.length_eps_mm / radius, sweep)
     with pytest.raises(ValueError, match=refusal("REQ-CL-016", move)):
         make_operation(HEADER, changed(columns(moves), "sweep_rad", move, longer), ctx)
+
+
+# One field of one LINE or ARC broken: (requirement, column, value). Research 26 test 2 (every
+# LINE and ARC has a feed class) and the fill values of REQ-CL-013 and 014.
+_MOVE_BREAKERS: tuple[tuple[str, str, object], ...] = (
+    ("REQ-CL-005", "role", Role.LINK),
+    ("REQ-CL-005", "kind", 7),
+    ("REQ-CL-009", "feed_class", NO_FEED_CLASS),
+    ("REQ-CL-009", "feed_class", len(HEADER.feed_classes)),
+)
+
+
+@pytest.mark.req("REQ-CL-005", "REQ-CL-009", "REQ-CL-020")
+@_SETTINGS
+@given(operations(), st.sampled_from(_MOVE_BREAKERS), st.data())
+def test_a_cutting_move_broken_in_one_field_names_it(
+    ctx: Context, moves: list[Move], breaker: tuple[str, str, object], data: st.DataObject
+) -> None:
+    requirement, column, value = breaker
+    cutting = [i for i, m in enumerate(moves) if m.kind != MoveKind.RAPID]
+    move = data.draw(st.sampled_from(cutting))
+    with pytest.raises(ValueError, match=refusal(requirement, move)):
+        make_operation(HEADER, changed(columns(moves), column, move, value), ctx)
+
+
+@pytest.mark.req("REQ-CL-013", "REQ-CL-014", "REQ-CL-020")
+@_SETTINGS
+@given(operations(with_arc=True), st.data())
+def test_a_centre_out_of_place_names_its_move(
+    ctx: Context, moves: list[Move], data: st.DataObject
+) -> None:
+    # A centre on a RAPID or LINE (REQ-CL-013), or a NaN centre on an ARC (REQ-CL-014).
+    move = data.draw(st.integers(0, len(moves) - 1))
+    is_arc = moves[move].kind == MoveKind.ARC
+    centre = (math.nan, 0.0) if is_arc else (0.0, 0.0)
+    requirement = "REQ-CL-014" if is_arc else "REQ-CL-013"
+    with pytest.raises(ValueError, match=refusal(requirement, move)):
+        make_operation(HEADER, changed(columns(moves), "centre_mm", move, centre), ctx)
 
 
 _HEADER_BREAKERS: tuple[tuple[str, object], ...] = (

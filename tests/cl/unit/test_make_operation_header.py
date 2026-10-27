@@ -26,7 +26,7 @@ def test_every_header_field_reads_back(ctx: Context) -> None:
         name="Outside_Profile_2",
         note=(f"Rohteil 105 {_TIMES} 65", "Spannung: Schraubstock"),
         tool_number=12,
-        point_number=1,
+        point_number=2,  # held as given; a point other than k = 1 is the writer's (Scope)
         axial_offset_mm=0.5,
         spindle_rpm=12000.0,
         tol_mm=0.02,
@@ -35,7 +35,7 @@ def test_every_header_field_reads_back(ctx: Context) -> None:
     )
     held = make_operation(header, columns(profile_moves()), ctx).header
     assert (held.name, held.note) == ("Outside_Profile_2", header.note)
-    assert (held.tool_number, held.point_number, held.axial_offset_mm) == (12, 1, 0.5)
+    assert (held.tool_number, held.point_number, held.axial_offset_mm) == (12, 2, 0.5)
     assert (held.spindle_rpm, held.tol_mm, held.clearance_height_mm) == (12000.0, 0.02, 4.5)
     assert held.feed_classes == (("plunge", 250.0), ("cut", 1200.0), ("lead", 600.0))
 
@@ -49,6 +49,7 @@ _BROKEN: list[tuple[str, object]] = [
     ("note", ("ok", "line\nbreak")),
     ("note", ("tab\there",)),
     ("note", ("delete\x7f",)),
+    ("note", ("unit separator\x1f",)),
     ("note", ('say "hi"',)),
     ("tool_number", 0),
     ("point_number", 0),
@@ -59,7 +60,9 @@ _BROKEN: list[tuple[str, object]] = [
     ("spindle_rpm", math.inf),
     ("tol_mm", -0.01),
     ("tol_mm", NAN),
+    ("tol_mm", math.inf),
     ("feed_classes", (("plunge", 300.0), ("cut", 0.0))),
+    ("feed_classes", (("plunge", 300.0), ("cut", math.inf))),
     ("feed_classes", (("plunge", 300.0), ("cut", NAN))),
     ("feed_classes", (("plunge", 300.0), ("", 1000.0))),
     ("feed_classes", (("cut", 300.0), ("cut", 1000.0))),
@@ -80,8 +83,22 @@ def test_a_header_field_out_of_range_is_refused(field: str, value: object, ctx: 
 
 @pytest.mark.req("REQ-CL-017")
 def test_a_note_with_umlauts_and_signs_passes(ctx: Context) -> None:
-    header = replace(HEADER, note=(f"Rohteil 105 {_TIMES} 65", "Ø 10, Außenkontur", ""))
-    assert make_operation(header, columns(profile_moves()), ctx).header.note == header.note
+    # The space, U+0020, is the first character allowed; "~" the last before U+007F.
+    note = (f"Rohteil 105 {_TIMES} 65", "Ø 10, Außenkontur", "", " ", "~")
+    header = replace(HEADER, note=note)
+    assert make_operation(header, columns(profile_moves()), ctx).header.note == note
+
+
+@pytest.mark.req("REQ-CL-020")
+def test_the_first_broken_field_is_named(ctx: Context) -> None:
+    # The name and tol are broken; the name comes first in `ClHeader`.
+    header = replace(HEADER, name="", tol_mm=0.0)
+    with pytest.raises(ValueError, match=refusal("REQ-CL-017", name="") + ": header field name"):
+        make_operation(header, columns(profile_moves()), ctx)
+    # The field after a broken one is not read: a feed of the wrong type does not hide it.
+    header = replace(HEADER, tool_number=0, feed_classes=(("cut", "1000"),))
+    with pytest.raises(ValueError, match=refusal("REQ-CL-017") + ": header field tool_number"):
+        make_operation(header, columns(profile_moves()), ctx)
 
 
 @pytest.mark.req("REQ-CL-020")

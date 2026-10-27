@@ -152,6 +152,33 @@ def test_pinned_arcs_at_the_radial_boundary(ctx: Context) -> None:
             make_operation(HEADER, columns(_quarter(end)), exact)
 
 
+@pytest.mark.req("REQ-CL-021", "REQ-CL-016")
+def test_pinned_arcs_at_the_radius_boundary(ctx: Context) -> None:
+    # Exact: a half circle from the origin about (r, 0) to (2r, 0). r = eps_len is refused (the
+    # radius must be above eps_len); r one ulp above eps_len passes.
+    exact = with_length_eps(ctx, _EPS)
+
+    def half(r: float) -> list[Move]:
+        return framed(arc((2 * r, 0.0, -1.0), (r, 0.0), math.pi), (0.0, 0.0))
+
+    with pytest.raises(ValueError, match=refusal("REQ-CL-016", _ARC)):
+        make_operation(HEADER, columns(half(_EPS)), exact)
+    make_operation(HEADER, columns(half(math.nextafter(_EPS, math.inf))), exact)
+
+
+@pytest.mark.req("REQ-CL-021", "REQ-CL-016")
+def test_pinned_arcs_at_the_angle_boundary(ctx: Context) -> None:
+    # The end moved along the circle by 0.5 and 1.5 eps_len (angle tolerance eps_len / r): the
+    # first passes, the second is refused, with the dyadic eps_len as above. The end is placed
+    # with libm's cos and sin, so these sit half an eps_len from the boundary, not on it.
+    exact = with_length_eps(ctx, _EPS)
+    for factor in (0.5, -0.5):
+        make_operation(HEADER, columns(_quarter(_along(factor, _EPS))), exact)
+    for factor in (1.5, -1.5):
+        with pytest.raises(ValueError, match=refusal("REQ-CL-016", _ARC)):
+            make_operation(HEADER, columns(_quarter(_along(factor, _EPS))), exact)
+
+
 @pytest.mark.req("REQ-CL-021", "REQ-CL-014")
 def test_pinned_tiny_arc_at_eps_len(ctx: Context) -> None:
     # Exact, with eps_len 2^-20. A half circle of radius r = eps_len / 2 + 2^-40: its end lies
