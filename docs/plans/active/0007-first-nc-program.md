@@ -56,6 +56,8 @@ Stop after each step for Peter's review of its pull request.
 
 ## Progress log
 
+From 2026-10-27 each new entry is a file of its own in `docs/plans/active/0007-log/` (docs/dev/07, Branches); the entries below stay here.
+
 ### 2026-10-11, step 1 (Project Spike)
 
 - Research moved (PR 66): `docs/research/26-toolpath-record.md` and `27-machines-and-controllers.md` whole, with the plan 0007 subset at L4; `21-geometry-input.md` (DXF import), `22-2d-operations.md` (outside profile) and `10-linking.md` (clearance-height links) new, with only what this plan uses.

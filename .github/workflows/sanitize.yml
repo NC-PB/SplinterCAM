@@ -9,6 +9,9 @@ on:
   push:
     branches: [main, "spike/**"]
   pull_request:
+    # Not a required check: skipped for pull requests that change only Markdown, docs/ or
+    # architecture/modules.yaml (docs/dev/07, Branches; Peter, 2026-10-27).
+    paths-ignore: ["**.md", "docs/**", "architecture/modules.yaml"]
   workflow_dispatch:
 
 permissions:

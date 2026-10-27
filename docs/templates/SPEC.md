@@ -88,7 +88,7 @@ of proprietary systems went in.>
 ## Open questions
 
 <!-- Box 1 questions for Peter only, in machining terms with a recommendation (docs/dev/07, "Questions: who answers").
-     Box 2 choices go to DECISIONS.md, box 3 to docs/research/REQUESTS.md. -->
+     Box 2 choices go to DECISIONS.md, box 3 to docs/research/requests/RR-NNN.md. -->
 
 - <…>
 
