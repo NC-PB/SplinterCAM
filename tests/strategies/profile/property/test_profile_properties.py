@@ -5,6 +5,7 @@ every pass from the same S and P, P clear of the stock, bit for bit twice (REQ-P
 022); the approach point in closed form (REQ-PRF-014)."""
 
 import math
+import os
 from dataclasses import dataclass, fields
 
 import numpy as np
@@ -34,6 +35,7 @@ from splintercam.strategies.profile._approach import approach_point
 
 EPS_LEN = 1e-6  # foundation's eps_len default; the context's is checked equal below
 _SLACK = 1e-9  # the oracles' own rounding, far below eps_len
+EXAMPLES = 1000 if os.environ.get("HYPOTHESIS_PROFILE") == "thorough" else 40  # tests/conftest.py
 
 
 def _grid(low: float, high: float) -> st.SearchStrategy[float]:
@@ -127,9 +129,11 @@ def _same(a: ClOperation, b: ClOperation) -> bool:
     return a.header == b.header and moves[: len(moves) // 2] == moves[len(moves) // 2 :]
 
 
-@pytest.mark.req("REQ-PRF-011", "REQ-PRF-012", "REQ-PRF-014", "REQ-PRF-016", "REQ-PRF-017",
-                 "REQ-PRF-019", "REQ-PRF-022")  # fmt: skip
-@settings(deadline=None, max_examples=40, suppress_health_check=[HealthCheck.too_slow])
+@pytest.mark.req("REQ-PRF-011", "REQ-PRF-012", "REQ-PRF-014", "REQ-PRF-015", "REQ-PRF-016",
+                 "REQ-PRF-017", "REQ-PRF-019", "REQ-PRF-022")  # fmt: skip
+# Fewer cases than the profile's (40 of dev's 100, 1000 of thorough's 10 000), as offset2d's band
+# tests do: each case runs offset2d twice, and the test stays under 2 s (docs/dev/06).
+@settings(deadline=None, max_examples=EXAMPLES, suppress_health_check=[HealthCheck.too_slow])
 @given(case=cases())
 def test_the_profile_of_a_random_part(
     case: tuple[Part, StockBox, FlatEndMill, dict[str, float]],

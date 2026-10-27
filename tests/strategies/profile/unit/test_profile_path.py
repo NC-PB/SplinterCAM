@@ -85,9 +85,10 @@ def test_research_22_test_1_the_sides_are_edges_offset_by_5_and_the_fillets_in_t
         on = (np.abs(a[:, axis] - value) <= width) & (np.abs(b[:, axis] - value) <= width)
         on &= np.abs(b[:, 1 - axis] - a[:, 1 - axis]) > 1.0  # not a fillet's chord near its end
         length = np.abs(b[on, 1 - axis] - a[on, 1 - axis]).sum()
-        assert on.sum() in (1, 2)  # 2 on the side S splits
-        # The whole straight; past its ends the edge runs on along the flattened fillet, whose
-        # points the band check above holds.
+        holds_s = abs(cut[0, axis] - value) <= width
+        assert on.sum() == (2 if holds_s else 1)  # S splits its side in two
+        # The whole straight; past its ends the edge runs on along the flattened fillet, which
+        # the exact band check above bounds (about 0.14 mm per end at this width).
         assert length >= (90.0 if axis == 1 else 50.0) - 2 * width
     assert signed_area(cut) < 0.0  # clockwise
 
@@ -140,7 +141,7 @@ def test_research_22_test_5_a_circle_starts_at_its_smallest_vertex() -> None:
     assert distance_to_box(p, stock) >= 6.0 - ctx.tolerances.length_eps_mm
 
 
-@pytest.mark.req("REQ-PRF-012", "REQ-PRF-013")
+@pytest.mark.req("REQ-PRF-012", "REQ-PRF-013", "REQ-PRF-015")
 def test_research_22_test_1_starts_at_the_middle_of_the_first_longest_side() -> None:
     ctx = make_context()
     region = _offset(task(ctx).contour, 5.0, ctx)

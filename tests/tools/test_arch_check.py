@@ -187,6 +187,10 @@ def test_a_group_folders_init_passes_only_without_imports(tmp_path: Path) -> Non
         "splintercam/strategies/__init__.py: Python file in no module of modules.yaml",
         "splintercam/stray/__init__.py: Python file in no module of modules.yaml",
     ]
+    unparsable = _check(tmp_path / "other", {"strategies/__init__.py": "def (:\n"})
+    assert unparsable == [
+        "splintercam/strategies/__init__.py: Python file in no module of modules.yaml"
+    ]
 
 
 @pytest.mark.parametrize(
