@@ -4,7 +4,7 @@ and a Hypothesis strategy of valid operations (src/splintercam/cl/SPEC.md, Examp
 
 import math
 from collections.abc import Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from typing import Any
 
 import numpy as np
@@ -17,6 +17,7 @@ NAN = math.nan
 H_C = 5.0  # clearance height (research 22 test 1)
 H_R = 3.0  # retract height h_r
 PLUNGE, CUT = 0, 1  # feed class indexes into HEADER.feed_classes
+COLUMNS = tuple(field.name for field in fields(ClMoves))
 
 HEADER = ClHeader(
     name="Profile_1",
@@ -82,15 +83,16 @@ def refusal(requirement: str, move: int | None = None, name: str = "Profile_1") 
     return f"^operation '{name}': {requirement}{where}"
 
 
-def framed(cut: Sequence[Move], at: tuple[float, float], z: float = -1.0) -> list[Move]:
-    """Tool change, rapid to `at` at h_c, down to h_r, plunge to `z`, the cut, rapid up to h_c."""
-    last = cut[-1].end if cut else (*at, z)
+def framed(cut: Move, at: tuple[float, float]) -> list[Move]:
+    """Tool change, rapid to `at` at h_c, down to h_r, plunge to z = -1, `cut` (move 4), rapid
+    up to h_c."""
+    last = cut.end
     return [
         rapid(NAN, NAN, H_C, H_C),
         rapid(*at, H_C, H_C),
         rapid(*at, H_R, H_R),
-        line(*at, z, Role.APPROACH, PLUNGE),
-        *cut,
+        line(*at, -1.0, Role.APPROACH, PLUNGE),
+        cut,
         rapid(last[0], last[1], H_C, H_C),
     ]
 
@@ -101,6 +103,7 @@ def framed(cut: Sequence[Move], at: tuple[float, float], z: float = -1.0) -> lis
 P = (50.0, -15.0)
 S = (50.0, -5.0)
 PASSES = (-10.0 / 3.0, -20.0 / 3.0, -10.0)
+FIRST_ARC = 6  # the index of the first fillet in profile_moves()
 _QUARTER_CW = -math.pi / 2
 
 
@@ -135,7 +138,7 @@ def profile_moves() -> list[Move]:
 
 def full_circle(sweep: float, end: tuple[float, float] = (10.0, 0.0)) -> list[Move]:
     """A circle of radius 10 about the origin from (10, 0) at z = -1, inside the frame."""
-    return framed([arc((*end, -1.0), (0.0, 0.0), sweep)], (10.0, 0.0))
+    return framed(arc((*end, -1.0), (0.0, 0.0), sweep), (10.0, 0.0))
 
 
 # Valid operations for the property tests: coordinates on a 2^-10 mm grid, arcs of radius 1 to
@@ -147,11 +150,11 @@ _level = st.integers(-(2**15), 0).map(lambda k: k * _GRID)
 
 
 @st.composite
-def _cut(draw: st.DrawFn, start: tuple[float, float], z: float) -> list[Move]:
+def _cut(draw: st.DrawFn, start: tuple[float, float], z: float, arc_first: bool) -> list[Move]:
     moves: list[Move] = []
     x, y = start
-    for _ in range(draw(st.integers(1, 6))):
-        if draw(st.booleans()):
+    for index in range(draw(st.integers(1, 6))):
+        if not (arc_first and index == 0) and draw(st.booleans()):
             x, y = draw(_coord), draw(_coord)
             moves.append(line(x, y, z))
             continue
@@ -165,13 +168,14 @@ def _cut(draw: st.DrawFn, start: tuple[float, float], z: float) -> list[Move]:
 
 
 @st.composite
-def operations(draw: st.DrawFn) -> list[Move]:
+def operations(draw: st.DrawFn, with_arc: bool = False) -> list[Move]:
     """A valid operation: one to three passes at random levels below h_r, each reached by a
-    rapid in the plane at h_c or at h_r, and the end at h_c."""
+    rapid in the plane at h_c or at h_r, and the end at h_c. `with_arc`: the first pass's cut
+    starts with an arc."""
     moves = [rapid(NAN, NAN, H_C, H_C)]
     x, y = draw(_coord), draw(_coord)
     moves.append(rapid(x, y, H_C, H_C))
-    for _ in range(draw(st.integers(1, 3))):
+    for index in range(draw(st.integers(1, 3))):
         if draw(st.booleans()):
             moves.append(rapid(x, y, H_C, H_C))
             moves.append(rapid(x, y, H_R, H_R))
@@ -181,7 +185,7 @@ def operations(draw: st.DrawFn) -> list[Move]:
             moves.append(rapid(x, y, H_R, H_R))
         z = draw(_level) - 1.0
         moves.append(line(x, y, z, Role.APPROACH, PLUNGE))
-        cut = draw(_cut((x, y), z))
+        cut = draw(_cut((x, y), z, with_arc and index == 0))
         moves += cut
         x, y = cut[-1].end[0], cut[-1].end[1]
         moves.append(rapid(x, y, H_C, H_C))

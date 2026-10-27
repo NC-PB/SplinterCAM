@@ -34,7 +34,11 @@ Public API: `./__init__.py`. No C++ part. Depends on: foundation, geometry2d (`c
   (climb) checks it after reversing.
 - A full circle (|sweep| = `math.tau`) must end exactly at its start; any other arc more than
   eps_len from it (DEC-CL-006).
-- A wrong type in a header field (a `None` name, a str feed) is outside REQ-CL-017 and raises
-  `TypeError`, not `ValueError` (DEC-CL-007): pyright strict catches it in the producer.
+- A wrong type in a header field is outside REQ-CL-017 (DEC-CL-007 (b)): a `None` name raises
+  `TypeError`, and a str note (`("Rohteil")`, the comma missing) passes as one line per
+  character. Only pyright strict in the producer catches these.
+- The note rule (DEC-CL-005) lags research 27, trap 15: `(` and `)` in a note must be refused
+  before the note gets a source (Fanuc ends the comment at `)`). Harmless while the note is
+  always `()` (AQ-008); a SPEC change when it is not.
 - Property tests take the `ctx` fixture with `HealthCheck.function_scoped_fixture` suppressed, as
   geometry2d's do; `Context` is frozen.

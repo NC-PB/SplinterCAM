@@ -33,33 +33,29 @@ _ROLES = np.array(list(Role), dtype=np.int8)
 
 
 def column_breach(moves: ClMoves) -> str | None:
-    """REQ-CL-004: the first column that is not an array of its dtype and shape, or None."""
+    # REQ-CL-004: the first column that is not an array of its dtype and shape, or None. A
+    # subclass is refused: a masked array hides its masked values from the checks.
     for name, dtype, tail, shape in _COLUMNS:
         value: object = getattr(moves, name)
         array = cast("NDArray[np.generic]", value)
         if (
-            not isinstance(value, np.ndarray)
+            type(value) is not np.ndarray
             or array.dtype != dtype
             or array.shape[1:] != tail
             or array.ndim != 1 + len(tail)
         ):
             return f"column {name} must be a {np.dtype(dtype).name} array of shape {shape}"
-    rows = moves.kind.shape[0]
-    for name, _, _, _ in _COLUMNS[1:]:
-        if (count := cast("NDArray[np.generic]", getattr(moves, name)).shape[0]) != rows:
-            return f"column {name} has {count} rows, column kind {rows}"
-    return None if rows else "column kind has no move"
+        if (count := array.shape[0]) != moves.kind.shape[0]:
+            return f"column {name} has {count} rows, column kind {moves.kind.shape[0]}"
+    return None if moves.kind.shape[0] else "column kind has no move"
 
 
 def read_only_copy(moves: ClMoves) -> ClMoves:
-    """The columns copied and made read-only (REQ-CL-019)."""
-
-    def frozen(name: str) -> NDArray[Any]:
-        copy = cast("NDArray[Any]", getattr(moves, name)).copy()
+    # REQ-CL-019: the columns copied and made read-only.
+    copies = [cast("NDArray[Any]", getattr(moves, name)).copy() for name, *_ in _COLUMNS]
+    for copy in copies:
         copy.flags.writeable = False
-        return copy
-
-    return ClMoves(*(frozen(name) for name, _, _, _ in _COLUMNS))
+    return ClMoves(*copies)
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,14 +130,18 @@ def _no_arc_fields(rows: _Rows) -> Mask:
 
 def _arc_form(rows: _Rows) -> Mask:
     # math.tau is the double nearest 2π, as geometry2d's. DEC-CL-006: a full circle ends at its
-    # start, any other arc more than eps_len from it. Ends are finite here (REQ-CL-007).
+    # start, any other arc more than eps_len from it; equal in value, -0.0 = +0.0 (DEC-CL-007).
+    # Arc rows only: their start and end are finite (REQ-CL-006 to 008).
     sweep, size = rows.moves.sweep_rad, np.abs(rows.moves.sweep_rad)
     centre_finite = np.isfinite(rows.moves.centre_mm).all(axis=1)
     form = ~centre_finite | ~np.isfinite(sweep) | (sweep == 0.0) | (size > math.tau)
-    chord = rows.moves.end_mm[:, :2] - rows.start[:, :2]
+    chord = rows.moves.end_mm[rows.arc, :2] - rows.start[rows.arc, :2]
     apart = np.sqrt(chord[:, 0] * chord[:, 0] + chord[:, 1] * chord[:, 1])
-    closure = np.where(
-        size == math.tau, (chord != 0.0).any(axis=1), apart <= rows.ctx.tolerances.length_eps_mm
+    closure = np.zeros_like(rows.arc)
+    closure[rows.arc] = np.where(
+        size[rows.arc] == math.tau,
+        (chord != 0.0).any(axis=1),
+        apart <= rows.ctx.tolerances.length_eps_mm,
     )
     return rows.arc & (form | closure)
 
@@ -185,10 +185,9 @@ _RULES: tuple[tuple[str, str, Callable[[_Rows], Mask]], ...] = (
 
 
 def move_breach(header: ClHeader, moves: ClMoves, ctx: Context) -> tuple[str, int, str] | None:
-    """The first rule of REQ-CL-005 to 016 broken, its first breaking move and the rule's text,
-    or None. `moves` passed REQ-CL-004."""
-    end = moves.end_mm
-    start = np.vstack((np.full((1, 3), np.nan), end[:-1]))
+    # The first rule of REQ-CL-005 to 016 broken, its first breaking move and the rule's text, or
+    # None. `moves` passed REQ-CL-004.
+    start = np.vstack((np.full((1, 3), np.nan), moves.end_mm[:-1]))
     kind = moves.kind
     rows = _Rows(moves, header, ctx, start, kind == MoveKind.RAPID, kind == MoveKind.ARC)
     for requirement, text, rule in _RULES:

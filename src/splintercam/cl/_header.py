@@ -3,6 +3,7 @@
 
 import math
 import re
+from collections.abc import Callable
 
 from ._types import ClHeader
 
@@ -16,23 +17,21 @@ def _positive(value: float) -> bool:
     return math.isfinite(value) and value > 0.0
 
 
-def _feeds_valid(feed_classes: tuple[tuple[str, float], ...]) -> bool:
-    names = [name for name, _ in feed_classes]
-    unique = len(set(names)) == len(names)
-    return unique and all(names) and all(_positive(feed) for _, feed in feed_classes)
+# Lazy, so a later field of the wrong type cannot hide an earlier field's refusal.
+_VALID: tuple[tuple[str, Callable[[ClHeader], bool]], ...] = (
+    ("name", lambda h: _NAME.fullmatch(h.name) is not None),
+    ("note", lambda h: not any(_NOT_IN_NOTE.search(line) for line in h.note)),
+    ("tool_number", lambda h: h.tool_number >= 1),
+    ("point_number", lambda h: h.point_number >= 1),
+    ("axial_offset_mm", lambda h: math.isfinite(h.axial_offset_mm) and h.axial_offset_mm >= 0),
+    ("spindle_rpm", lambda h: _positive(h.spindle_rpm)),
+    ("tol_mm", lambda h: _positive(h.tol_mm)),
+    ("feed_classes", lambda h: len({name for name, _ in h.feed_classes}) == len(h.feed_classes)
+     and all(name and _positive(feed) for name, feed in h.feed_classes)),
+    ("clearance_height_mm", lambda h: math.isfinite(h.clearance_height_mm)),
+)  # fmt: skip
 
 
 def header_breach(header: ClHeader) -> str | None:
-    """The first field of `header` outside its range, or None."""
-    valid = {
-        "name": _NAME.fullmatch(header.name) is not None,
-        "note": not any(_NOT_IN_NOTE.search(line) for line in header.note),
-        "tool_number": header.tool_number >= 1,
-        "point_number": header.point_number >= 1,
-        "axial_offset_mm": math.isfinite(header.axial_offset_mm) and header.axial_offset_mm >= 0,
-        "spindle_rpm": _positive(header.spindle_rpm),
-        "tol_mm": _positive(header.tol_mm),
-        "feed_classes": _feeds_valid(header.feed_classes),
-        "clearance_height_mm": math.isfinite(header.clearance_height_mm),
-    }
-    return next((field for field, ok in valid.items() if not ok), None)
+    # The first field of `header` outside its range, or None.
+    return next((field for field, valid in _VALID if not valid(header)), None)

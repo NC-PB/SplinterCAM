@@ -8,6 +8,8 @@ import numpy as np
 import pytest
 
 from cl_strategies import (
+    COLUMNS,
+    FIRST_ARC,
     HEADER,
     changed,
     columns,
@@ -17,8 +19,6 @@ from cl_strategies import (
 )
 from splintercam.cl import ClOperation, make_cl_data, make_operation
 from splintercam.foundation import Context
-
-_FIRST_ARC = 6
 
 
 def _operation(name: str, ctx: Context) -> ClOperation:
@@ -41,6 +41,9 @@ def test_operations_and_moves_keep_their_order(ctx: Context) -> None:
 def test_the_work_offset_is_at_least_1(ctx: Context) -> None:
     with pytest.raises(ValueError, match=r"^cl data: REQ-CL-018: work offset 0"):
         make_cl_data(0, (_operation("A", ctx),), ctx)
+    # REQ-CL-020: the work offset before there is an operation.
+    with pytest.raises(ValueError, match=r"^cl data: REQ-CL-018: work offset 0"):
+        make_cl_data(0, (), ctx)
 
 
 @pytest.mark.req("REQ-CL-018", "REQ-CL-020")
@@ -58,11 +61,11 @@ def test_operation_names_are_unique(ctx: Context) -> None:
 
 @pytest.mark.req("REQ-CL-018", "REQ-CL-020")
 def test_an_operation_built_directly_is_checked_again(ctx: Context) -> None:
-    broken = changed(columns(profile_moves()), "end_mm", (_FIRST_ARC, 0), -5.01)
+    broken = changed(columns(profile_moves()), "end_mm", (FIRST_ARC, 0), -5.01)
     direct = ClOperation(replace(HEADER, name="B"), broken)
     # The broken operation comes before a repeated name: operations are checked first.
     operations = (_operation("A", ctx), direct, _operation("A", ctx))
-    with pytest.raises(ValueError, match=refusal("REQ-CL-016", _FIRST_ARC, name="B")):
+    with pytest.raises(ValueError, match=refusal("REQ-CL-016", FIRST_ARC, name="B")):
         make_cl_data(1, operations, ctx)
 
 
@@ -83,9 +86,8 @@ def test_make_operation_holds_read_only_copies(ctx: Context) -> None:
     produced.kind[5] = 0
     assert held.end_mm[5, 0] == 5.0
     assert held.kind[5] == 1
-    for name in ("kind", "role", "end_mm", "centre_mm", "sweep_rad", "feed_class"):
+    for name in COLUMNS:
         assert not getattr(held, name).flags.writeable
-    assert not held.link_height_mm.flags.writeable
     with pytest.raises(ValueError, match="read-only"):
         held.end_mm[5, 0] = 99.0
 
@@ -94,6 +96,6 @@ def test_make_operation_holds_read_only_copies(ctx: Context) -> None:
 def test_make_cl_data_holds_read_only_copies(ctx: Context) -> None:
     produced = columns(profile_moves())
     held = make_cl_data(1, (ClOperation(HEADER, produced),), ctx).operations[0].moves
-    produced.sweep_rad[_FIRST_ARC] = 1.0
-    assert held.sweep_rad[_FIRST_ARC] == -math.pi / 2
+    produced.sweep_rad[FIRST_ARC] = 1.0
+    assert held.sweep_rad[FIRST_ARC] == -math.pi / 2
     assert not held.sweep_rad.flags.writeable

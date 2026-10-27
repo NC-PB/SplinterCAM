@@ -9,7 +9,9 @@ import numpy as np
 import pytest
 
 from cl_strategies import (
+    COLUMNS,
     CUT,
+    FIRST_ARC,
     H_C,
     H_R,
     HEADER,
@@ -28,23 +30,21 @@ from cl_strategies import (
 from splintercam.cl import NO_FEED_CLASS, ClMoves, MoveKind, Role, make_operation
 from splintercam.foundation import Context
 
-_COLUMNS = ("kind", "role", "end_mm", "centre_mm", "sweep_rad", "feed_class", "link_height_mm")
-
 
 def _profile() -> ClMoves:
     return columns(profile_moves())
 
 
 # Indexes into research 22 test 1's record: the first pass starts at move 2.
-_DOWN, _PLUNGE, _LEAD_IN, _FIRST_ARC, _UP = 2, 3, 4, 6, 15
+_DOWN, _PLUNGE, _LEAD_IN, _UP = 2, 3, 4, 15
 
 
 @pytest.mark.req("REQ-CL-003")
 def test_the_profile_record_has_the_seven_columns(ctx: Context) -> None:
     moves = make_operation(HEADER, _profile(), ctx).moves
-    dtypes = [getattr(moves, name).dtype for name in _COLUMNS]
+    dtypes = [getattr(moves, name).dtype for name in COLUMNS]
     assert dtypes == [np.int8, np.int8, *[np.float64] * 3, np.int64, np.float64]
-    shapes = [getattr(moves, name).shape for name in _COLUMNS]
+    shapes = [getattr(moves, name).shape for name in COLUMNS]
     assert shapes == [(44,), (44,), (44, 3), (44, 2), (44,), (44,), (44,)]
     rapid_rows = moves.kind == MoveKind.RAPID
     assert np.isnan(moves.centre_mm[moves.kind != MoveKind.ARC]).all()
@@ -52,11 +52,11 @@ def test_the_profile_record_has_the_seven_columns(ctx: Context) -> None:
     assert (moves.feed_class[rapid_rows] == NO_FEED_CLASS).all()
     assert np.isnan(moves.link_height_mm[~rapid_rows]).all()
     assert np.isnan(moves.end_mm[0, :2]).all()
-    assert moves.sweep_rad[_FIRST_ARC] == -math.pi / 2
+    assert moves.sweep_rad[FIRST_ARC] == -math.pi / 2
 
 
 @pytest.mark.req("REQ-CL-004")
-@pytest.mark.parametrize("column", _COLUMNS)
+@pytest.mark.parametrize("column", COLUMNS)
 def test_a_column_of_the_wrong_type_is_refused(column: str, ctx: Context) -> None:
     good = _profile()
     array = getattr(good, column)
@@ -67,7 +67,7 @@ def test_a_column_of_the_wrong_type_is_refused(column: str, ctx: Context) -> Non
 
 
 @pytest.mark.req("REQ-CL-004")
-@pytest.mark.parametrize("column", _COLUMNS[1:])
+@pytest.mark.parametrize("column", COLUMNS[1:])
 def test_row_counts_must_agree(column: str, ctx: Context) -> None:
     good = _profile()
     broken = replace(good, **{column: getattr(good, column)[:-1]})
@@ -81,6 +81,23 @@ def test_an_operation_without_moves_is_refused(ctx: Context) -> None:
         make_operation(HEADER, columns([]), ctx)
 
 
+@pytest.mark.req("REQ-CL-004", "REQ-CL-007")
+def test_a_masked_array_is_refused(ctx: Context) -> None:
+    # A masked NaN would hide from REQ-CL-007's check; a subclass of ndarray is refused.
+    good = _profile()
+    hidden = np.ma.array(good.end_mm, mask=np.zeros_like(good.end_mm, dtype=np.bool_))
+    hidden[13, 2] = np.ma.masked
+    with pytest.raises(ValueError, match=refusal("REQ-CL-004") + ": column end_mm"):
+        make_operation(HEADER, replace(good, end_mm=hidden), ctx)
+
+
+@pytest.mark.req("REQ-CL-006", "REQ-CL-012")
+def test_an_operation_of_one_rapid_passes(ctx: Context) -> None:
+    # DEC-CL-007 (c): no requirement refuses it.
+    operation = make_operation(HEADER, columns([rapid(NAN, NAN, H_C, H_C)]), ctx)
+    assert operation.moves.kind.tolist() == [MoveKind.RAPID]
+
+
 @pytest.mark.req("REQ-CL-005")
 @pytest.mark.parametrize(
     ("column", "move", "value"),
@@ -89,7 +106,7 @@ def test_an_operation_without_moves_is_refused(ctx: Context) -> None:
         ("role", _LEAD_IN, 4),  # not a Role
         ("role", _DOWN, Role.APPROACH),  # a RAPID that is not a LINK
         ("role", _PLUNGE, Role.LINK),  # a LINE link (D-087: later)
-        ("role", _FIRST_ARC, Role.LINK),
+        ("role", FIRST_ARC, Role.LINK),
     ],
 )
 def test_kinds_and_roles(column: str, move: int, value: int, ctx: Context) -> None:
@@ -146,7 +163,7 @@ def test_the_second_move_is_not_a_line_or_an_arc(ctx: Context) -> None:
 @pytest.mark.req("REQ-CL-009")
 @pytest.mark.parametrize(
     ("move", "value"),
-    [(_DOWN, PLUNGE), (_PLUNGE, NO_FEED_CLASS), (_LEAD_IN, 2), (_FIRST_ARC, -2)],
+    [(_DOWN, PLUNGE), (_PLUNGE, NO_FEED_CLASS), (_LEAD_IN, 2), (FIRST_ARC, -2)],
 )
 def test_feed_classes_by_kind(move: int, value: int, ctx: Context) -> None:
     broken = changed(_profile(), "feed_class", move, value)
@@ -157,7 +174,7 @@ def test_feed_classes_by_kind(move: int, value: int, ctx: Context) -> None:
 @pytest.mark.req("REQ-CL-010")
 @pytest.mark.parametrize(
     ("move", "value"),
-    [(_DOWN, NAN), (_DOWN, math.inf), (_PLUNGE, H_R), (_FIRST_ARC, math.inf)],
+    [(_DOWN, NAN), (_DOWN, math.inf), (_PLUNGE, H_R), (FIRST_ARC, math.inf)],
 )
 def test_link_heights_by_kind(move: int, value: float, ctx: Context) -> None:
     broken = changed(_profile(), "link_height_mm", move, value)
@@ -198,6 +215,15 @@ def test_the_rapid_up_from_p_one_ulp_off_counts_as_a_move_in_the_plane(ctx: Cont
     broken = changed(_profile(), "end_mm", (_UP, 0), off)
     with pytest.raises(ValueError, match=refusal("REQ-CL-011", _UP)):
         make_operation(HEADER, broken, ctx)
+
+
+@pytest.mark.req("REQ-CL-011")
+def test_a_rapid_up_from_plus_zero_to_minus_zero_is_vertical(ctx: Context) -> None:
+    # DEC-CL-007 (a): x = +0.0 and x = -0.0 are the same point, so the rapid up from below its
+    # link height does not move in the plane.
+    head = [rapid(NAN, NAN, H_C, H_C), rapid(0.0, 0.0, H_C, H_C), rapid(0.0, 0.0, H_R, H_R)]
+    plunge = line(0.0, 0.0, -1.0, Role.APPROACH, PLUNGE)
+    make_operation(HEADER, columns([*head, plunge, rapid(-0.0, -0.0, H_C, H_C)]), ctx)
 
 
 @pytest.mark.req("REQ-CL-011")

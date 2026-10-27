@@ -7,6 +7,7 @@ import math
 import pytest
 
 from cl_strategies import (
+    FIRST_ARC,
     HEADER,
     NAN,
     Move,
@@ -23,13 +24,12 @@ from splintercam.cl import make_operation
 from splintercam.foundation import Context
 
 _ARC = 4  # the index of the one cut move in `framed`
-_FIRST_ARC = 6  # the first fillet of research 22 test 1's record
 _EPS = 2.0**-20  # a dyadic eps_len, so the boundary ends below are exact
 
 
 def _quarter(end: tuple[float, float], sweep: float = math.pi / 2) -> list[Move]:
     # A quarter arc of radius 5 about the origin from (5, 0), its end given.
-    return framed([arc((*end, -1.0), (0.0, 0.0), sweep)], (5.0, 0.0))
+    return framed(arc((*end, -1.0), (0.0, 0.0), sweep), (5.0, 0.0))
 
 
 def _along(factor: float, eps: float) -> tuple[float, float]:
@@ -43,6 +43,13 @@ def _along(factor: float, eps: float) -> tuple[float, float]:
 def test_full_circles_with_end_at_start_pass(sweep: float, ctx: Context) -> None:
     operation = make_operation(HEADER, columns(full_circle(sweep)), ctx)
     assert operation.moves.sweep_rad[_ARC] == sweep
+
+
+@pytest.mark.req("REQ-CL-014")
+def test_a_full_circle_ending_at_minus_zero_passes(ctx: Context) -> None:
+    # DEC-CL-007 (a): -0.0 equals +0.0, the same point; the circle starts at (10, +0.0).
+    operation = make_operation(HEADER, columns(full_circle(math.tau, (10.0, -0.0))), ctx)
+    assert math.copysign(1.0, operation.moves.end_mm[_ARC, 1]) == -1.0
 
 
 @pytest.mark.req("REQ-CL-014")
@@ -81,17 +88,17 @@ def test_a_tiny_arc_is_refused(ctx: Context) -> None:
     ],
 )
 def test_an_arc_needs_a_finite_centre_and_a_sweep(column: str, value: object, ctx: Context) -> None:
-    broken = changed(columns(profile_moves()), column, _FIRST_ARC, value)
-    with pytest.raises(ValueError, match=refusal("REQ-CL-014", _FIRST_ARC)):
+    broken = changed(columns(profile_moves()), column, FIRST_ARC, value)
+    with pytest.raises(ValueError, match=refusal("REQ-CL-014", FIRST_ARC)):
         make_operation(HEADER, broken, ctx)
 
 
 @pytest.mark.req("REQ-CL-015")
 def test_an_arc_is_planar(ctx: Context) -> None:
-    z = columns(profile_moves()).end_mm[_FIRST_ARC, 2]
+    z = columns(profile_moves()).end_mm[FIRST_ARC, 2]
     for end_z in (math.nextafter(z, 0.0), z - 1.0):
-        broken = changed(columns(profile_moves()), "end_mm", (_FIRST_ARC, 2), end_z)
-        with pytest.raises(ValueError, match=refusal("REQ-CL-015", _FIRST_ARC)):
+        broken = changed(columns(profile_moves()), "end_mm", (FIRST_ARC, 2), end_z)
+        with pytest.raises(ValueError, match=refusal("REQ-CL-015", FIRST_ARC)):
             make_operation(HEADER, broken, ctx)
 
 
@@ -120,7 +127,7 @@ def test_a_ccw_quarter_given_a_cw_sweep_is_refused(ctx: Context) -> None:
 
 @pytest.mark.req("REQ-CL-016")
 def test_an_arc_with_its_centre_at_its_start_is_refused(ctx: Context) -> None:
-    moves = framed([arc((0.0, 5.0, -1.0), (5.0, 0.0), math.pi / 2)], (5.0, 0.0))
+    moves = framed(arc((0.0, 5.0, -1.0), (5.0, 0.0), math.pi / 2), (5.0, 0.0))
     with pytest.raises(ValueError, match=refusal("REQ-CL-016", _ARC)):
         make_operation(HEADER, columns(moves), ctx)
 
@@ -128,8 +135,8 @@ def test_an_arc_with_its_centre_at_its_start_is_refused(ctx: Context) -> None:
 @pytest.mark.req("REQ-CL-016")
 def test_a_fillet_end_0_01_off_its_circle_is_refused(ctx: Context) -> None:
     # Research 22 test 1 with the first fillet's end moved 0.01 mm outwards (SPEC, Example parts).
-    broken = changed(columns(profile_moves()), "end_mm", (_FIRST_ARC, 0), -5.01)
-    with pytest.raises(ValueError, match=refusal("REQ-CL-016", _FIRST_ARC)):
+    broken = changed(columns(profile_moves()), "end_mm", (FIRST_ARC, 0), -5.01)
+    with pytest.raises(ValueError, match=refusal("REQ-CL-016", FIRST_ARC)):
         make_operation(HEADER, broken, ctx)
 
 
@@ -147,14 +154,15 @@ def test_pinned_arcs_at_the_radial_boundary(ctx: Context) -> None:
 
 @pytest.mark.req("REQ-CL-021", "REQ-CL-014")
 def test_pinned_tiny_arc_at_eps_len(ctx: Context) -> None:
-    # A half circle of radius eps_len / 2 + 2^-40 about (5 + r, 0): its end lies 2r from its
-    # start, just above eps_len, and passes; its radius is above eps_len only if r is, so this
-    # also pins REQ-CL-016's radius rule: refused there, not by the tiny-arc rule.
+    # Exact, with eps_len 2^-20. A half circle of radius r = eps_len / 2 + 2^-40: its end lies
+    # 2r from its start, just above eps_len, so REQ-CL-014 passes it, and REQ-CL-016 refuses
+    # its radius (not above eps_len). With r = eps_len / 2 its end lies exactly eps_len from its
+    # start, and REQ-CL-014 refuses it first.
     exact = with_length_eps(ctx, _EPS)
     r = _EPS / 2 + 2.0**-40
-    moves = framed([arc((5.0 + 2 * r, 0.0, -1.0), (5.0 + r, 0.0), math.pi)], (5.0, 0.0))
+    moves = framed(arc((5.0 + 2 * r, 0.0, -1.0), (5.0 + r, 0.0), math.pi), (5.0, 0.0))
     with pytest.raises(ValueError, match=refusal("REQ-CL-016", _ARC)):
         make_operation(HEADER, columns(moves), exact)
-    at_eps = framed([arc((5.0 + _EPS, 0.0, -1.0), (5.0 + _EPS / 2, 0.0), math.pi)], (5.0, 0.0))
+    at_eps = framed(arc((5.0 + _EPS, 0.0, -1.0), (5.0 + _EPS / 2, 0.0), math.pi), (5.0, 0.0))
     with pytest.raises(ValueError, match=refusal("REQ-CL-014", _ARC)):
         make_operation(HEADER, columns(at_eps), exact)

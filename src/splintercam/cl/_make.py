@@ -44,10 +44,8 @@ def make_cl_data(work_offset: int, operations: tuple[ClOperation, ...], ctx: Con
     if not operations:
         raise ValueError("cl data: REQ-CL-018: no operation")
     rebuilt = tuple(make_operation(op.header, op.moves, ctx) for op in operations)
-    seen: set[str] = set()
-    for index, operation in enumerate(rebuilt):
-        name = operation.header.name
-        if name in seen:
-            raise _refusal(name, "REQ-CL-018", f"operation {index} repeats the name")
-        seen.add(name)
+    names = [operation.header.name for operation in rebuilt]
+    repeat = next((i for i, name in enumerate(names) if name in names[:i]), None)
+    if repeat is not None:
+        raise _refusal(names[repeat], "REQ-CL-018", f"operation {repeat} repeats the name")
     return ClData(work_offset, rebuilt)
