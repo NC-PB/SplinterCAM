@@ -5,7 +5,7 @@
 
 | | |
 | --- | --- |
-| Status | Draft (2026-10-27, for Peter's review: AQ-012). Choices marked "(ours)" are in `src/splintercam/apps/cli/DECISIONS.md`, provisional until the review |
+| Status | Reviewed (2026-10-27, Peter: AQ-012 and AQ-013 in `docs/agents/questions/`, all as recommended). Choices marked "(ours)" are in `src/splintercam/apps/cli/DECISIONS.md` and stand as the contract |
 | Layer | 6 (see architecture/modules.yaml) |
 | Depends on | job only (`run_job`, `JobReport`, `Diagnostic`, `Severity`; docs/dev/03, rule 6, `apps-use-job-only`) |
 | Research | none (`architecture/modules.yaml` lists none for apps). Inputs: Project Spike `product/feature-map.md`, section 1 (the command line, its exit codes and reports; Peter, 2026-10-03); [27][r27], Exit codes (`ncx`'s convention) |
@@ -41,14 +41,14 @@ def entry() -> NoReturn: ...                              # sys.exit(main()); th
 
 | ID | Requirement (EARS) | Verified by | Status |
 | --- | --- | --- | --- |
-| REQ-CLI-001 | THE cli SHALL provide the command `run` with the job file as its one positional argument and the options `--output` (required), `--ncx`, `--machine`, `--strict` and `--json` (plan 0007, step 7; feature map, section 1). | unit: `main([...])` reaches a fake `run_job` with the matching arguments | Draft |
-| REQ-CLI-002 | THE cli SHALL call `job.run_job` once per `run` and import nothing from SplinterCAM but `job` (docs/dev/03, rule 6). | `tools/arch-check`; unit | Draft |
-| REQ-CLI-003 | WHEN `--json` is not given, THE cli SHALL print each diagnostic on stderr as one line `<SEVERITY> <CODE> <location>: <message>` (the location left out when None; line breaks in a message or location written as `\n` and `\r`), in the report's order, and, only when the exit code is 0, the absolute paths of the NCX file and the NC files on stdout, one per line (DEC-CLI-001). | unit: the golden case's report; a failed run prints nothing on stdout | Draft |
-| REQ-CLI-004 | WHEN `--json` is given, THE cli SHALL print on stdout one JSON object, keys sorted, ASCII only, and nothing on stderr: `diagnostics` (objects with `code`, `severity` as `"INFO"`, `"WARNING"` or `"ERROR"`, `message`, `location` or null), `ncx_file` (an absolute path or null), `nc_files` (a list of absolute paths) and `exit_code` (feature map, section 1: text or JSON reports; DEC-CLI-001). | unit: the output parses and carries the report's values | Draft |
-| REQ-CLI-005 | THE cli SHALL return 2 for a usage error and when the report holds `JOB_FILE_UNREADABLE`, `DXF_UNREADABLE` or `JOB_MACHINE_NOT_FOUND`; otherwise 1 when it holds an ERROR or `CANCELLED`, or with `--strict` a WARNING; otherwise 0. INFO never changes the code (feature map, section 1: 0, 1 for warnings under `--strict`, 2; research 27, Exit codes: 2 for usage errors, unreadable input or a missing machine file; DEC-CLI-002). | unit: one report per case; property: generated reports | Draft |
-| REQ-CLI-006 | THE cli SHALL print nothing but REQ-CLI-003 or 004 for a run; for a usage error argparse's usage message on stderr and code 2; for `--help` the help on stdout and code 0; `main` SHALL return these codes, not raise `SystemExit` (ours). | unit | Draft |
-| REQ-CLI-007 | THE same job run twice into two empty folders SHALL print the same report but for the folder names (D-055). | unit: the real `run_job` on the golden job with any existing file as `--machine` and a missing `--ncx` path, so it stops at `JOB_NCX_NOT_FOUND` after the record is built | Draft |
-| REQ-CLI-008 | THE end-to-end test SHALL run `python -m splintercam.apps.cli run testdata/zoo/profile-rectangle-fillets/job.json --output <empty temporary folder> --machine <$SPLINTERCAM_NCXCHANGE/machines/heidenhain-itnc530.toml> --strict` as a subprocess and expect exit 0, `RECT_FILLETS.ncx` and `RECT_FILLETS.h` in the folder, and no ERROR or WARNING; without `ncx` on the path or without the variable it SHALL be skipped with a message naming what is missing (plan 0007, step 7 and question 3; docs/dev/06: end-to-end tests in `tests/apps/cli/`; DEC-JOB-004). | end-to-end: `tests/apps/cli/test_run_profile_rectangle_fillets.py` | Draft |
+| REQ-CLI-001 | THE cli SHALL provide the command `run` with the job file as its one positional argument and the options `--output` (required), `--ncx`, `--machine`, `--strict` and `--json` (plan 0007, step 7; feature map, section 1). | unit: `main([...])` reaches a fake `run_job` with the matching arguments | Reviewed |
+| REQ-CLI-002 | THE cli SHALL call `job.run_job` once per `run` and import nothing from SplinterCAM but `job` (docs/dev/03, rule 6). | `tools/arch-check`; unit | Reviewed |
+| REQ-CLI-003 | WHEN `--json` is not given, THE cli SHALL print each diagnostic on stderr as one line `<SEVERITY> <CODE> <location>: <message>` (the location left out when None; line breaks in a message or location written as `\n` and `\r`), in the report's order, and, only when the exit code is 0, the absolute paths of the NCX file and the NC files on stdout, one per line (DEC-CLI-001). | unit: the golden case's report; a failed run prints nothing on stdout | Reviewed |
+| REQ-CLI-004 | WHEN `--json` is given, THE cli SHALL print on stdout one JSON object, keys sorted, ASCII only, and nothing on stderr: `diagnostics` (objects with `code`, `severity` as `"INFO"`, `"WARNING"` or `"ERROR"`, `message`, `location` or null), `ncx_file` (an absolute path or null), `nc_files` (a list of absolute paths) and `exit_code` (feature map, section 1: text or JSON reports; DEC-CLI-001). | unit: the output parses and carries the report's values | Reviewed |
+| REQ-CLI-005 | THE cli SHALL return 2 for a usage error and when the report holds `JOB_FILE_UNREADABLE`, `DXF_UNREADABLE` or `JOB_MACHINE_NOT_FOUND`; otherwise 1 when it holds an ERROR or `CANCELLED`, or with `--strict` a WARNING; otherwise 0. INFO never changes the code (feature map, section 1: 0, 1 for warnings under `--strict`, 2; research 27, Exit codes: 2 for usage errors, unreadable input or a missing machine file; DEC-CLI-002). | unit: one report per case; property: generated reports | Reviewed |
+| REQ-CLI-006 | THE cli SHALL print nothing but REQ-CLI-003 or 004 for a run; for a usage error argparse's usage message on stderr and code 2; for `--help` the help on stdout and code 0; `main` SHALL return these codes, not raise `SystemExit` (ours). | unit | Reviewed |
+| REQ-CLI-007 | THE same job run twice into two empty folders SHALL print the same report but for the folder names (D-055). | unit: the real `run_job` on the golden job with any existing file as `--machine` and a missing `--ncx` path, so it stops at `JOB_NCX_NOT_FOUND` after the record is built | Reviewed |
+| REQ-CLI-008 | THE end-to-end test SHALL run `python -m splintercam.apps.cli run testdata/zoo/profile-rectangle-fillets/job.json --output <empty temporary folder> --machine <$SPLINTERCAM_NCXCHANGE/machines/heidenhain-itnc530.toml> --strict` as a subprocess and expect exit 0, `RECT_FILLETS.ncx` and `RECT_FILLETS.h` in the folder, and no ERROR or WARNING; without `ncx` on the path or without the variable it SHALL be skipped with a message naming what is missing (plan 0007, step 7 and question 3; docs/dev/06: end-to-end tests in `tests/apps/cli/`; DEC-JOB-004). | end-to-end: `tests/apps/cli/test_run_profile_rectangle_fillets.py` | Reviewed |
 
 ## Invariants
 
@@ -93,10 +93,11 @@ First count about 60 NLOC of Python (arguments and usage codes 20, the two repor
 
 ## Open questions
 
-Box 1 in `docs/agents/questions/AQ-012.md` (this SPEC's review) and AQ-013 (the budget). Box 2 choices are in `src/splintercam/apps/cli/DECISIONS.md`.
+None open. Peter answered on 2026-10-27, as recommended: AQ-012 (this SPEC, items 1 to 3 as drafted) and AQ-013 (budget 90). Box 2 choices are in `src/splintercam/apps/cli/DECISIONS.md`.
 
 ## Change log
 
 - 2026-10-27: drafted for plan 0007, step 7, from the feature map, section 1, and research 27, Exit codes; revised after the spec review the same day: exit 2 for unreadable inputs and a missing machine file, 1 for a cancel, paths on stdout only for a usable run, the JSON form fixed, argparse's exits returned, the end-to-end test's machine file from the pinned NCXchange.
+- 2026-10-27: Reviewed (Peter, AQ-012 items 1 to 3 as drafted; budget 90, AQ-013). DEC-CLI-001 and 002 Accepted.
 
 [r27]: ../../../../docs/research/27-machines-and-controllers.md
