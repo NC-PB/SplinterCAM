@@ -21,6 +21,10 @@
 | retract | `retract` | Rückzug | Move away from the material, along the tool axis first | 10 |
 | rapid | `rapid` | Eilgang | Positioning move at maximum speed (G0) | 10 |
 | clearance, retract and feed height | `clearance_height`, `retract_height`, `feed_height` | Sicherheits-, Rückzugs-, Vorschubhöhe | The three safe heights of an operation | 10 |
+| approach point (P) | `approach_xy` | Anfahrpunkt | Point beside the stock where the tool goes down to a pass and comes back up (research 22, Method 5) | 10, 22 |
+| start point (S) | `start_point` | Startpunkt | Point on the centre path where each pass of a profile begins and ends (research 22, Method 4) | 22 |
+| air gap (g) | `air_gap` | Luftspalt | Distance the tool keeps from the stock where it moves down in air, 0.2·R by default (D-079) | 10, 22 |
+| climb milling | `climb` | Gleichlauffräsen | The cutting edge enters the material at full chip thickness; with the spindle CW the material is on the right of the direction of travel (research 22, Method 2) | 22 |
 | chord tolerance | `chord_tolerance` | Sehnentoleranz | Maximum deviation of a flattened or fitted curve | 01, 11 |
 | tolerance set | `ToleranceSet` | Toleranzsatz | All tolerances of an operation: epsilons, tol and its budget parts | 01 |
 | budget part | `BUDGET_PARTS`: `geometry`, `fit`, `control`, `reserve` | Toleranzanteil | A part of the operation tolerance tol, with its base share (D-056, D-146) | 01 |
