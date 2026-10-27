@@ -62,6 +62,10 @@
 | feed class | `feed_class` | Vorschubklasse | A named feed of an operation (`cut`, `plunge`, …); every LINE and ARC names one (research 26) | 26 |
 | link height | `link_height_mm` | Verbindungshöhe | The height a link's rapids run at or above (D-062, D-087); carried on every RAPID of the record | 10, 26 |
 | work offset | `work_offset` | Nullpunktverschiebung | Index of the datum a setup uses, NCX `ORIGIN`; an index, not a G code (D-078; research 26, trap 13) | 26, 27 |
+| rounding allowance | `round_limit_mm` | Rundungsreserve | The share 0.1·tol of an operation's tolerance reserved for output rounding; NCX `ROUND_LIMIT` once the pinned NCXchange has it (D-149, NCXchange D363) | 26, 27 |
+| NCX section | `NcxSection` | NCX-Abschnitt | The lines of one operation in the NCX, from its `SECTION` block to the next; `ncx`'s messages are mapped to the operation by it | 27 |
+| job file | `job_file` | Auftragsdatei | The JSON file that names a job's part, tools, stock, setup, operations, program and machine (plan 0007: format version 1) | — |
+| working folder | `work_dir` | Arbeitsordner | The empty folder the CAM makes for each `ncx` run, so `ncx` loads no plugins from elsewhere (research 27, trap 3) | 27 |
 | parameter declaration | `ParameterDeclaration` | Parameterdeklaration | A strategy's declared input: name, unit, default or none, range, source; operation panels and job checks come from it (D-018, D-049) | dev/03 |
 | work frame | `work_frame` | Werkstücknullpunkt | Coordinate frame the program refers to (G54 and similar) | 19 |
 | setup | `Setup` | Aufspannung | One clamping of the part, with stock, fixtures and origin | 19 |
