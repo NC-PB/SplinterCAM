@@ -16,14 +16,6 @@ from ._passes import PLUNGE_CLASS, level_passes, levels
 from ._types import ProfileInput, Values
 
 
-def _header(task: ProfileInput, v: Values, axial_offset_mm: float) -> ClHeader:
-    # REQ-PRF-018: the feed classes in the order of _passes' CUT_CLASS and PLUNGE_CLASS.
-    op, heights = task.operation, link_heights(task.stock)
-    feeds = (("cut", v.cut_feed_mm_per_min), ("plunge", v.plunge_feed_mm_per_min))
-    return ClHeader(op.name, (), op.tool_number, op.point_number, axial_offset_mm, op.spindle_rpm,
-                    op.tol_mm, feeds, heights.clearance_mm, heights.retract_mm)  # fmt: skip
-
-
 def _link_plan(
     task: ProfileInput, v: Values, region: PolygonRegion, ctx: Context
 ) -> LinkPlan | Diagnostic:
@@ -66,5 +58,19 @@ def plan_profile(task: ProfileInput, ctx: Context) -> Result[ClOperation]:
     plan = _link_plan(task, values, offset.value, ctx)
     if isinstance(plan, Diagnostic):
         return Result(None, (*offset.diagnostics, plan))
-    header = _header(task, values, point.axial_offset_mm)
+    # REQ-PRF-018: the feed classes in the order of _passes' CUT_CLASS and PLUNGE_CLASS.
+    op, heights = task.operation, link_heights(task.stock)
+    feeds = (("cut", values.cut_feed_mm_per_min), ("plunge", values.plunge_feed_mm_per_min))
+    header = ClHeader(
+        op.name,
+        (),
+        op.tool_number,
+        op.point_number,
+        point.axial_offset_mm,
+        op.spindle_rpm,
+        op.tol_mm,
+        feeds,
+        heights.clearance_mm,
+        heights.retract_mm,
+    )
     return Result(link_operation(header, plan, task.stock, ctx), offset.diagnostics)
