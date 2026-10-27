@@ -32,28 +32,54 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: true
+          fetch-depth: 2 # HEAD^1 of the pull request merge commit is the base
+      - name: scope
+        id: scope
+        # A pull request that changes only Markdown, docs/ or architecture/modules.yaml skips the build,
+        # the tests and the wheel and runs the two standard-library checks instead (docs/dev/07,
+        # Branches; Peter, 2026-10-27). The job still runs, so the required check names report.
+        run: |
+          printf '| Step | Result |\n| --- | --- |\n' > "$RUNNER_TEMP/timings.md"
+          full=true
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            files=$(git diff --name-only HEAD^1 HEAD)
+            if [ -n "$files" ] && ! printf '%s\n' "$files" | grep -Ev '\.md$|^docs/|^architecture/modules\.yaml$' >/dev/null; then
+              full=false
+            fi
+          fi
+          echo "full=$full" >> "$GITHUB_OUTPUT"
+          echo "full run: $full"
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           version: "0.12.18"
           # Off while plan 0001 measures cold runs; turn it on afterwards.
           enable-cache: false
-      - name: bootstrap
+      - name: docs only
+        if: steps.scope.outputs.full != 'true'
         run: |
-          printf '| Step | Result |\n| --- | --- |\n' > "$RUNNER_TEMP/timings.md"
+          tools/arch-check
+          tools/size-check
+          echo "| docs only: arch-check and size-check | pass |" >> "$RUNNER_TEMP/timings.md"
+      - name: bootstrap
+        if: steps.scope.outputs.full == 'true'
+        run: |
           start=$SECONDS
           tools/bootstrap
           echo "| tools/bootstrap (cold) | $((SECONDS - start)) s |" >> "$RUNNER_TEMP/timings.md"
       - name: check
+        if: steps.scope.outputs.full == 'true'
         run: |
           start=$SECONDS
           tools/check
           echo "| tools/check | $((SECONDS - start)) s |" >> "$RUNNER_TEMP/timings.md"
       - name: incremental build
+        if: steps.scope.outputs.full == 'true'
         run: |
           start=$SECONDS
           tools/build
           echo "| tools/build, nothing changed | $((SECONDS - start)) s |" >> "$RUNNER_TEMP/timings.md"
       - name: wheel size
+        if: steps.scope.outputs.full == 'true'
         run: |
           uv build --wheel --out-dir "$RUNNER_TEMP/dist" -C build-dir="$RUNNER_TEMP/wheel-build"
           for wheel in "$RUNNER_TEMP"/dist/*.whl; do

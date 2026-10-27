@@ -1,10 +1,10 @@
 # Research requests
 
-<!-- Box 3 questions (docs/dev/07, "Questions: who answers"): knowledge nobody has at hand. Agents add a request here
-     instead of asking Peter; Project Spike answers it with sources (D-159: research is pulled by a plan step).
-     Newest last. IDs RR-NNN are never reused. Files by their path from the repository root. -->
+<!-- Box 3 questions (docs/dev/07, "Questions: who answers"): knowledge nobody has at hand. Agents add a request as a file of its own,
+     docs/research/requests/RR-NNN.md (one file per request, Peter 2026-10-27), instead of asking Peter; Project Spike answers it with sources (D-159: research is pulled by a plan step).
+     IDs RR-NNN are never reused. Files by their path from the repository root. -->
 
-## RR-<NNN>: <short title>
+# RR-<NNN>: <short title>
 
 - Date: <YYYY-MM-DD>; raised by: <plan NNNN, step n>
 - Question: <what must be known, one or two sentences>
@@ -13,48 +13,4 @@
 - Provisional choice: <the conservative option taken meanwhile, DEC-… marked provisional>
 - Status: Open <or: Answered on <date>, see <research section or DEC-…>>
 
-## RR-001: A stock update that errs toward more stock
-
-- Date: 2026-10-08; raised by: plan 0005, SPEC draft (spec-reviewer round)
-- Question: how must `remove_machined` subtract a machined region from a stock layer so that the result never loses stock that is really there, and by how much must the machined region be shrunk first?
-- Why it matters: REQ-OFF-032 in `src/splintercam/offset2d/SPEC.md` is blocked by it; stock layers decide safe links and skipped air passes (D-026, D-062).
-- What is known: `docs/research/02-offsets-and-booleans.md`, Booleans, shrinks the machined area by 3u before the difference. But the shrink is itself a Clipper2 call on an already rounded region, against "offsets are never chained" (same section, D-132), and each of the two calls moves points by up to 2.83u in no fixed direction (SRC-118), so 3u does not cover both. Options seen: a larger margin (at least about 3u + 2·2.83u); or the machined region built from its source paths, grown by t − margin in one call, so nothing is chained.
-- Provisional choice: none; REQ-OFF-032 stays out of plan 0005's steps until answered. The other Booleans do not depend on it.
-- Status: Answered on 2026-10-09, see `docs/research/02-offsets-and-booleans.md`, Booleans (the stock update) and test 22: no chaining; each operation's machined area from its own centre paths grown by R − (t_flat + 6u) in one call, the stock layer as the raw layer minus all machined areas in one Difference call.
-
-## RR-002: Corrections to research 02 found while building offset2d
-
-- Date: 2026-10-09; raised by: plan 0005, steps 4 to 6
-- Question: please take these into research 02 at its next review, each with its evidence in `src/splintercam/offset2d/DECISIONS.md`: (1) The kernel call, step 3, says normalised loops pass outer loops first, but geometry2d's loop tree keeps the input order, so an inner loop listed first can win Clipper2's tie (DEC-OFF-008, 011); (2) test 17 asks for vertices within 3u, but round joins do not keep their vertices under translation (798 against 796 measured), so the check is every vertex within 3u of the other result's boundary (DEC-OFF-013); (3) test 22's bound on the extra stock leaves out the arc tolerance a of the round joins (DEC-OFF-007); (4) Open chains: the grown path needs t_flat added to δ to cover a flattened arc on both sides (DEC-OFF-005); (5) Source IDs: the nearest input edges are those before any clean-up, which may drop the joint between an arc and its tangent side (DEC-OFF-013). (6) Test 15's second case asks for a fixed node where a hole touches the middle of an outer edge, which the Open items defer to the arc fit; and it lists the triangle clockwise, which cuts nothing with the Positive rule (DEC-OFF-014). (7) Test 12's C open narrower than 2t with the tool inside gives one open piece on its inner wall, not an open and a closed piece: by the cap rule the inner wall's edges near the mouth lie nearest the chain's ends; a closed piece needs a room away from the ends, such as an omega with a narrow neck (DEC-OFF-018). (8) Open chains: one side needs EndType Round, not Butt: Butt ends leave the area short of "within t" at the ends, so a wall near an end (a short first segment into an inside corner) comes closer than t to the end; the cap rule then drops the round ends (DEC-OFF-018). (9) Open chains: a chain that runs back over itself has no side over the overlap; offset2d refuses it with `CHAIN_FOLDS` (DEC-OFF-018).
-- Why it matters: the SPEC already follows the corrected readings; the research text should not lead the next reader back to the old ones.
-- What is known: each item is measured or derived in the DEC entries named.
-- Provisional choice: the SPEC's readings (Peter accepted the deviations of the draft, DEC-OFF-005; the rest are box 2 decisions).
-- Status: Answered. Items 1 to 6 on 2026-10-25 by Project Spike: taken into `docs/research/02-offsets-and-booleans.md` as the SPEC reads them (the kernel call, step 3, with the guard of DEC-OFF-011; Open chains, grown path δ = t + t_flat + a + 3u; Source IDs before clean-up; tests 15, 17 and 22; the stock bound with a). Items 7 to 9 answered on 2026-10-10 by Peter: `docs/research/02-offsets-and-booleans.md`, Open chains, corrected in pull request 58 (round ends, one open piece for the C, chains that are not simple refused; DEC-OFF-018 to 021).
-
-
-## RR-003: Open profiles along a spike that turns back by nearly 180°
-
-- Date: 2026-10-10; raised by: plan 0005, step 8 (second spec review of `offset_chain_side`)
-- Question: how should one side of an open chain treat a spike wider than the grid unit, two segments meeting at a turn of nearly but not exactly 180° (for example (5, 0) to (5, -0.5) to (4.99, 0) inside a wall along y = 0, the tool above), where the spike's tool side wraps round its tip on the far side of the main wall? Do CAM systems refuse such chains, clean them (from what angle or width), or machine them, and is there a published rule?
-- Why it matters: DEC-OFF-018 refused folds within u only; a near turn-back gave a short piece round the spike's tip, up to t on the material side of the main wall.
-- What is known: the second spec review's cases in `src/splintercam/offset2d/DECISIONS.md` (DEC-OFF-018); a 135° turn is ordinary geometry, so a fixed angle limit needs a source.
-- Provisional choice: none.
-- Status: Answered on 2026-10-10 by Peter, see `docs/research/02-offsets-and-booleans.md`, Open chains, and DEC-OFF-021: no angle or width limit; an open chain must be simple (Held, SRC-030, p. 19, Def. 5.3; research 01's loop tree rule 4 with t_topo): where parts not next to each other come within t_topo, it is refused with the position (`CHAIN_SELF_CONTACT`). The example is refused, since (4.99, 0) lies on the incoming wall. A turn-back that touches nothing else is valid and offset as drawn; gouging the real part is the profile's check against the part model (topic 22).
-
-## RR-004: Corrections to research 21 found in the io SPEC review
-
-- Date: 2026-10-12; raised by: plan 0007, step 2 (spec review of `src/splintercam/io/SPEC.md`)
-- Question: please check and take into research 21 at its next review: (1) Method 3 lists ARC, CIRCLE and LWPOLYLINE as OCS entities, but the vertices of a 2D POLYLINE are OCS points too (only a 3D POLYLINE stores world points), so a mirrored 2D POLYLINE read without its OCS comes out un-mirrored; (2) ezdxf reports 2D, 3D, mesh and polyface polylines all as `POLYLINE`, and a spline-fit 2D polyline lists its frame control points among its vertices: which subtypes and vertex flags must the reader take, and which skip? (3) Method 5 closes a gap by moving both ends to the midpoint; on an arc that keeps its sweep this moves the centre and radius by about Δc / (2·sin(|φ|/2)), so a 0.005 mm move on a 359° arc moves the arc by about 0.3 to 0.6 mm: is there a published repair rule for arcs (keep the radius, bridge with a line, or refuse)? (4) Method 3 takes the reference z from "the first contour", which is not known before chaining; (5) Method 6 makes open chains a warning, but Peter decided that gaps larger than the limit stop the import (DEC-IO-001), and with a warning an outline that does not close can import its only other closed loop, such as a hole circle; (6) Method 2 counts `$INSUNITS` values other than 1, 4, 5, 6 as "no unit", but a file in feet states a unit and must not take the job's millimetres (DEC-IO-002).
-- Why it matters: REQ-IO-003, 005, 009, 010, 022 and 026 in `src/splintercam/io/SPEC.md` take provisional readings of these points.
-- What is known: the spec review of 2026-10-12 (the SPEC's change log); for (1) and (2) the DXF reference as ezdxf documents it (SRC-123), to be cited by page; for (3) the formula above, from the arc form of research 01.
-- Provisional choice: (1) 2D POLYLINE read through its OCS (REQ-IO-009); (2) only plain 2D polylines read, every other subtype skipped and listed (REQ-IO-003); (3) instead of the midpoint, the row with the smaller magnification D/c moves its end onto the other (a line before an arc), and a row whose points would move by more than the gap limit is not moved (REQ-IO-020 to 022); (4) the z shared by the most entities (REQ-IO-010); (5) open chains are errors (REQ-IO-026); (6) other values stop with `DXF_UNIT_UNSUPPORTED` (REQ-IO-005).
-- Status: Answered 2026-10-25 by Project Spike: all six provisional choices taken into `docs/research/21-geometry-input.md` (Methods 2 to 6, Parameters, tests 5, 6, 8, 9). (1) confirmed: 2D POLYLINE vertices are OCS points, only 3D POLYLINE vertices are world points. (2) The POLYLINE flags (group code 70: 2 curve-fit, 4 spline-fit, 8 3D polyline, 16 polygon mesh, 64 polyface) separate the kinds; only a plain 2D polyline is read, every other kind skipped and listed (SRC-123, checked against ezdxf 1.4.5). (3) No published repair rule for arcs was found; the SPEC's rule (the row that magnifies less moves, bounded by B) stays ours. (4), (5) and (6) as provisional.
-
-## RR-005: Quotes, characters and length of NCX `COMMENT` and `SECTION` strings
-
-- Date: 2026-10-25; raised by: plan 0007, step 4 (`cl` SPEC draft)
-- Question: how does NCX write a `"` inside `COMMENT="…"` and `SECTION="…"` (an escape, a doubled quote, or not at all), which other characters it refuses in them, and is there a length limit per string, in NCX or in what the iTNC 530 machine file writes for a comment (and whether NCXchange or the control shortens or refuses a long one)? And: is `RAPID Z…` without X and Y valid NCX, so that an operation's first move (along the axis from wherever the tool change left the tool, research 10, Method 1) can be written as it is recorded?
-- Why it matters: REQ-CL-017 in `src/splintercam/cl/SPEC.md` refuses `"` and control characters in note lines, provisionally (DEC-CL-005); the `ncx` writer (plan 0007, step 6) must write the operation's name and note lines so that `ncx format --check` and `check --strict` pass.
-- What is known: `docs/research/27-machines-and-controllers.md`, the Comments row of the controller table (ASCII; a character without a transliteration warns `CMP022`) and trap 13 (umlauts transliterated in comments); nothing on quotes or length. The NCX language spec at the pinned commit (SRC-112) should say.
-- Provisional choice: note lines without control characters and without `"`; no length limit (DEC-CL-005). Move 0 is recorded as (NaN, NaN, z) (REQ-CL-006); if NCX needs X and Y there, the writer has no position to write and research 10's first link needs another form.
-- Status: Answered 2026-10-25 by Project Spike, measured with NCXchange main f74559c (our build) on the iTNC 530, Fanuc 30i and 840D sl machine files; written into `docs/research/27-machines-and-controllers.md`, trap 15. (1) NCX strings escape a quote as `\"` and a backslash as `\\` (NCX language spec, section 3, SRC-112); `format --check`, `check --strict` and `compile` pass, and the compilers write a plain `"`. (2) Brackets are the problem, not quotes: on Fanuc `(` and `)` inside a string end the comment early and the rest of the line is read as code, with no message from `ncx`. Keep DEC-CL-005's refusal of `"` and control characters and add `(` and `)` (ours, conservative; NCXchange request R1-14 asks for escaping or a refusal). (3) No length limit is stated in NCX or the machine files; 120 characters passed on all three. No limit in the slice; the dry run (step 8) checks a long note on the iTNC 530. (4) `RAPID Z=…` without X and Y is valid NCX and compiles on all three; on Fanuc it is the block that switches on `G43`, which suits research 10's first move.
+RR-001 to RR-005 were entries in this file until 2026-10-27; each is now `docs/research/requests/<ID>.md` with its text unchanged.

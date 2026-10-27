@@ -26,9 +26,9 @@ SplinterCAM/
 │   ├── specs/                 cross-module feature and change specs
 │   │   └── 0007-adaptive-clearing/   requirements, design, tasks
 │   ├── plans/
-│   │   ├── active/            execution plans with progress logs
+│   │   ├── active/            execution plans; progress-log entries in <plan>-log/, one file each
 │   │   └── completed/
-│   ├── agents/QUESTIONS.md    questions from coding agents and their answers (AQ-NNN)
+│   ├── agents/questions/      questions from coding agents and their answers, one file per AQ-NNN
 │   ├── glossary.md            domain terms and the code names for them
 │   └── generated/             produced by tools; never edited by hand
 ├── schemas/                   JSON schemas: job, tool, machine, CL data, test case

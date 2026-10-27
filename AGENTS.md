@@ -10,7 +10,7 @@ Status: early start of release 1 (D-156): `foundation` done; `geometry2d` slices
 
 - Current work: plan 0007, the first NC program (`docs/plans/active/0007-first-nc-program.md`), approved on 2026-10-11, for the Heidenhain iTNC 530. Steps 1 (research) and 2 (the DXF import in `io`) are done; step 3, the job data in `model`, is next.
 - Work one plan step at a time. At the end of each step, tick it, write a progress-log entry in the plan, run `tools/check`, and commit. One pull request per session, with small code changes included; a new algorithm or a change over about 100 lines of non-test code gets its own (docs/dev/07, Branches, commits and pull requests). The plan says where to stop for the user's review.
-- Decisions (D-nnn) and sources (SRC-nnn) are registered in Project Spike until the handover; `docs/spike/` holds dated snapshots. Never edit them. If a decision seems wrong or missing, write the question in `docs/agents/QUESTIONS.md` and the progress log.
+- Decisions (D-nnn) and sources (SRC-nnn) are registered in Project Spike until the handover; `docs/spike/` holds dated snapshots. Never edit them. If a decision seems wrong or missing, write the question as `docs/agents/questions/AQ-NNN.md` and the progress log.
 
 ## Where to look
 
@@ -22,7 +22,7 @@ Status: early start of release 1 (D-156): `foundation` done; `geometry2d` slices
 | What you may import | `architecture/modules.yaml` |
 | Another module's interface | `docs/generated/api/<module>.md` (not its source) |
 | Work in progress | `docs/plans/active/` |
-| Questions asked and answered | `docs/agents/QUESTIONS.md` (AQ-NNN) |
+| Questions asked and answered | `docs/agents/questions/` (one file per AQ-NNN; rules in `docs/agents/QUESTIONS.md`) |
 | Why a module is built as it is, and what was rejected | `src/splintercam/<name>/DECISIONS.md` |
 | Why things are as they are across modules | `docs/adr/`, and the decisions in `docs/spike/decisions-snapshot.md` |
 | The right name for a domain term | `docs/glossary.md` |
@@ -49,7 +49,7 @@ After cloning, run `tools/bootstrap`; on Windows, run the `tools/` scripts from 
 3. Write or extend the tests first, tagged with the requirement ID. Run `tools/test-one` and see them fail for the expected reason.
 4. Implement in small steps. Run `tools/test-one` after each step.
 5. Run `tools/check`. For geometry or toolpath changes run `tools/render` on the affected cases and look at the images.
-6. Update the SPEC's "Verified by" column, the plan's progress log, and the glossary if you introduced a term. Decisions and pitfalls are already recorded (see Keep the record).
+6. Update the SPEC's "Verified by" column, the plan's progress log (a new file in the plan's log folder, `docs/plans/active/<plan>-log/YYYY-MM-DD-<slug>.md`), and the glossary if you introduced a term. Decisions and pitfalls are already recorded (see Keep the record).
 7. Report: files changed, tests added, commands run with their results, open questions. Name every file by its path from the repository root, for example `src/splintercam/geometry2d/SPEC.md`.
 
 ## Keep the record
@@ -97,11 +97,11 @@ Record as you go, in the same commit as the change, without being asked (docs/de
 
 Look first: search Project Spike (`~/project_spike` when readable, otherwise `docs/spike/` and `docs/research/`) and use what you find, cited. Then sort every remaining question (docs/dev/07, "Questions: who answers"):
 
-1. **Peter's judgement** (scope, what the user sees, machine and controller behaviour, safety, licences, dependencies, `modules.yaml`, interfaces between modules, accepted decisions): write it in `docs/agents/QUESTIONS.md` (AQ-NNN) in machining terms, what happens on the machine under each option, with your recommendation.
+1. **Peter's judgement** (scope, what the user sees, machine and controller behaviour, safety, licences, dependencies, `modules.yaml`, interfaces between modules, accepted decisions): write it as `docs/agents/questions/AQ-NNN.md` in machining terms, what happens on the machine under each option, with your recommendation.
 2. **Technical inside the module** (algorithms, numerics, edge cases, deviations from research backed by a test, a measurement or a source): decide it yourself as "(ours)", record it in `DECISIONS.md` with the evidence, list it in the pull request under "Deviations and decisions". Do not ask Peter.
-3. **Knowledge nobody has at hand:** write a research request in `docs/research/REQUESTS.md`. Do not ask Peter.
+3. **Knowledge nobody has at hand:** write a research request as `docs/research/requests/RR-NNN.md`. Do not ask Peter.
 
-Never block and never wait for an answer inside a run: take the conservative option, record it as provisional, continue; when nothing is left that does not depend on an open AQ entry, commit and stop, naming the open entries. You resume from the answers in `docs/agents/QUESTIONS.md`. Stop at once only when a test looks wrong, a tolerance would have to be loosened, the same approach failed three times, or no requirement covers what the code needs.
+Never block and never wait for an answer inside a run: take the conservative option, record it as provisional, continue; when nothing is left that does not depend on an open AQ entry, commit and stop, naming the open entries. You resume from the answers in `docs/agents/questions/`. Stop at once only when a test looks wrong, a tolerance would have to be loosened, the same approach failed three times, or no requirement covers what the code needs.
 
 Every file you name, anywhere, is its path from the repository root in backticks: `src/splintercam/geometry2d/SPEC.md`, never "the SPEC".
 

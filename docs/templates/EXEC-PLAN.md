@@ -1,7 +1,8 @@
 # Plan <NNNN>: <title>
 
 <!-- Lives in docs/plans/active/ while work is ongoing, then moves to docs/plans/completed/.
-     The agent updates the progress log at the end of every session, before stopping. -->
+     The agent updates the progress log at the end of every session, before stopping: one new file per entry in
+     docs/plans/active/<plan>-log/YYYY-MM-DD-<slug>.md, not an edit of this file. -->
 
 - Goal: <one sentence; what is true when this plan is done>
 - Specs: <src/splintercam/…/SPEC.md, docs/specs/NNNN-…>
