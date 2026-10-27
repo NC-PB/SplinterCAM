@@ -2,13 +2,15 @@
 """The preconditions, which raise, and the value checks, which are diagnostics, all reported in
 the order of REQ-PRF-003 to 009 (REQ-PRF-020; DEC-PRF-005)."""
 
+import math
+
 from splintercam.foundation import Context, Diagnostic, Severity, ToleranceSet
 from splintercam.geometry2d import row_boxes
 from splintercam.model import MeasurementPoint
 from splintercam.toolpath import link_heights
 
 from ._passes import first_level
-from ._types import DECLARATIONS, STRATEGY_ID, ProfileInput, Values
+from ._types import DECLARATIONS, MIN_STEPDOWN_MM, STRATEGY_ID, ProfileInput, Values
 
 
 def error(task: ProfileInput, code: str, text: str) -> Diagnostic:
@@ -68,6 +70,15 @@ def _stock_sides(task: ProfileInput, ctx: Context) -> list[str]:
     return [side for side, out in sides if out]
 
 
+def _step_down(step: float, flute: float, countable: bool) -> str | None:
+    # REQ-PRF-008: at most the flute length, at least 0.01 mm, and a finite pass count (AQ-030).
+    if step > flute:
+        return f"step-down {step!r} exceeds the flute length {flute!r}"
+    if not step >= MIN_STEPDOWN_MM:
+        return f"step-down {step!r} is below {MIN_STEPDOWN_MM!r}"
+    return None if countable else f"step-down {step!r} gives no finite pass count for the depth"
+
+
 def value_errors(task: ProfileInput, v: Values, ctx: Context) -> list[Diagnostic]:
     # REQ-PRF-020: every failing value check, REQ-PRF-003 to 009 in that order.
     r, flute = task.tool.radius_mm, task.tool.flute_length_mm
@@ -76,10 +87,12 @@ def value_errors(task: ProfileInput, v: Values, ctx: Context) -> list[Diagnostic
     found: list[tuple[str, str]] = []
     if not v.allowance_mm > -r:  # D-150: t = R + s > 0
         found.append(("PROFILE_ALLOWANCE", f"allowance {v.allowance_mm!r} is not above -R {-r!r}"))
+    # AQ-030: a pass count from a quotient that is not finite would overflow; no levels then.
+    countable = v.stepdown_mm > 0.0 and math.isfinite((v.z_top_mm - v.z_bottom_mm) / v.stepdown_mm)
     if not v.z_bottom_mm < v.z_top_mm:  # research 22, trap 3
         found.append(("PROFILE_DEPTH_INVALID",
                       f"z_bottom {v.z_bottom_mm!r} is not below z_top {v.z_top_mm!r}"))  # fmt: skip
-    else:
+    elif countable:
         found += _levels(task, v, ctx)
     if v.z_bottom_mm < bottom:  # AQ-016, item 5 (a)
         text = f"z_bottom {v.z_bottom_mm!r} is below the stock bottom {bottom!r}"
@@ -87,9 +100,8 @@ def value_errors(task: ProfileInput, v: Values, ctx: Context) -> list[Diagnostic
     if top - v.z_bottom_mm > flute:  # from the stock top, DEC-PRF-004
         text = f"depth {top - v.z_bottom_mm!r} below the stock top exceeds the flute {flute!r}"
         found.append(("PROFILE_TOO_DEEP", text))
-    if v.stepdown_mm > flute:
-        text = f"step-down {v.stepdown_mm!r} exceeds the flute length {flute!r}"
-        found.append(("PROFILE_STEP_DOWN", text))
+    if (step := _step_down(v.stepdown_mm, flute, countable)) is not None:
+        found.append(("PROFILE_STEP_DOWN", step))
     if sides := _stock_sides(task, ctx):
         found.append(("PROFILE_STOCK_SMALL", f"the part lies past the stock's {', '.join(sides)}"))
     if not gap > eps:  # DEC-PRF-003

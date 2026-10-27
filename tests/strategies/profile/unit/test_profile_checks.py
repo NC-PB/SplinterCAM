@@ -42,18 +42,35 @@ def _plan(ctx: Context, **changed: object) -> Result[ClOperation]:
 def test_the_declarations_in_order_with_units_defaults_and_ranges() -> None:
     inf = math.inf
     expected = [
-        ("allowance_mm", Unit.MM, 0.0, -inf, True),
-        ("z_top_mm", Unit.MM, None, -inf, True),
-        ("z_bottom_mm", Unit.MM, None, -inf, True),
-        ("stepdown_mm", Unit.MM, None, 0.0, True),
-        ("cut_feed_mm_per_min", Unit.MM_PER_MIN, None, 0.0, True),
-        ("plunge_feed_mm_per_min", Unit.MM_PER_MIN, None, 0.0, True),
-        ("air_gap_ratio", Unit.RATIO, 0.2, 0.0, True),
+        ("allowance_mm", Unit.MM, 0.0, -inf, True, inf, True),
+        ("z_top_mm", Unit.MM, None, -inf, True, inf, True),
+        ("z_bottom_mm", Unit.MM, None, -inf, True, inf, True),
+        ("stepdown_mm", Unit.MM, None, 0.01, False, inf, True),  # [0.01, inf), AQ-030
+        ("cut_feed_mm_per_min", Unit.MM_PER_MIN, None, 0.0, True, inf, True),
+        ("plunge_feed_mm_per_min", Unit.MM_PER_MIN, None, 0.0, True, inf, True),
+        ("air_gap_ratio", Unit.RATIO, 0.2, 0.0, True, 2.0, False),  # (0, 2], AQ-031
     ]
-    got = [(d.name, d.unit, d.default, d.low, d.low_open) for d in DECLARATIONS]
+    got = [(d.name, d.unit, d.default, d.low, d.low_open, d.high, d.high_open)
+           for d in DECLARATIONS]  # fmt: skip
     assert got == expected
-    assert all(d.high == inf and d.high_open and d.source for d in DECLARATIONS)
+    assert all(d.source for d in DECLARATIONS)
     assert STRATEGY_ID == "profile"
+
+
+@pytest.mark.req("REQ-PRF-001")
+@pytest.mark.parametrize(
+    ("name", "value", "ok"),
+    [("stepdown_mm", 0.01, True), ("stepdown_mm", 0.009, False),
+     ("air_gap_ratio", 2.0, True), ("air_gap_ratio", 2.001, False)],
+)  # fmt: skip
+def test_check_job_holds_the_step_down_and_air_gap_ranges(name: str, value: float,
+                                                          ok: bool) -> None:  # fmt: skip
+    ctx = make_context()
+    checked = check_job(example_job((operation(**{name: value}),)), {STRATEGY_ID: DECLARATIONS},
+                        ctx)  # fmt: skip
+    assert checked.ok is ok
+    if not ok:
+        assert codes(checked) == ["PARAM_OUT_OF_RANGE"]
 
 
 @pytest.mark.req("REQ-PRF-001")
@@ -191,6 +208,23 @@ def test_the_depth_is_measured_from_the_stock_top_not_from_z_top() -> None:
 def test_a_step_down_above_the_flute_length_is_refused() -> None:
     assert _plan(make_context(), stepdown_mm=30.0).ok
     _refused(_plan(make_context(), stepdown_mm=30.001), "PROFILE_STEP_DOWN")
+
+
+@pytest.mark.req("REQ-PRF-008")
+def test_a_step_down_below_a_hundredth_is_refused() -> None:
+    # AQ-030 (a): 0.01 mm the smallest step-down; 5 passes to -0.05.
+    assert _plan(make_context(), z_bottom_mm=-0.05, stepdown_mm=0.01).ok
+    message = _refused(_plan(make_context(), stepdown_mm=0.009), "PROFILE_STEP_DOWN")
+    assert "0.009" in message
+    assert "0.01" in message
+
+
+@pytest.mark.req("REQ-PRF-008", "REQ-PRF-020")
+def test_a_pass_count_that_is_not_finite_is_refused_and_does_not_raise() -> None:
+    # AQ-030: z_top - z_bottom overflows to inf; REQ-PRF-005 has no levels to check.
+    result = _plan(make_context(), z_top_mm=1e308, z_bottom_mm=-1e308)
+    assert codes(result) == ["PROFILE_BELOW_STOCK", "PROFILE_TOO_DEEP", "PROFILE_STEP_DOWN"]
+    assert "pass count" in _refused(result, "PROFILE_STEP_DOWN")
 
 
 @pytest.mark.req("REQ-PRF-009")

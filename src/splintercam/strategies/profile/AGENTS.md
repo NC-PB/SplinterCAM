@@ -31,7 +31,7 @@ offset2d, model, cl, toolpath.
 - On research 22 test 1 the straight edges run on past the fillets' tangent points, along the
   flattened fillet (about 0.06 mm each end at tol 0.01): measure the sides with the band, not
   with their nominal length.
-- Nothing bounds the pass count yet (AQ-030): a step-down of 1e-4 mm builds 1e5 passes, and one
-  below about 1e-308 overflows `math.ceil` in `_pass_count`.
+- `_pass_count` overflows `math.ceil` on a quotient that is not finite: every caller must run
+  after `value_errors` has checked `countable` (REQ-PRF-008, DEC-PRF-010).
 - Whether P differs from S is decided by comparing the points, not by d > 0: a d that rounds
   away would leave a zero-length APPROACH and RETRACT row in every pass (DEC-PRF-007).

@@ -86,3 +86,12 @@
 - Decision: REQ-PRF-012's "each edge keeping its source ID when the CCW loop is reversed" is met by choosing S from offset2d's IDs on the CCW loop, before the reversal; the record carries no IDs (cl, Later), so none are reversed. REQ-PRF-017's "WHERE d > 0" is read as "where P is not S" (DEC-PRF-007 (3)).
 - Why: research 22, trap 2 guards against a start edge picked by a shifted ID, which the test of REQ-PRF-012 checks (S on a long side, then on to that side's CCW start). A d that rounds away gives P = S, and the moves of "d > 0" would then have no length.
 - Where: REQ-PRF-012, 017.
+
+## DEC-PRF-010: The smallest step-down and the largest air gap ratio
+
+- Date: 2026-10-27; decided by: Peter (AQ-030 (a), AQ-031 (a)); the placement in the code ours
+- Status: Accepted 2026-10-27
+- Decision: `stepdown_mm` is declared [0.01, ∞) and `air_gap_ratio` (0, 2] (`MIN_STEPDOWN_MM`, `MAX_AIR_GAP_RATIO` in `_types.py`), so model's `check_job` refuses values outside them. The profile also refuses a step-down below 0.01 mm with `PROFILE_STEP_DOWN`, after the flute-length case, and in the same check a step-down whose pass count (z_top − z_bottom) / a_p,max is not finite. REQ-PRF-005 then has no levels and is skipped, as when REQ-PRF-004 fails. The air gap's upper end is the declaration's alone.
+- Why: a step-down typed in µm builds days of passes; one whose quotient overflows crashed `math.ceil` inside REQ-PRF-005 (spec review). The profile's own step-down check stays a backstop for a caller without `check_job`, as the flute check is. A ratio above 2 puts P far beside the stock, where the approach at the plunge feed crosses whatever stands there (AQ-031).
+- Rejected: a largest pass count (AQ-030 (b): a number without machining meaning); an upper air gap check in REQ-PRF-009 (AQ-031 (b): the declaration does it).
+- Where: REQ-PRF-001, 005, 008, 020.
