@@ -13,21 +13,25 @@ from splintercam.model import StockBox
 type Point = tuple[float, float]
 
 
-def _longest_line_edge(region: PolygonRegion, line_ids: NDArray[np.int64]) -> int | None:
-    # REQ-PRF-013: squared lengths, the first in offset2d's CCW order on a tie (np.argmax).
+def _longest_line_edge(region: PolygonRegion, arc_ids: NDArray[np.int64]) -> int | None:
+    # REQ-PRF-013: an edge whose source ID has no arc row is a line row's (every output ID is
+    # a contour ID, REQ-OFF-034); squared lengths, the first in CCW order on a tie (np.argmax).
     p = region.points
     d = np.roll(p, -1, axis=0) - p
-    length2 = np.where(np.isin(region.source_ids, line_ids), d[:, 0] * d[:, 0] + d[:, 1] * d[:, 1],
-                       -1.0)  # fmt: skip
+    line = ~np.isin(region.source_ids, arc_ids)
+    length2 = np.where(line, d[:, 0] * d[:, 0] + d[:, 1] * d[:, 1], -1.0)
     k = int(np.argmax(length2))
     return k if length2[k] >= 0.0 else None
 
 
+def _unit(x: float, y: float) -> Point:
+    length = math.sqrt(x * x + y * y)
+    return x / length, y / length
+
+
 def _outward(a: NDArray[np.float64], b: NDArray[np.float64]) -> Point:
     # The unit outward normal of the CCW edge a → b: its direction turned right.
-    dx, dy = float(b[0] - a[0]), float(b[1] - a[1])
-    length = math.sqrt(dx * dx + dy * dy)
-    return dy / length, -dx / length
+    return _unit(float(b[1] - a[1]), float(a[0] - b[0]))
 
 
 def _start(p: NDArray[np.float64], k: int, at_vertex: bool) -> tuple[Point, Point]:
@@ -38,9 +42,7 @@ def _start(p: NDArray[np.float64], k: int, at_vertex: bool) -> tuple[Point, Poin
         s = (p[k] + after) / 2.0
         return (float(s[0]), float(s[1])), _outward(p[k], after)
     (ax, ay), (bx, by) = _outward(p[k - 1], p[k]), _outward(p[k], after)
-    sx, sy = ax + bx, ay + by
-    length = math.sqrt(sx * sx + sy * sy)
-    return (float(p[k, 0]), float(p[k, 1])), (sx / length, sy / length)
+    return (float(p[k, 0]), float(p[k, 1])), _unit(ax + bx, ay + by)
 
 
 def approach_point(s: Point, n: Point, stock: StockBox, clearance: float) -> Point:
@@ -70,11 +72,11 @@ def approach_point(s: Point, n: Point, stock: StockBox, clearance: float) -> Poi
 def _blocked(p: NDArray[np.float64], skip: list[int], s: Point, end: Point) -> bool:
     # REQ-PRF-015: S → P touches or crosses an edge but the ones at S (orient2d, exact).
     keep = np.ones(p.shape[0], dtype=np.bool_)
-    keep[np.array(skip, dtype=np.int64) % p.shape[0]] = False
+    keep[np.array(skip, dtype=np.int64)] = False  # -1 is the last edge
     a, b = p[keep], np.roll(p, -1, axis=0)[keep]
     ss, ee = np.broadcast_to(s, a.shape), np.broadcast_to(end, a.shape)
-    o1, o2 = orient2d(ss, ee, a).astype(np.int64), orient2d(ss, ee, b).astype(np.int64)
-    o3, o4 = orient2d(a, b, ss).astype(np.int64), orient2d(a, b, ee).astype(np.int64)
+    o1, o2 = orient2d(ss, ee, a), orient2d(ss, ee, b)  # int8 signs: products stay in -1 … 1
+    o3, o4 = orient2d(a, b, ss), orient2d(a, b, ee)
     # Collinear: the boxes must overlap in x and y.
     low = np.maximum(np.minimum(a, b), np.minimum(ss, ee))
     high = np.minimum(np.maximum(a, b), np.maximum(ss, ee))
@@ -84,13 +86,13 @@ def _blocked(p: NDArray[np.float64], skip: list[int], s: Point, end: Point) -> b
 
 
 def start_and_approach(
-    region: PolygonRegion, line_ids: NDArray[np.int64], stock: StockBox, clearance: float
+    region: PolygonRegion, arc_ids: NDArray[np.int64], stock: StockBox, clearance: float
 ) -> tuple[NDArray[np.float64] | None, Point]:
     """The CW loop from S to S and P: S on the longest line edge, else, or where that approach is
     blocked, at the smallest vertex; no loop and S where that is blocked too (REQ-PRF-012 to
     015)."""
     p = region.points
-    k = _longest_line_edge(region, line_ids)
+    k = _longest_line_edge(region, arc_ids)
     candidates = [(0, True)] if k is None else [(k, False), (0, True)]
     s: Point = (math.nan, math.nan)
     for k, at_vertex in candidates:

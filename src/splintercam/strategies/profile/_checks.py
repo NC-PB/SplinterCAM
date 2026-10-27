@@ -11,9 +11,9 @@ from ._passes import first_level
 from ._types import DECLARATIONS, STRATEGY_ID, ProfileInput, Values
 
 
-def location(task: ProfileInput) -> str:
-    """The diagnostics' location, without model's index (DEC-PRF-005)."""
-    return f"operation ({task.operation.name})"
+def error(task: ProfileInput, code: str, text: str) -> Diagnostic:
+    # An error at the operation, without model's index (DEC-PRF-005).
+    return Diagnostic(code, Severity.ERROR, text, f"operation ({task.operation.name})")
 
 
 def checked_input(task: ProfileInput, ctx: Context) -> tuple[Values, MeasurementPoint]:
@@ -95,4 +95,4 @@ def value_errors(task: ProfileInput, v: Values, ctx: Context) -> list[Diagnostic
         found.append(("PROFILE_STOCK_SMALL", f"the part lies past the stock's {', '.join(sides)}"))
     if not gap > eps:  # DEC-PRF-003
         found.append(("PROFILE_AIR_GAP", f"air gap {gap!r} mm is not above eps_len {eps!r}"))
-    return [Diagnostic(code, Severity.ERROR, text, location(task)) for code, text in found]
+    return [error(task, code, text) for code, text in found]

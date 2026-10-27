@@ -37,14 +37,13 @@ def level_passes(
 ) -> tuple[LevelPass, ...]:
     """One pass per level: WHERE P is not S, P → S at the plunge feed (APPROACH) and S → P at the
     cutting feed (RETRACT) round the CW loop from S to S (REQ-PRF-017; research 22, trap 1)."""
-    if (loop[0, 0], loop[0, 1]) == approach:
-        points, role = loop, np.full(loop.shape[0] - 1, Role.CUT, dtype=np.int8)
-    else:
-        p = np.array([approach], dtype=np.float64)
-        points = np.concatenate([p, loop, p])
-        role = np.full(points.shape[0] - 1, Role.CUT, dtype=np.int8)
-        role[0], role[-1] = Role.APPROACH, Role.RETRACT
+    apart = (loop[0, 0], loop[0, 1]) != approach  # DEC-PRF-007 (3): the points, not d > 0
+    p = np.array([approach], dtype=np.float64)
+    points = np.concatenate([p, loop, p]) if apart else loop
     m = points.shape[0] - 1
+    role = np.full(m, Role.CUT, dtype=np.int8)
+    if apart:
+        role[0], role[-1] = Role.APPROACH, Role.RETRACT
     rows = np.column_stack([points[:-1], points[1:], np.full((m, 2), np.nan), np.zeros(m)])
     feed = np.where(role == Role.APPROACH, PLUNGE_CLASS, CUT_CLASS).astype(np.int64)
     for array in (rows, role, feed):

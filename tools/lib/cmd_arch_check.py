@@ -38,7 +38,10 @@ def _group_init(map_: ModuleMap, relative: Path, path: Path) -> bool:
     group = relative.parent.as_posix()
     if relative.name != "__init__.py" or not any(m.startswith(f"{group}/") for m in map_.modules):
         return False
-    tree = ast.parse(path.read_text(encoding="utf-8-sig"))
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8-sig"))
+    except (SyntaxError, ValueError):  # reported as in no module
+        return False
     return not any(isinstance(node, ast.Import | ast.ImportFrom) for node in ast.walk(tree))
 
 
@@ -48,10 +51,9 @@ def _python_findings(map_: ModuleMap, path: Path, package: Path) -> list[str]:
     if relative == Path("__init__.py"):  # the package's own
         return []
     module = arch_python.owner(map_, relative)
-    if module is None and _group_init(map_, relative, path):
-        return []
     if module is None:
-        return [f"{name}: Python file in no module of modules.yaml"]
+        grouping = _group_init(map_, relative, path)
+        return [] if grouping else [f"{name}: Python file in no module of modules.yaml"]
     try:
         source = path.read_text(encoding="utf-8-sig")
         return arch_python.file_findings(map_, map_.modules[module], name, source)
