@@ -46,13 +46,32 @@ class Part:
     rows: list[list[float]]
     rect: tuple[float, float, float, float, float] | None  # inner box and radius when rounded
     lines_only: bool
+    small_tool: bool = False  # t <= 4, so the U's channel stays open
+
+
+def _u_part(draw: st.DrawFn) -> Part:
+    # A U of lines opening up, its outer sides bent out by 1 mm at mid-height, so the inner sides
+    # (at least 23 mm after a t <= 4 offset) are the longest line edges (bottom <= 20, outer
+    # halves about 20): their normals cross the channel at the other arm (REQ-PRF-015).
+    arm, gap = draw(_grid(3.0, 4.0)), draw(_grid(10.0, 12.0))
+    height, base = draw(_grid(33.0, 40.0)), draw(_grid(3.0, 6.0))
+    x0, y0 = -(2.0 * arm + gap) / 2.0, -height / 2.0
+    x1, y1, ym = -x0, -y0, 0.0
+    points = [(x0, y0), (x1, y0), (x1 + 1.0, ym), (x1, y1), (x1 - arm, y1),
+              (x1 - arm, y0 + base), (x0 + arm, y0 + base), (x0 + arm, y1), (x0, y1),
+              (x0 - 1.0, ym)]  # fmt: skip
+    rows = [bulge_row(p, q, 0.0) for p, q in zip(points, points[1:] + points[:1], strict=True)]
+    return Part(rows, None, True, small_tool=True)
 
 
 @st.composite
 def parts(draw: st.DrawFn) -> Part:
-    """A rounded box (convex, lines and arcs), a star polygon of lines (not convex) or a star of
-    bulged rows (lines and arcs, not convex), all inside [-25, 25]²."""
-    kind = draw(st.sampled_from(["box", "star", "bulged"]))
+    """A rounded box (convex, lines and arcs), a star polygon of lines (not convex), a star of
+    bulged rows (lines and arcs, not convex) or a U whose approach falls back to the smallest
+    vertex, all inside [-25, 25]²."""
+    kind = draw(st.sampled_from(["box", "star", "bulged", "u"]))
+    if kind == "u":
+        return _u_part(draw)
     if kind == "box":
         w, h, r = draw(_grid(5.0, 40.0)), draw(_grid(5.0, 40.0)), draw(_grid(0.0, 2.5))
         rows = rounded_box(-w / 2, -h / 2, w / 2, h / 2, r)
@@ -89,13 +108,13 @@ def _distances(part: Part, contour: CurveRows, cut: NDArray[np.float64]
 @st.composite
 def cases(draw: st.DrawFn) -> tuple[Part, StockBox, FlatEndMill, dict[str, float]]:
     part = draw(parts())
-    radius = draw(_grid(1.0, 8.0))
+    radius = draw(_grid(1.0, 3.0 if part.small_tool else 8.0))
     margins = draw(st.lists(_grid(0.0, 10.0), min_size=4, max_size=4))
     bottom = -draw(_grid(0.5, 20.0))
     stock = StockBox((-25.0 - margins[0], -25.0 - margins[1], -25.0),
                      (25.0 + margins[2], 25.0 + margins[3], 0.0))  # fmt: skip
     values = {
-        "allowance_mm": draw(_grid(-radius + 0.1, 3.0)),
+        "allowance_mm": draw(_grid(-radius + 0.1, 1.0 if part.small_tool else 3.0)),
         "z_bottom_mm": bottom,
         "stepdown_mm": draw(_grid(0.5, 10.0)),
         "air_gap_ratio": draw(_grid(0.05, 1.0)),
@@ -139,6 +158,11 @@ def test_the_profile_of_a_random_part(
     smallest, largest = _distances(part, contour, first_cut)
     assert smallest.min() >= t - _SLACK * max(1.0, t)
     assert largest.max() <= t + true_curve_band_mm(ctx.tolerances)
+    # The approach P → S (and the retract back on it) cuts nothing of the part (REQ-PRF-015).
+    way, _ = _distances(part, contour, np.array([p, first_cut[0]]))
+    assert way.min() >= t - _SLACK * max(1.0, t)
+    if part.small_tool:  # the U: its inner side's approach is blocked, S the smallest vertex
+        assert first_cut[0, 0] == first_cut[:, 0].min()
     depths = -np.diff([0.0, *(z for z, _ in passes)])
     assert depths.max() <= values["stepdown_mm"] + EPS_LEN
     assert passes[-1][0] == values["z_bottom_mm"]

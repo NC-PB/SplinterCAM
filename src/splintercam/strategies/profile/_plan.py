@@ -38,6 +38,9 @@ def _link_plan(
     # from P round the clockwise loop (REQ-PRF-012 to 017).
     if (count := region.loop_starts.size) != 1:
         return error(task, "PROFILE_REGION", f"the centre path has {count} loops, not one")
+    x, y = region.points[:, 0], region.points[:, 1]
+    if not np.sum(x * np.roll(y, -1) - np.roll(x, -1) * y) > 0.0:  # DEC-PRF-007 (6)
+        raise ValueError(f"operation {task.operation.name!r}: offset2d's outer loop is not CCW")
     arc_ids = task.contour.ids[task.contour.rows[:, 6] != 0.0]
     r = task.tool.radius_mm
     loop, approach = start_and_approach(region, arc_ids, task.stock, r + v.air_gap_ratio * r)

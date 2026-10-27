@@ -248,6 +248,22 @@ def _no_offset(*args: object) -> Result[PolygonRegion]:
     raise AssertionError("the offset ran")
 
 
+@pytest.mark.req("REQ-PRF-012")
+def test_a_clockwise_loop_from_offset2d_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    # DEC-PRF-007 (6): reversed, the loop would be milled conventional; offset2d broke its promise.
+    def clockwise(*args: object) -> Result[PolygonRegion]:
+        region = offset_region(*args).value  # type: ignore[arg-type]
+        assert region is not None
+        back = slice(None, None, -1)
+        points, ids = region.points[back].copy(), region.source_ids[back].copy()
+        return Result(PolygonRegion(points, region.loop_starts, ids, region.fixed[back].copy()))
+
+    monkeypatch.setattr(_OFFSET, clockwise)
+    ctx = make_context()
+    with pytest.raises(ValueError, match="not CCW"):
+        plan_profile(task(ctx), ctx)
+
+
 @pytest.mark.req("REQ-PRF-021")
 def test_cancelled_at_entry_gives_cancelled_alone_without_the_offset(
     monkeypatch: pytest.MonkeyPatch,
