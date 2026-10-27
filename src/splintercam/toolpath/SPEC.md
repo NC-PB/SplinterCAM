@@ -7,7 +7,7 @@
 
 | | |
 | --- | --- |
-| Status | Draft (2026-10-27, for Peter's review: AQ-010; budget AQ-012). Choices marked "(ours)" are in `src/splintercam/toolpath/DECISIONS.md`, provisional |
+| Status | Draft (2026-10-27, for Peter's review: AQ-015; budget AQ-017). Choices marked "(ours)" are in `src/splintercam/toolpath/DECISIONS.md`, provisional |
 | Layer | 3 (see architecture/modules.yaml) |
 | Depends on | foundation (`Context`); model (`StockBox`, `FlatEndMill`); cl (`ClHeader`, `ClMoves`, `ClOperation`, `MoveKind`, `Role`, `NO_FEED_CLASS`, `make_operation`, by `src/splintercam/cl/SPEC.md`, Reviewed) |
 | Research | [10][r10], Method, Traps, Tests (the clearance-height links of plan 0007); [26][r26], Links and heights (what the record carries) |
@@ -21,7 +21,7 @@ Turns a strategy's passes into one complete operation of the toolpath record: th
 ## Scope
 
 - In: the clearance height h_c and the retract height h_r from the stock top (D-062); research 10's links for passes that all start and end at one approach point P: Method 1 to 5 in that order; the check of research 10 test 1 that the descent at P lies beside the stock box grown by R.
-- Out, handled elsewhere: where P lies, the passes' levels and their moves in the plane (`strategies/profile`, research 22, Method 4 to 6); the feed values and the header fields other than the clearance height (the strategy); the record's own rules (`cl`, REQ-CL-005 to 017, applied by `make_operation`); fixtures and clamps (research 10, trap 1: the setup sheet and Peter's dry run, plan 0007 step 8; what the setup sheet must say is AQ-010, item 1).
+- Out, handled elsewhere: where P lies, the passes' levels and their moves in the plane (`strategies/profile`, research 22, Method 4 to 6); the feed values and the header fields other than the clearance height (the strategy); the record's own rules (`cl`, REQ-CL-005 to 017, applied by `make_operation`); fixtures and clamps (research 10, trap 1: the setup sheet and Peter's dry run, plan 0007 step 8; what the setup sheet must say is AQ-015, item 1).
 - Later (one line each, no work): retract heights per link over the stock layers grown by R + 0.2R and staying down (D-062, research 10 in Project Spike); LINE links below h_r at a link feed (D-087); leads in and out; passes with different start points; link checks against fixtures and keep-out zones (D-078); h_c and h_r as job parameters; the arc fit of research 11 (D-023); a kernel for links over many passes.
 - Non-goals: choosing P or the order of passes (the strategy's, research 22); any controller knowledge (D-021, D-148).
 
@@ -131,12 +131,12 @@ No algorithms beyond research 10's order of links.
 
 ## Size estimate
 
-First count about 110 NLOC of Python (types and constants 25, `link_heights` 5, plan and pass checks 45, the record's columns built per pass and joined 35); by Peter's rule of 2026-10-25 about 1.5 times that: **about 165 NLOC**, and about 300 lines of tests. Module budget: AQ-012.
+First count about 110 NLOC of Python (types and constants 25, `link_heights` 5, plan and pass checks 45, the record's columns built per pass and joined 35); by Peter's rule of 2026-10-25 about 1.5 times that: **about 165 NLOC**, and about 300 lines of tests. Module budget: AQ-017.
 
 ## Open questions
 
-- AQ-010 (Peter): the SPEC review: what the setup sheet must say about clamps and jaws, fixed heights from the stock top, the order after the tool change, the feed descent beside the stock, the descent refusal.
-- AQ-012 (Peter): the budget and research list in `architecture/modules.yaml`.
+- AQ-015 (Peter): the SPEC review: what the setup sheet must say about clamps and jaws, fixed heights from the stock top, the order after the tool change, the feed descent beside the stock, the descent refusal.
+- AQ-017 (Peter): the budget and research list in `architecture/modules.yaml`.
 
 ## Change log
 

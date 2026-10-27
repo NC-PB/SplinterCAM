@@ -8,12 +8,12 @@
 
 ## DEC-PRF-001: The cut moves are offset2d's polygon as lines; research 22's tests read for it
 
-- Date: 2026-10-27; decided by: ours, from D-023 and plan 0007's scope (Out: arc fitting); part of Peter's review (AQ-011), since it changes the NC program
+- Date: 2026-10-27; decided by: ours, from D-023 and plan 0007's scope (Out: arc fitting); part of Peter's review (AQ-016), since it changes the NC program
 - Status: Provisional until the SPEC is Reviewed
 - Decision: the cut moves are the edges of `offset_region`'s loop, written as LINE moves. Research 22 test 1's "four arcs of radius 10" is read as: the loop's points on each fillet lie in the band of the arc of radius 10 about the fillet's centre. Test 2's band "from the contour" is measured against the true lines and arcs, so it is [t, t + a + 6u + t_flat], as offset2d's SPEC states. Test 5's "S at its first vertex" is read with REQ-PRF-013's line-row rule, since every edge of a polygon is a line.
 - Why: offset2d returns a `PolygonRegion` (Clipper2 works on polylines, D-058); D-023 brings G2/G3 back through arc fitting (research 11), which plan 0007 leaves out ("output stays lines and the record's arcs as given"). Writing arcs from source IDs alone would be an arc fit of our own with no research behind it.
 - Rejected: recovering each fillet as one ARC from its source arc's centre and radius + t (an arc fit in disguise, wrong at round joins and where offset2d merged edges); waiting for arc fitting (the slice would stop here).
-- On the machine: each fillet becomes a few short G1 blocks instead of one G2/G3, within the chord tolerance; the profile is never inside t (no gouge). RR-006 asks Project Spike to word the tests for the polygonal path; `src/splintercam/cl/SPEC.md`, Example parts, names arcs for the same case and is not this lane's file.
+- On the machine: each fillet becomes a few short G1 blocks instead of one G2/G3, within the chord tolerance; the profile is never inside t (no gouge). RR-007 asks Project Spike to word the tests for the polygonal path; `src/splintercam/cl/SPEC.md`, Example parts, names arcs for the same case and is not this lane's file.
 - Where: REQ-PRF-011, 013.
 
 ## DEC-PRF-002: The start point from source IDs
@@ -36,11 +36,11 @@
 
 ## DEC-PRF-004: Depth checked from the stock top; the pass count guarded against rounding
 
-- Date: 2026-10-27; decided by: ours; part of Peter's review (AQ-011, item 2)
+- Date: 2026-10-27; decided by: ours; part of Peter's review (AQ-016, item 2)
 - Status: Provisional until the SPEC is Reviewed
-- Decision: `PROFILE_TOO_DEEP` compares the stock top − z_bottom with the flute length, not z_top − z_bottom; for the same reason a first pass that lies more than a_p,max + eps_len below the stock top is refused (`PROFILE_FIRST_PASS_DEEP`, provisional, AQ-011). n = ⌈D / a_p,max⌉ is reduced by one where n > 1 and (n − 1)·a_p,max ≥ D − eps_len, and the last level is z_bottom itself. z_top has no default.
+- Decision: `PROFILE_TOO_DEEP` compares the stock top − z_bottom with the flute length, not z_top − z_bottom; for the same reason a first pass that lies more than a_p,max + eps_len below the stock top is refused (`PROFILE_FIRST_PASS_DEEP`, provisional, AQ-016). n = ⌈D / a_p,max⌉ is reduced by one where n > 1 and (n − 1)·a_p,max ≥ D − eps_len, and the last level is z_bottom itself. z_top has no default.
 - Why: research 22 names "a depth larger than the flute length" without saying from where. Without a stock model the CAM does not know that the material above z_top was removed, so the tool may be in stock from the stock top down to z_bottom; measuring from the stock top is the conservative reading and equals research 22's where z_top is the stock top (every example of the slice). The same unknown makes the first pass cut stock top − z_1, which can exceed the step-down the user set (spec and cnc review). In floats (0.1 − (−0.2)) / 0.1 lands above 3, so ⌈⌉ alone would add a fourth pass of almost no depth; a pass up to eps_len deeper than a_p,max is harmless; without n > 1 a depth below eps_len would give n = 0 (spec review). z_top − n·Δ need not equal z_bottom bit for bit, and the final depth must. Research 22 gives z_top no default, and 0 equals the stock top only when the drawing's datum is there.
-- Rejected: z_top − z_bottom (the shank may rub stock above z_top); counting the passes from the stock top when z_top lies below it (changes research 22's levels; an option in AQ-011); a relative epsilon (a magic number); z_top default 0 (the draft).
+- Rejected: z_top − z_bottom (the shank may rub stock above z_top); counting the passes from the stock top when z_top lies below it (changes research 22's levels; an option in AQ-016); a relative epsilon (a magic number); z_top default 0 (the draft).
 - Where: REQ-PRF-001, 005, 007, 016.
 
 ## DEC-PRF-005: Preconditions raise, outcomes are diagnostics

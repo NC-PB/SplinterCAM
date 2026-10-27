@@ -8,11 +8,11 @@
 
 ## DEC-TP-001: The strategy hands over passes as curve rows at a level; toolpath owns the heights
 
-- Date: 2026-10-27; decided by: ours (SPEC draft, plan 0007 step 5); part of Peter's review (AQ-010), since it is the interface every strategy will use
+- Date: 2026-10-27; decided by: ours (SPEC draft, plan 0007 step 5); part of Peter's review (AQ-015), since it is the interface every strategy will use
 - Status: Provisional until the SPEC is Reviewed
 - Decision: a strategy gives toolpath the approach point P, the tool (for R), the plunge feed class and per pass its level z_i with the moves in the plane as geometry2d's curve rows (m, 7), plus a role and a feed class per row. toolpath builds every move along Z and every rapid, with the link heights, and calls `cl`'s `make_operation`. h_c and h_r are named constants from D-062 (5 mm and 3 mm over the stock top), not job parameters, in the slice.
 - Why: research 10 puts the heights and the order of links in topic 10, the same for every operation; a strategy that wrote its own rapids could break D-062 and D-087 in its own way. Curve rows are the form loops already cross module boundaries in (geometry2d `AGENTS.md`, Local rules), so the profile's loop goes in without a conversion. D-062 fixes 5 and 3 mm; research 10 names no user parameter for them, and plan 0007's scope lists none.
-- Rejected: the strategy writes the whole `ClMoves` and toolpath only checks it (every strategy repeats the link code); passes as `ClMoves` (the link-height and kind columns would be filled by a strategy that must not set them); h_c and h_r as declared parameters now (no requirement in the slice; AQ-010 asks Peter).
+- Rejected: the strategy writes the whole `ClMoves` and toolpath only checks it (every strategy repeats the link code); passes as `ClMoves` (the link-height and kind columns would be filled by a strategy that must not set them); h_c and h_r as declared parameters now (no requirement in the slice; AQ-015 asks Peter).
 - Where: REQ-TP-001 to 006, 011.
 
 ## DEC-TP-002: A broken plan raises `ValueError`
