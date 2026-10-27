@@ -111,6 +111,16 @@ def test_a_line_row_gets_the_fill_values_whatever_it_holds(ctx: Context) -> None
     assert (moves.sweep_rad[4:6] == 0.0).all()
 
 
+@pytest.mark.req("REQ-TP-006")
+def test_a_whole_number_level_gives_float_columns(ctx: Context) -> None:
+    # cnc review: an int z_mm must not make the end or link-height column an integer one.
+    rows = [line_row(P, (40.0, -15.0)), line_row((40.0, -15.0), P)]
+    plan = LinkPlan(P, TOOL, PLUNGE, (level(-2, rows, [Role.CUT] * 2, [CUT] * 2),))
+    moves = _moves(plan, ctx)
+    assert tuple(moves.end_mm[4]) == (40.0, -15.0, -2.0)
+    assert np.isnan(moves.link_height_mm[4:6]).all()
+
+
 @pytest.mark.req("REQ-TP-002", "REQ-TP-006")
 def test_the_record_is_read_only_and_leaves_the_plan_alone(ctx: Context) -> None:
     plan = profile_plan()

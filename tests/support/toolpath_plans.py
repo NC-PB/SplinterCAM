@@ -89,6 +89,7 @@ def refusal(requirement: str, pass_index: int | None = None, row: int | None = N
 
 def header_for(stock: StockBox) -> ClHeader:
     top = stock.top_mm
+    # Literal D-062 heights, not the module's constants, so a wrong constant fails REQ-TP-007.
     return replace(HEADER, clearance_height_mm=top + 5.0, retract_height_mm=top + 3.0)
 
 
@@ -108,7 +109,9 @@ def _outside(point: tuple[float, float], stock: StockBox) -> bool:
 @st.composite
 def _row(draw: st.DrawFn, start: tuple[float, float]) -> Row:
     if draw(st.booleans()):
-        return line_row(start, (draw(_coord), draw(_coord)))
+        # A line row's centre and zero sweep may hold anything (REQ-TP-006).
+        junk = draw(st.sampled_from(((math.nan, math.nan), (0.0, 0.0), (7.5, -3.0))))
+        return (*start, draw(_coord), draw(_coord), *junk, draw(st.sampled_from((0.0, -0.0))))
     radius = draw(st.floats(1.0, 50.0))
     at = draw(st.floats(-math.pi, math.pi))
     sweep = draw(st.floats(0.1, math.tau - 0.1)) * draw(st.sampled_from((-1.0, 1.0)))

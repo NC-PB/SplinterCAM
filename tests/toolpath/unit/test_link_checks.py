@@ -56,19 +56,33 @@ def test_header_heights_off_h_c_or_h_r_are_refused(ctx: Context, field: str, del
         link_operation(header, square_plan(), STOCK, ctx)
 
 
+@pytest.mark.req("REQ-TP-007")
+@pytest.mark.parametrize("field", ["clearance_height_mm", "retract_height_mm"])
+@pytest.mark.parametrize("direction", [-math.inf, math.inf])
+def test_header_heights_one_ulp_off_are_refused(ctx: Context, field: str, direction: float) -> None:
+    # Bit for bit: no tolerance.
+    base = {"clearance_height_mm": H_C, "retract_height_mm": H_R}[field]
+    header = replace(HEADER, **{field: math.nextafter(base, direction)})
+    with pytest.raises(ValueError, match=refusal("REQ-TP-007") + f" header {field[:-10]}"):
+        link_operation(header, square_plan(), STOCK, ctx)
+
+
 @pytest.mark.req("REQ-TP-008")
 @pytest.mark.parametrize(
-    "plan",
+    ("plan", "text"),
     [
-        LinkPlan(P, TOOL, 0, ()),
-        LinkPlan((math.nan, -15.0), TOOL, 0, (square_pass(-1.0),)),
-        LinkPlan((50.0, math.inf), TOOL, 0, (square_pass(-1.0),)),
-        LinkPlan(P, TOOL, -1, (square_pass(-1.0),)),
+        (LinkPlan(P, TOOL, 0, ()), "no pass"),
+        (LinkPlan((math.nan, -15.0), TOOL, 0, ()), "no pass"),
+        (LinkPlan((math.nan, -15.0), TOOL, -1, (square_pass(-1.0),)), "approach point"),
+        (LinkPlan((50.0, math.inf), TOOL, 0, (square_pass(-1.0),)), "approach point"),
+        (LinkPlan(P, TOOL, -1, (square_pass(-1.0),)), "plunge feed class"),
+        (LinkPlan(P, TOOL, 2**63, (square_pass(-1.0),)), "plunge feed class"),
     ],
-    ids=["no pass", "P NaN", "P infinite", "plunge class negative"],
-)
-def test_a_broken_plan_field_is_refused(ctx: Context, plan: LinkPlan) -> None:
-    with pytest.raises(ValueError, match=refusal("REQ-TP-008")):
+    ids=["no pass", "no pass before P", "P NaN before plunge", "P infinite",
+         "plunge class negative", "plunge class beyond int64 (DEC-TP-005)"],
+)  # fmt: skip
+def test_a_broken_plan_field_is_refused(ctx: Context, plan: LinkPlan, text: str) -> None:
+    with pytest.raises(ValueError, match=refusal("REQ-TP-008") + f" {text}"):
         link_operation(HEADER, plan, STOCK, ctx)
 
 
@@ -88,15 +102,16 @@ def _pass_with(column: str, value: object) -> LevelPass:
         (_pass_with("role", square_pass(-1.0).role.astype(np.int64)), "role"),
         (_pass_with("feed_class", square_pass(-1.0).feed_class.astype(np.int32)), "feed_class"),
         (_pass_with("feed_class", square_pass(-1.0).feed_class.reshape(4, 1)), "feed_class"),
+        (_pass_with("role", np.array(Role.CUT, dtype=np.int8)), "role"),
     ],
     ids=["float32", "(m, 6)", "list", "masked", "role short", "role int64", "feed int32",
-         "feed (m, 1)"],
+         "feed (m, 1)", "role 0-d"],
 )  # fmt: skip
 def test_a_broken_column_names_the_pass_and_column(
     ctx: Context, broken: LevelPass, column: str
 ) -> None:
     plan = LinkPlan(P, TOOL, 0, (square_pass(-2.0), broken))
-    with pytest.raises(ValueError, match=refusal("REQ-TP-009", 1) + f" .*{column}"):
+    with pytest.raises(ValueError, match=refusal("REQ-TP-009", 1) + f" column {column} "):
         link_operation(HEADER, plan, STOCK, ctx)
 
 
@@ -136,8 +151,8 @@ def test_a_level_one_ulp_below_h_r_passes(ctx: Context) -> None:
 @pytest.mark.req("REQ-TP-011")
 @pytest.mark.parametrize(
     ("index", "row"),
-    [((0, 0), 0), ((2, 1), 2), ((3, 2), 3)],
-    ids=["first start", "chain", "last end"],
+    [((0, 0), 0), ((0, 1), 0), ((2, 0), 2), ((2, 1), 2), ((3, 2), 3), ((3, 3), 3)],
+    ids=["first start x", "first start y", "chain x", "chain y", "last end x", "last end y"],
 )
 def test_a_pass_off_p_or_with_a_gap_by_one_ulp_is_refused(
     ctx: Context, index: tuple[int, int], row: int
@@ -147,6 +162,15 @@ def test_a_pass_off_p_or_with_a_gap_by_one_ulp_is_refused(
     plan = LinkPlan(P, TOOL, 0, (square_pass(-2.0), _shifted(level, index, value)))
     with pytest.raises(ValueError, match=refusal("REQ-TP-011", 1, row)):
         link_operation(HEADER, plan, STOCK, ctx)
+
+
+@pytest.mark.req("REQ-TP-011")
+def test_the_first_break_in_a_pass_is_named_in_the_stated_order(ctx: Context) -> None:
+    # Start off P and end off P: the start is checked first.
+    level = square_pass(-1.0)
+    broken = _shifted(_shifted(level, (3, 2), 51.0), (0, 0), 51.0)
+    with pytest.raises(ValueError, match=refusal("REQ-TP-011", 0, 0)):
+        link_operation(HEADER, LinkPlan(P, TOOL, 0, (broken,)), STOCK, ctx)
 
 
 @pytest.mark.req("REQ-TP-011")
@@ -189,6 +213,18 @@ def test_a_descent_just_beyond_r_of_the_stock_box_passes(
     assert tuple(moves.end_mm[1, :2]) == point
 
 
+@pytest.mark.req("REQ-TP-012")
+@pytest.mark.parametrize("corner", [0, 1])
+@pytest.mark.parametrize("axis", [0, 1])
+def test_a_stock_box_not_finite_in_xy_is_refused(ctx: Context, corner: int, axis: int) -> None:
+    # DEC-TP-005: Python's max() would drop a NaN and let P in the stock's middle pass.
+    ends = [list(STOCK.min_mm), list(STOCK.max_mm)]
+    ends[corner][axis] = math.nan
+    stock = StockBox((ends[0][0], ends[0][1], ends[0][2]), (ends[1][0], ends[1][1], ends[1][2]))
+    with pytest.raises(ValueError, match=refusal("REQ-TP-012")):
+        link_operation(HEADER, _at((50.0, 30.0)), stock, ctx)
+
+
 @pytest.mark.req("REQ-TP-013")
 def test_the_first_rule_broken_is_named_over_the_first_pass(ctx: Context) -> None:
     # Pass 0 breaks REQ-TP-011, pass 1 REQ-TP-009: rule by rule, so REQ-TP-009 and pass 1.
@@ -200,6 +236,22 @@ def test_the_first_rule_broken_is_named_over_the_first_pass(ctx: Context) -> Non
 
 
 @pytest.mark.req("REQ-TP-013")
+def test_the_first_pass_and_row_breaking_a_rule_are_named(ctx: Context) -> None:
+    with pytest.raises(ValueError, match=refusal("REQ-TP-010", 0)):
+        link_operation(HEADER, square_plan(H_R, H_R), STOCK, ctx)
+    level = square_pass(-1.0)
+    roles = level.role.copy()
+    roles[1:] = Role.LINK
+    plan = LinkPlan(P, TOOL, 0, (replace(level, role=roles),))
+    with pytest.raises(ValueError, match=refusal("REQ-TP-009", 0, 1)):
+        link_operation(HEADER, plan, STOCK, ctx)
+
+
+def _float32(z: float) -> LevelPass:
+    return replace(square_pass(z), rows=square_pass(z).rows.astype(np.float32))
+
+
+@pytest.mark.req("REQ-TP-013")
 @pytest.mark.parametrize(
     ("header", "stock", "plan", "requirement"),
     [
@@ -208,9 +260,13 @@ def test_the_first_rule_broken_is_named_over_the_first_pass(ctx: Context) -> Non
         (HEADER, STOCK, LinkPlan(P, TOOL, -1, (square_pass(H_R),)), "REQ-TP-008"),
         (HEADER, STOCK, LinkPlan((50.0, 30.0), TOOL, 0, (square_pass(H_R),)), "REQ-TP-010"),
         (HEADER, STOCK, LinkPlan((50.0, 30.0), TOOL, 0, (square_pass(-1.0),)), "REQ-TP-011"),
+        (HEADER, STOCK, LinkPlan(P, TOOL, -1, (_float32(H_R),)), "REQ-TP-008"),
+        (HEADER, STOCK, LinkPlan(P, TOOL, 0, (_float32(H_R),)), "REQ-TP-009"),
+        (HEADER, STOCK, LinkPlan((50.0, 30.0), TOOL, 2, (square_pass(-1.0, (50.0, 30.0)),)),
+         "REQ-TP-012"),
     ],
     ids=["001 before 007", "007 before 008", "008 before 010", "010 before 011 and 012",
-         "011 before 012"],
+         "011 before 012", "008 before 009", "009 before 010", "012 before make_operation"],
 )  # fmt: skip
 def test_the_rules_run_in_order(
     ctx: Context, header: ClHeader, stock: StockBox, plan: LinkPlan, requirement: str
@@ -230,7 +286,7 @@ def test_cls_refusal_passes_through_at_the_stated_move_index(ctx: Context) -> No
         link_operation(HEADER, plan, STOCK, ctx)
 
 
-@pytest.mark.req("REQ-TP-005")
+@pytest.mark.req("REQ-TP-005", "REQ-TP-008")
 def test_the_plunge_class_beyond_the_header_is_cls_to_refuse(ctx: Context) -> None:
     # REQ-TP-008 checks only the lower bound; the descent of pass 0 is move 3.
     plan = LinkPlan(P, TOOL, 2, (square_pass(-1.0),))

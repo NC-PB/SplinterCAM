@@ -42,7 +42,7 @@ def _rapid(x: float, y: float, z: float) -> _Block:
 def _cut(level: LevelPass) -> _Block:
     # REQ-TP-006: an ARC where the sweep is not 0 (-0.0 is 0); a LINE gets the fill values.
     rows, arc = level.rows, level.rows[:, 6] != 0.0
-    z = np.full(rows.shape[0], level.z_mm)
+    z = np.full(rows.shape[0], level.z_mm, dtype=np.float64)  # float64 even for an int z_mm
     kind = np.where(arc, MoveKind.ARC, MoveKind.LINE).astype(np.int8)
     centre = np.where(arc[:, np.newaxis], rows[:, 4:6], np.nan)
     sweep = np.where(arc, rows[:, 6], 0.0)

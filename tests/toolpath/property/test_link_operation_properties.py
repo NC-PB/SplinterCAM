@@ -39,6 +39,8 @@ def _check_pass(
     assert (moves.end_mm[cut, 2] == level.z_mm).all()
     np.testing.assert_array_equal(moves.kind[cut], np.where(arc, MoveKind.ARC, MoveKind.LINE))
     np.testing.assert_array_equal(moves.centre_mm[cut][arc], level.rows[arc, 4:6])
+    assert np.isnan(moves.centre_mm[cut][~arc]).all()
+    assert not np.signbit(moves.sweep_rad[cut][~arc]).any()
     np.testing.assert_array_equal(moves.sweep_rad[cut], np.where(arc, level.rows[:, 6], 0.0))
     np.testing.assert_array_equal(moves.role[cut], level.role)
     np.testing.assert_array_equal(moves.feed_class[cut], level.feed_class)
@@ -59,6 +61,9 @@ def test_valid_plans_give_the_pattern(ctx: Context, drawn: tuple[LinkPlan, Stock
     assert moves.end_mm[0, 2] == heights.clearance_mm
     assert np.isnan(moves.end_mm[0, :2]).all()
     assert tuple(moves.end_mm[1]) == (*plan.approach_xy_mm, heights.clearance_mm)
+    assert list(moves.kind[:2]) == [MoveKind.RAPID] * 2
+    assert list(moves.role[:2]) == [Role.LINK] * 2
+    np.testing.assert_array_equal(moves.link_height_mm[:2], heights.clearance_mm)
     first = 2
     for level, m in zip(plan.passes, sizes, strict=True):
         _check_pass(moves, first, plan, level, heights)
@@ -87,6 +92,20 @@ def test_research_10_test_1s_invariants(ctx: Context, drawn: tuple[LinkPlan, Sto
         moves.end_mm[links, :2], np.array([plan.approach_xy_mm] * len(links))
     )
     assert (moves.end_mm[rapid, 2] >= heights.retract_mm).all()
+    # Below h_r only the passes' rows and the descents, which are at P, outside the box grown by
+    # R (research 10 test 1).
+    sizes = [level.rows.shape[0] for level in plan.passes]
+    firsts = 2 + np.cumsum([0] + [m + 3 for m in sizes[:-1]])
+    in_pass = np.zeros(moves.kind.shape[0], dtype=np.bool_)
+    for first, m in zip(firsts, sizes, strict=True):
+        in_pass[first + 2 : first + 2 + m] = True
+    low = np.flatnonzero(~in_pass & (moves.end_mm[:, 2] < heights.retract_mm))
+    np.testing.assert_array_equal(low, firsts + 1)
+    np.testing.assert_array_equal(moves.end_mm[low, :2], moves.end_mm[[1] * len(low), :2])
+    px, py = plan.approach_xy_mm
+    dx = max(stock.min_mm[0] - px, 0.0, px - stock.max_mm[0])
+    dy = max(stock.min_mm[1] - py, 0.0, py - stock.max_mm[1])
+    assert math.hypot(dx, dy) > plan.tool.radius_mm
 
 
 _BREAKS = ("level", "start", "role", "dtype", "approach")

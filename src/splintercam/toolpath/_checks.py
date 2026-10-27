@@ -22,10 +22,13 @@ _COLUMNS = (
     ("feed_class", np.int64, (), "(m,)"),
 )
 _PASS_ROLES = np.array([Role.APPROACH, Role.CUT, Role.RETRACT], dtype=np.int8)
+_INT64_MAX = int(np.iinfo(np.int64).max)  # cl's feed_class column (REQ-CL-004)
 
 
 def _heights(top: float, h: LinkHeights) -> str | None:
-    if math.isfinite(top) and h.retract_mm < h.clearance_mm:
+    if not math.isfinite(top):
+        return f"stock top {top!r} is not finite"
+    if h.retract_mm < h.clearance_mm:
         return None
     return f"stock top {top!r} gives no h_r below h_c ({h.retract_mm!r}, {h.clearance_mm!r})"
 
@@ -43,8 +46,9 @@ def _fields(plan: LinkPlan) -> str | None:
         return "no pass"
     if not all(math.isfinite(value) for value in plan.approach_xy_mm):
         return f"approach point {plan.approach_xy_mm!r} is not finite"
-    if plan.plunge_feed_class < 0:
-        return f"plunge feed class {plan.plunge_feed_class} is negative"
+    # DEC-TP-005: above the int64 column's range too, which would raise OverflowError later.
+    if not 0 <= plan.plunge_feed_class <= _INT64_MAX:
+        return f"plunge feed class {plan.plunge_feed_class} is negative or beyond int64"
     return None
 
 
@@ -53,12 +57,14 @@ def _columns(level: LevelPass) -> str | None:
     for name, dtype, tail, shape in _COLUMNS:
         value: object = getattr(level, name)
         array = cast("NDArray[np.generic]", value)
-        if type(value) is not np.ndarray or array.dtype != dtype or array.shape[1:] != tail:
+        wrong_type = type(value) is not np.ndarray or array.dtype != dtype
+        if wrong_type or array.ndim != 1 + len(tail) or array.shape[1:] != tail:
             return f"column {name} must be a {np.dtype(dtype).name} array of shape {shape}"
-        if array.ndim != 1 + len(tail) or array.shape[0] != level.rows.shape[0]:
-            return f"column {name} must have one entry per row of rows"
     if level.rows.shape[0] == 0:
-        return "no row"
+        return "column rows has no row"
+    for name in ("role", "feed_class"):
+        if getattr(level, name).shape[0] != level.rows.shape[0]:
+            return f"column {name} must have one entry per row of rows"
     wrong = np.flatnonzero(~np.isin(level.role, _PASS_ROLES))
     if wrong.size:
         return f"row {wrong[0]}: role {level.role[wrong[0]]} is not APPROACH, CUT or RETRACT"
@@ -69,7 +75,7 @@ def _level(level: LevelPass, retract: float) -> str | None:
     # Research 10, Method 2: the descent goes down from h_r.
     if math.isfinite(level.z_mm) and level.z_mm < retract:
         return None
-    return f"level {level.z_mm!r} is not finite and below h_r {retract!r}"
+    return f"level {level.z_mm!r} is not finite or not below h_r {retract!r}"
 
 
 def _chain(level: LevelPass, at: tuple[float, float]) -> str | None:
@@ -90,6 +96,8 @@ def _descent(plan: LinkPlan, stock: StockBox) -> str | None:
     # expression in scalar Python floats, in this order (D-055, REQ-TP-014).
     px, py = (float(value) for value in plan.approach_xy_mm)
     (x_min, y_min, _), (x_max, y_max, _) = stock.min_mm, stock.max_mm
+    if not all(math.isfinite(value) for value in (x_min, y_min, x_max, y_max)):
+        return "the stock box is not finite in x or y"  # DEC-TP-005: max() would drop a NaN
     dx = max(x_min - px, 0.0, px - x_max)
     dy = max(y_min - py, 0.0, py - y_max)
     if dx * dx + dy * dy <= plan.tool.radius_mm * plan.tool.radius_mm:

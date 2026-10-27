@@ -41,3 +41,12 @@
 - Why: the tool's circle at P overlaps the stock exactly when P is within R of the box; at a box corner that is a quarter circle of radius R, not the square corner of a box grown along the axes, which would refuse a valid P diagonally off a corner. At distance exactly R the tool rubs the stock's side on the way down, so touching is refused (conservative). The profile places P at least R + 0.2·R off the box (research 22, Method 5; D-079), so a correct strategy never meets the boundary. Squares avoid `sqrt` and `hypot` in the decision (D-055).
 - Rejected: the axis-aligned grown box (refuses valid points off the corners); a tolerance on the distance (lets a rubbing descent pass); an exact predicate (geometry2d's `in_arc_circle` needs a point on the circle, which is itself rounded; a margin of rounding at a decision the profile keeps 0.2·R away from does not change a result).
 - Where: REQ-TP-012, 014.
+
+## DEC-TP-005: Two inputs outside the preconditions are refused rather than crash or pass
+
+- Date: 2026-10-27; decided by: ours (implementation, spec review)
+- Status: Accepted 2026-10-27
+- Decision: (a) REQ-TP-008 also refuses a plunge feed class above the int64 range of cl's `feed_class` column, with the same `ValueError`; (b) REQ-TP-012 refuses a stock box whose x or y bounds are not finite, before the distance test.
+- Why: (a) the SPEC leaves the class's upper bound to cl's REQ-CL-009, but `np.array([2**63], dtype=np.int64)` raises `OverflowError` before `make_operation` runs, so a strategy bug would surface as a different exception (spec review, should-fix 2). (b) Python's `max` keeps the first of equal or unordered values, so `max(x_min - px, 0.0, px - nan)` is 0.0: an x_max of NaN made P in the middle of the stock pass REQ-TP-012 (spec review, should-fix 3). `model`'s `check_job` refuses such a stock, but the SPEC's preconditions do not name the stock, and the descent into the stock is the one thing REQ-TP-012 exists to stop. Both are refusals of inputs no correct caller sends; neither changes a result for a valid plan.
+- Rejected: adding the stock to the preconditions instead (leaves the silent pass for a caller that skips `check_job`); `not (d² > R²)` in place of `d² ≤ R²` (does not catch it, since `max` drops the NaN before the comparison).
+- Where: REQ-TP-008, REQ-TP-012; `src/splintercam/toolpath/_checks.py`.
