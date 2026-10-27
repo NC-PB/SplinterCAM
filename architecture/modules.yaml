@@ -44,8 +44,8 @@ modules:
   stock:                  { layer: 2, kernel: true,  depends_on: [foundation, geometry2d, geometry3d], research: ["08"] }
 
   features:               { layer: 3, kernel: false, depends_on: [foundation, geometry2d, geometry3d, io, model], research: ["20", "25"] }
-  toolpath:               { layer: 3, kernel: true,  depends_on: [foundation, geometry2d, geometry3d, model, cl, stock], research: ["10", "11"] }
-  strategies/profile:     { layer: 3, kernel: false, depends_on: [foundation, geometry2d, model, cl, toolpath], research: ["02", "22"] }
+  toolpath:               { layer: 3, kernel: true,  depends_on: [foundation, geometry2d, geometry3d, model, cl, stock], research: ["10", "11", "26"], budget: 165 }
+  strategies/profile:     { layer: 3, kernel: false, depends_on: [foundation, geometry2d, offset2d, model, cl, toolpath], research: ["02", "22", "10"], budget: 400 }
   strategies/pocket:      { layer: 3, kernel: false, depends_on: [foundation, geometry2d, model, cl, toolpath], research: ["04"] }
   strategies/adaptive:    { layer: 3, kernel: true,  depends_on: [foundation, geometry2d, model, cl, toolpath, stock], research: ["05"] }
   strategies/drilling:    { layer: 3, kernel: false, depends_on: [foundation, model, cl, toolpath, features], research: ["20"] }
