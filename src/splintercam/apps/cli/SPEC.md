@@ -1,0 +1,103 @@
+# SPEC: apps/cli
+
+<!-- The headless runner, cut to plan 0007, step 7 (D-160): one command, `splintercam run`, over job's `run_job`.
+     The commands `new`, `compute`, `check`, `output`, `sheet` and `info` of the feature map come with later plans. -->
+
+| | |
+| --- | --- |
+| Status | Reviewed (2026-10-27, Peter: AQ-012 and AQ-013 in `docs/agents/questions/`, all as recommended). Choices marked "(ours)" are in `src/splintercam/apps/cli/DECISIONS.md` and stand as the contract |
+| Layer | 6 (see architecture/modules.yaml) |
+| Depends on | job only (`run_job`, `JobReport`, `Diagnostic`, `Severity`; docs/dev/03, rule 6, `apps-use-job-only`) |
+| Research | none (`architecture/modules.yaml` lists none for apps). Inputs: Project Spike `product/feature-map.md`, section 1 (the command line, its exit codes and reports; Peter, 2026-10-03); [27][r27], Exit codes (`ncx`'s convention) |
+| Decisions | D-055 (determinism); the feature map's command line (section 1) |
+| Owner | Peter Burgener |
+
+## Purpose
+
+Lets a person, CI or an agent run a whole job from a terminal: `splintercam run job.json --output out/` writes the NCX and the NC program, prints every diagnostic, and its exit code says whether the run is usable. It holds no logic beyond arguments, printing and the exit code.
+
+## Scope
+
+- In: the `run` command and its options; the text and JSON reports; the exit codes; the `splintercam` console script and `python -m splintercam.apps.cli`.
+- Out, handled elsewhere: everything the run does (`job`).
+- Later (one line each, no work): the commands `new`, `compute`, `check`, `output`, `sheet`, `info` (feature map, section 1); `--debug` (docs/dev/03); `--threads` (D-055); translated messages; a separate exit code for a programming error (today a traceback and exit 1, AQ-012 item 2); the end-to-end test's read-back and simulated stock (docs/dev/06; with `ncx trace` and `simulation`).
+- Non-goals: any check or computation of its own.
+
+## Public interface
+
+```text
+splintercam run JOB_FILE --output DIR [--ncx PATH] [--machine PATH] [--strict] [--json]
+python -m splintercam.apps.cli run …        # the same
+```
+
+```python
+def main(argv: Sequence[str] | None = None) -> int: ...   # the exit code; never raises SystemExit
+def entry() -> NoReturn: ...                              # sys.exit(main()); the console script's target
+```
+
+- `--ncx` and `--machine` go to `run_job` as `ncx_executable` and `machine_file`. `pyproject.toml` gains `[project.scripts] splintercam = "splintercam.apps.cli.__main__:entry"` (no new dependency).
+
+## Requirements
+
+| ID | Requirement (EARS) | Verified by | Status |
+| --- | --- | --- | --- |
+| REQ-CLI-001 | THE cli SHALL provide the command `run` with the job file as its one positional argument and the options `--output` (required), `--ncx`, `--machine`, `--strict` and `--json` (plan 0007, step 7; feature map, section 1). | unit: `main([...])` reaches a fake `run_job` with the matching arguments | Reviewed |
+| REQ-CLI-002 | THE cli SHALL call `job.run_job` once per `run` and import nothing from SplinterCAM but `job` (docs/dev/03, rule 6). | `tools/arch-check`; unit | Reviewed |
+| REQ-CLI-003 | WHEN `--json` is not given, THE cli SHALL print each diagnostic on stderr as one line `<SEVERITY> <CODE> <location>: <message>` (the location left out when None; line breaks in a message or location written as `\n` and `\r`), in the report's order, and, only when the exit code is 0, the absolute paths of the NCX file and the NC files on stdout, one per line (DEC-CLI-001). | unit: the golden case's report; a failed run prints nothing on stdout | Reviewed |
+| REQ-CLI-004 | WHEN `--json` is given, THE cli SHALL print on stdout one JSON object, keys sorted, ASCII only, and nothing on stderr: `diagnostics` (objects with `code`, `severity` as `"INFO"`, `"WARNING"` or `"ERROR"`, `message`, `location` or null), `ncx_file` (an absolute path or null), `nc_files` (a list of absolute paths) and `exit_code` (feature map, section 1: text or JSON reports; DEC-CLI-001). | unit: the output parses and carries the report's values | Reviewed |
+| REQ-CLI-005 | THE cli SHALL return 2 for a usage error and when the report holds `JOB_FILE_UNREADABLE`, `DXF_UNREADABLE` or `JOB_MACHINE_NOT_FOUND`; otherwise 1 when it holds an ERROR or `CANCELLED`, or with `--strict` a WARNING; otherwise 0. INFO never changes the code (feature map, section 1: 0, 1 for warnings under `--strict`, 2; research 27, Exit codes: 2 for usage errors, unreadable input or a missing machine file; DEC-CLI-002). | unit: one report per case; property: generated reports | Reviewed |
+| REQ-CLI-006 | THE cli SHALL print nothing but REQ-CLI-003 or 004 for a run; for a usage error argparse's usage message on stderr and code 2; for `--help` the help on stdout and code 0; `main` SHALL return these codes, not raise `SystemExit` (ours). | unit | Reviewed |
+| REQ-CLI-007 | THE same job run twice into two empty folders SHALL print the same report but for the folder names (D-055). | unit: the real `run_job` on the golden job with any existing file as `--machine` and a missing `--ncx` path, so it stops at `JOB_NCX_NOT_FOUND` after the record is built | Reviewed |
+| REQ-CLI-008 | THE end-to-end test SHALL run `python -m splintercam.apps.cli run testdata/zoo/profile-rectangle-fillets/job.json --output <empty temporary folder> --machine <$SPLINTERCAM_NCXCHANGE/machines/heidenhain-itnc530.toml> --strict` as a subprocess and expect exit 0, `RECT_FILLETS.ncx` and `RECT_FILLETS.h` in the folder, and no ERROR or WARNING; without `ncx` on the path or without the variable it SHALL be skipped with a message naming what is missing (plan 0007, step 7 and question 3; docs/dev/06: end-to-end tests in `tests/apps/cli/`; DEC-JOB-004). | end-to-end: `tests/apps/cli/test_run_profile_rectangle_fillets.py` | Reviewed |
+
+## Invariants
+
+- The exit code is a function of the report and `--strict` alone (REQ-CLI-005). Property test over generated reports.
+- stdout names files only for a run with exit code 0 (REQ-CLI-003, 004). The same property test checks stdout for every generated report.
+
+## Tolerance budget
+
+None.
+
+## Failure modes and diagnostics
+
+None of its own: usage errors are argparse's (exit 2); every diagnostic is `job`'s. A `ValueError` from a producer's bug is not caught: Python prints the traceback and exits 1 (AQ-012 item 2).
+
+## Algorithms and design inputs
+
+No algorithms.
+
+| Element | Public source, or own design with date |
+| --- | --- |
+| Command, exit codes, text or JSON report | feature map, section 1 (Peter, 2026-10-03); research 27, Exit codes; the line and key forms ours, 2026-10-27 (DEC-CLI-001, 002) |
+
+## Example parts
+
+- The golden case with `ncx` and `--machine`: stderr `INFO JOB_INPUTS …`, `INFO DXF_PART_SIZE …`, `INFO NCX_ROUNDED operation 1 (PROFILE_1): …`; stdout the two paths; exit 0, also with `--strict`.
+- The same without `ncx`: stderr `ERROR JOB_NCX_NOT_FOUND …`, nothing on stdout, exit 1. Without `--machine`: `ERROR JOB_MACHINE_NOT_FOUND …`, exit 2.
+- `splintercam run missing.json --output out`: `ERROR JOB_FILE_UNREADABLE …`, exit 2.
+
+## Test plan
+
+- Unit (`tests/apps/cli/unit/`): `main` with a fake `run_job` per requirement, tagged with its ID; REQ-CLI-007 with the real one.
+- Property: the exit code over generated reports.
+- End-to-end (`tests/apps/cli/`): REQ-CLI-008. Golden, differential: none.
+
+## Performance budget
+
+None of its own.
+
+## Size estimate
+
+First count about 60 NLOC of Python (arguments and usage codes 20, the two reports 30, exit code and entry 10); by Peter's rule of 2026-10-25 about 1.5 times that: **about 90 NLOC**, and about 200 lines of tests. Module budget 90 (AQ-013).
+
+## Open questions
+
+None open. Peter answered on 2026-10-27, as recommended: AQ-012 (this SPEC, items 1 to 3 as drafted) and AQ-013 (budget 90). Box 2 choices are in `src/splintercam/apps/cli/DECISIONS.md`.
+
+## Change log
+
+- 2026-10-27: drafted for plan 0007, step 7, from the feature map, section 1, and research 27, Exit codes; revised after the spec review the same day: exit 2 for unreadable inputs and a missing machine file, 1 for a cancel, paths on stdout only for a usable run, the JSON form fixed, argparse's exits returned, the end-to-end test's machine file from the pinned NCXchange.
+- 2026-10-27: Reviewed (Peter, AQ-012 items 1 to 3 as drafted; budget 90, AQ-013). DEC-CLI-001 and 002 Accepted.
+
+[r27]: ../../../../docs/research/27-machines-and-controllers.md
