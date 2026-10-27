@@ -95,3 +95,39 @@
 - Why: the three compilers write `SECTION` as a comment line on every control (research 27, trap 15: Heidenhain `* - …`, Siemens `; …`, Fanuc `( … )`), so the operator sees the name; a second copy adds a line and nothing else.
 - Rejected: `COMMENT="<name>"` after `SECTION`.
 - Where: REQ-NCX-002.
+
+## DEC-NCX-011: A section ends at its operation's last move
+
+- Date: 2026-10-27; decided by: ours (implementation, plan 0007 step 6)
+- Status: Accepted 2026-10-27
+- Decision: `NcxSection.last_line` is the line of the operation's last move. For every section but the last that is the line before the next `SECTION`; for the last, the program end is read as the closing blocks `COOLANT=OFF`, `SPINDLE=OFF`, `PROGRAM=END`, `FILE=END`, so a message on them has the location `program`.
+- Why: REQ-NCX-001 writes the spindle and coolant stop after the operations, not in one, and a message about the program's end blocks (an unknown `SPINDLE=OFF`, RR-006) is not an operation's fault. REQ-NCX-021's `program` location exists for such lines.
+- Rejected: the last section running to the line before `PROGRAM=END` (it would take the program's closing blocks into the last operation).
+- Where: REQ-NCX-002, 021; `src/splintercam/ncx/_write.py`.
+
+## DEC-NCX-012: A tol the tolerance set refuses is reported, not swallowed
+
+- Date: 2026-10-27; decided by: ours (implementation)
+- Status: Accepted 2026-10-27
+- Decision: when `ToleranceSet.for_operation(tol)` has no value for an operation's tol (below 2/875 mm or above 1 mm, REQ-FND-010), `write_ncx` returns no program and reports foundation's diagnostic (`TOL_BELOW_MINIMUM`, `TOL_ABOVE_MAXIMUM`) with the operation as its location, after the operation's other errors.
+- Why: `cl` accepts any positive tol (REQ-CL-017), and REQ-NCX-009 needs the reserve share of the operation's tolerance set. A tol without a set has no rounding allowance; no requirement names the case, and errors are never swallowed. In plan 0007 `model` checks tol first, so the case does not occur.
+- Rejected: `0.1·tol` computed directly (a second copy of REQ-FND-009's share); raising `ValueError` (the record itself is valid).
+- Where: REQ-NCX-009, 017; `src/splintercam/ncx/_write.py`.
+
+## DEC-NCX-013: The pipes are drained by `Popen.communicate` with a timeout
+
+- Date: 2026-10-27; decided by: ours (implementation of DEC-NCX-007)
+- Status: Accepted 2026-10-27
+- Decision: each step waits in `Popen.communicate(timeout=…)` at the poll interval of DEC-NCX-007, and looks at `ctx.cancel` after each timeout; when it is set, the process is killed and its pipes read to the end. No reader threads of our own.
+- Why: `communicate` reads both pipes to their end while it waits (threads on Windows, a selector elsewhere), and the Python documentation guarantees that a timeout loses no output and the call may be repeated. DEC-NCX-007's reader threads are what it does inside; writing them again adds code and nothing else. The test `test_a_long_output_does_not_block` prints 10^5 lines on each pipe.
+- Rejected: our own reader threads (the same, longer); `wait()` with unread pipes (blocks on a full pipe).
+- Where: REQ-NCX-018, 024; `src/splintercam/ncx/_run.py`.
+
+## DEC-NCX-014: `NCX_STRICT_FAILED` once per `compile`, after its messages; a speed of 10^9 names no move
+
+- Date: 2026-10-27; decided by: ours (readings of REQ-NCX-010, 022 and 025)
+- Status: Accepted 2026-10-27
+- Decision: (a) `compile`'s warnings other than `CMP020` keep their place; one `NCX_STRICT_FAILED` follows the step's messages, whatever their number. (b) REQ-NCX-010 names the move for a coordinate or a feed, one diagnostic per move; a spindle speed of 10^9 or more belongs to the operation, not to a move, and its message names the speed. (c) A `CMP020` from `format` or `check` is kept as `ncx` reports it; only `compile`'s are counted.
+- Why: (a) REQ-NCX-025 orders `ncx`'s own messages as printed; the added error is the step's verdict, and one is enough to fail the run. (b) The speed is a header value, written in the tool block. (c) REQ-NCX-022 counts the `CMP020`s of `compile`; `check` does not round (research 26, Checked condition 3), so one from `check` would be news.
+- Rejected: one `NCX_STRICT_FAILED` per warning (repeats the same verdict).
+- Where: REQ-NCX-010, 022, 025; `src/splintercam/ncx/_refusals.py`, `src/splintercam/ncx/_messages.py`.
