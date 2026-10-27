@@ -8,6 +8,7 @@ one line, `path:line: rule: what`; any violation fails. Standard library only (P
 """
 
 import argparse
+import ast
 import sys
 import time
 from collections.abc import Sequence
@@ -31,12 +32,24 @@ KNOWN_RULES = frozenset(
 )
 
 
+def _group_init(map_: ModuleMap, relative: Path, path: Path) -> bool:
+    # The `__init__.py` of a folder that only groups modules ("strategies" of strategies/profile),
+    # which pyright needs to see a typed package; it may import nothing.
+    group = relative.parent.as_posix()
+    if relative.name != "__init__.py" or not any(m.startswith(f"{group}/") for m in map_.modules):
+        return False
+    tree = ast.parse(path.read_text(encoding="utf-8-sig"))
+    return not any(isinstance(node, ast.Import | ast.ImportFrom) for node in ast.walk(tree))
+
+
 def _python_findings(map_: ModuleMap, path: Path, package: Path) -> list[str]:
     relative = path.relative_to(package)
     name = (Path(package.name) / relative).as_posix()
     if relative == Path("__init__.py"):  # the package's own
         return []
     module = arch_python.owner(map_, relative)
+    if module is None and _group_init(map_, relative, path):
+        return []
     if module is None:
         return [f"{name}: Python file in no module of modules.yaml"]
     try:
