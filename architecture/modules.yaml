@@ -56,12 +56,12 @@ modules:
   kinematics:             { layer: 4, kernel: true,  depends_on: [foundation, model], research: ["12"] }
   # ncx writes the toolpath record as NCX and runs the pinned ncx binary (compile, check); every controller dialect,
   # cycle, rounding rule and the control's virtual machine live in NCXchange (D-021, D-031, D-148, D-149).
-  ncx:                    { layer: 4, kernel: false, depends_on: [foundation, model, cl], research: ["26", "27"] }
+  ncx:                    { layer: 4, kernel: false, depends_on: [foundation, model, cl], research: ["26", "27"], budget: 400 }
   simulation:             { layer: 4, kernel: true,  depends_on: [foundation, geometry3d, model, cl, stock], research: ["08"] }
 
-  job:                    { layer: 5, kernel: false, depends_on: [foundation, io, model, cl, stock, features, toolpath, "strategies/*", kinematics, ncx, simulation], research: [] }
+  job:                    { layer: 5, kernel: false, depends_on: [foundation, geometry2d, io, model, cl, stock, features, toolpath, "strategies/*", kinematics, ncx, simulation], research: [], budget: 360 }
 
-  apps/cli:               { layer: 6, kernel: false, depends_on: [job] }
+  apps/cli:               { layer: 6, kernel: false, depends_on: [job], budget: 90 }
   apps/desktop:           { layer: 6, kernel: false, depends_on: [job] }
 
 kernel_libraries:
