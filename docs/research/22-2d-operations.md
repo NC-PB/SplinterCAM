@@ -22,9 +22,9 @@ This file holds the part of topic 22 that plan 0007 needs: an outside profile of
 
 1. **Centre path.** `offset_region` (offset2d) grows the material region by t = R + s (D-150: s > −R, so t > 0). For one closed contour the result is one outer loop; anything else stops the operation with `PROFILE_REGION` (error, ours). The loop lies between t and t + a + 6u from the contour (research 02, the band).
 2. **Direction.** Climb milling with a clockwise spindle keeps the material on the right of the direction of travel, so an outside profile runs clockwise round the part (ours, the usual definition of down-milling). offset2d returns outer loops counter-clockwise, so the loop is reversed.
-3. **Depth passes.** n = ⌈(z_top − z_bottom) / a_p,max⌉ passes of equal depth Δ = (z_top − z_bottom) / n, at z_i = z_top − i·Δ for i = 1 … n (ours: equal steps leave no thin last pass). A depth larger than the tool's flute length stops the operation with `PROFILE_TOO_DEEP` (error; the feature map's cutting-length check, release 1).
-4. **Start point** (ours). S is the midpoint of the loop's longest line row; on a loop of arcs only, its first vertex. The loop is rotated to start and end at S.
-5. **Approach point** (ours). P lies on the outward normal of S's row, away from the part, at the smallest distance at which the tool at P clears the stock box by the air gap 0.2·R (D-079): no point of the tool's circle at P lies within 0.2·R of the stock box. Along that normal P always exists, because the stock box contains the part.
+3. **Depth passes.** n = ⌈(z_top − z_bottom) / a_p,max⌉ passes of equal depth Δ = (z_top − z_bottom) / n, at z_i = z_top − i·Δ for i = 1 … n (ours: equal steps leave no thin last pass). A depth larger than the tool's flute length stops the operation with `PROFILE_TOO_DEEP` (error; the feature map's cutting-length check, release 1). The depth is measured from the stock top, not from z_top, because without a stock model the material above z_top may still be there; for the same reason a first pass more than a_p,max below the stock top is refused (`PROFILE_FIRST_PASS_DEEP`; RR-007, DEC-PRF-004, Peter AQ-016 item 3).
+4. **Start point** (ours). S is the midpoint of the loop's longest line row; on a loop of arcs only, its first vertex. The loop is rotated to start and end at S. In plan 0007 the centre path is offset2d's polygon (no arc fit, D-023 later), so every edge is a line: "the longest line row" is the longest edge whose source ID belongs to line rows of the contour only (REQ-OFF-034), the first in offset2d's canonical order on a tie, and "its first vertex" is the polygon's smallest point (RR-007, DEC-PRF-002).
+5. **Approach point** (ours). P lies on the outward normal of S's row, away from the part, at the smallest distance at which the tool at P clears the stock box by the air gap 0.2·R (D-079): no point of the tool's circle at P lies within 0.2·R of the stock box. Along that normal P always exists, because the stock box contains the part. The segment S → P must not cross the part: where the outward normal of S's edge crosses it (a U whose inner side is the longest), S moves to the path's smallest point, whose way out is always free (RR-007, DEC-PRF-003).
 6. **One pass at depth z_i:** P → S as a LINE with role APPROACH at the plunge feed (the move may enter the stock allowance with the full tool width, so it takes the lower feed; ours); round the loop from S to S with role CUT at the cutting feed; S → P with role RETRACT at the cutting feed, through the stretch the approach already cut. The links between passes and at the start and end are topic 10's.
 
 ## Parameters
@@ -44,11 +44,11 @@ This file holds the part of topic 22 that plan 0007 needs: an outside profile of
 
 ## Tests
 
-1. Rectangle 100 × 60 with fillets of radius 5 (topic 21, test 1), tool R = 5, s = 0, stock box with 5 mm on every side, z_top = 0, z_bottom = −10, a_p,max = 4: three passes at −3.333…, −6.666…, −10; the loop has four lines on the rectangle's sides offset by 5 and four arcs of radius 10; it runs clockwise; S is the midpoint of a long side; P is outside the stock by at least 1 mm (0.2·R).
-2. The same with s = 0.5: every cut point lies between 5.5 and 5.5 + a + 6u from the contour.
+1. Rectangle 100 × 60 with fillets of radius 5 (topic 21, test 1), tool R = 5, s = 0, stock box with 5 mm on every side, z_top = 0, z_bottom = −10, a_p,max = 4: three passes at −3.333…, −6.666…, −10; the loop has four lines on the rectangle's sides offset by 5 and, at each fillet, short lines whose points lie in the band of the arc of radius 10 about the fillet's centre (plan 0007: offset2d's polygon, RR-007); it runs clockwise; S is the midpoint of a long side; P is outside the stock by at least 1 mm (0.2·R).
+2. The same with s = 0.5: every cut point lies between 5.5 and 5.5 + a + 6u + t_flat from the true contour (lines and arcs), the band of `src/splintercam/offset2d/SPEC.md` before REQ-OFF-020 (RR-007).
 3. s = −5 (equal to −R) is refused; s = −4.9 gives a loop 0.1 mm from the contour.
 4. z_bottom deeper than the flute length gives `PROFILE_TOO_DEEP`.
-5. A circle of radius 20: a loop of arcs only, S at its first vertex, one circle of radius 20 + R per pass.
+5. A circle of radius 20: a loop of arcs only, S at its first vertex (offset2d's polygon: its smallest point), one closed loop per pass whose points lie in the band of the circle of radius 20 + R (RR-007).
 
 ## Sources
 
