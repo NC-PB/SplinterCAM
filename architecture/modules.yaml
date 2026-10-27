@@ -40,7 +40,7 @@ modules:
   offset2d:               { layer: 1, kernel: true,  depends_on: [foundation, geometry2d], kernel_includes: [geometry2d], research: ["02"], budget: 1600 }
 
   model:                  { layer: 2, kernel: false, depends_on: [foundation], research: ["26", "22", "27", "10", "23"], budget: 360 }
-  cl:                     { layer: 2, kernel: false, depends_on: [foundation], research: ["26"] }
+  cl:                     { layer: 2, kernel: false, depends_on: [foundation, geometry2d], research: ["26", "10"], budget: 310 }
   stock:                  { layer: 2, kernel: true,  depends_on: [foundation, geometry2d, geometry3d], research: ["08"] }
 
   features:               { layer: 3, kernel: false, depends_on: [foundation, geometry2d, geometry3d, io, model], research: ["20", "25"] }

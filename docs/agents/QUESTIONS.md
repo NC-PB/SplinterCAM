@@ -78,7 +78,8 @@ Entry format:
   3. **Spindle CW, coolant on, the tool centre path (no G41/G42) and the XY plane for every operation, without fields** (DEC-CL-003), as in `model` (DEC-MDL-006). The register radius r is not in the record until control compensation comes; the axial offset a is, and the writer shifts every Z by it (D-154).
   4. **A measurement point other than k = 1** (a second point of the tool, D-154) is held in the record as given. NCX has no point words yet (R1-11), so the writer always writes `OFFSET:LEN` with the tool number, the register of the tool's first point; with k = 2 every Z would be written for point 2 while the length register named is point 1's (research 26, trap 3: wrong by the difference). Also in the SPEC, without a choice to make: a full circle must end exactly at its start, and any other arc whose end lies within eps_len (1e-6 mm) of its start is refused, so the control is never sent a tiny arc that prints as a full circle (DEC-CL-006; the writer adds the final check on the printed values in step 6). Recommended: the `ncx` writer (step 6) refuses an operation with k ≠ 1 with a diagnostic naming the operation, until NCX has the point words; point 1 may still have any a, which the writer applies to every Z.
 - Recommendation: approve the SPEC as drafted, with 1 to 4 as recommended, once AQ-006 to 008 are answered. Safe default meanwhile: nothing is implemented; DEC-CL-001 to 006 stand as provisional.
-- Status: Open
+- Status: Answered 2026-10-26
+- Answer: approved as drafted, with 1 to 4 as recommended (Peter): the first move along the tool axis and the second at the clearance height; rapids at or above their link height, compared exactly; spindle CW, coolant on, tool centre path and the XY plane without fields; the record holds k as given and the `ncx` writer (step 6) refuses an operation with k ≠ 1 with a diagnostic naming the operation until NCX has point words (R1-11). The SPEC is Reviewed; DEC-CL-001 to 004 and 006 stand.
 
 ## AQ-006: cl's arc check: depend on geometry2d (plan 0007, step 4)
 
@@ -88,7 +89,8 @@ Entry format:
   - (a) `cl` depends on geometry2d, and geometry2d gains a public `check_arc_rows(rows, ctx) -> NDArray[np.int8]` (the status per curve row, as `RowStatus`) over its existing kernel function, in a small geometry2d pull request (SPEC line, wrapper, tests) before cl's implementation. The record checks arcs exactly as io and offset2d build them.
   - (b) `cl` checks arcs itself with NumPy's `sin` and `cos`: no new dependency, but NumPy's trigonometry may differ in the last bit between platforms, so an arc right at the eps_len limit could be accepted on one machine and refused on another (against D-055's first tier), and the rule would exist twice.
 - Recommendation: (a). Replace the `cl` line of `architecture/modules.yaml` with the line of AQ-007, which adds geometry2d to `depends_on` (layer 1 below cl's layer 2; no cycle). Safe default meanwhile: the SPEC is written for (a); no code.
-- Status: Open
+- Status: Answered 2026-10-26
+- Answer: (a), as recommended (Peter): `cl` depends on geometry2d; geometry2d gains a public `check_arc_rows(rows, ctx)` over its kernel in its own small pull request before cl's implementation.
 
 ## AQ-007: cl's budget in architecture/modules.yaml (plan 0007, step 4)
 
@@ -100,7 +102,8 @@ Entry format:
   or, with AQ-006 (b):
   `  cl:                     { layer: 2, kernel: false, depends_on: [foundation], research: ["26", "10"], budget: 310 }`
   Research 10 is added because the SPEC takes the first move and the link heights from it. Safe default meanwhile: no code, so no size to check.
-- Status: Open
+- Status: Answered 2026-10-26
+- Answer: as recommended (Peter): `cl`'s line in `architecture/modules.yaml` is `{ layer: 2, kernel: false, depends_on: [foundation, geometry2d], research: ["26", "10"], budget: 310 }` (applied by the Project Spike session).
 
 ## AQ-008: Where the operation's note comes from; model has no field and no room (plan 0007, step 4)
 
@@ -110,7 +113,8 @@ Entry format:
   - (a) `model` gains `note: tuple[str, ...] = ()` on `Operation`, checked by `check_job` (each line a `str`, `VALUE_TYPE_INVALID` otherwise; no control character and no `"`, a new `OP_NOTE_INVALID`, as REQ-CL-017 and RR-005), as REQ-MDL-030 and 031: about 12 NLOC, so `model`'s budget 375 (`  model:                  { layer: 2, kernel: false, depends_on: [foundation], research: ["26", "22", "27", "10", "23"], budget: 375 }`), in its own small pull request. The user writes the note in the job file (step 7) and sees it in the NC program.
   - (b) No note in plan 0007: the header keeps the field, every strategy passes `()`, and the note comes with the desktop app's operation dialog. The NC program shows the operation's name only.
 - Recommendation: (b): the slice proves the path to the machine, and a note changes nothing the machine does; (a) when the job file grows. Safe default meanwhile: (b), the note empty in every record.
-- Status: Open
+- Status: Answered 2026-10-26
+- Answer: (b), as recommended (Peter): no note in plan 0007; the header keeps the field and every strategy passes `()`. The note gets a source with the job file or the operation dialog.
 
 ## AQ-009: geometry2d's budget for `check_arc_rows` (plan 0007, step 4)
 
