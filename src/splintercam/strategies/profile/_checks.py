@@ -17,8 +17,7 @@ def error(task: ProfileInput, code: str, text: str) -> Diagnostic:
 
 
 def checked_input(task: ProfileInput, ctx: Context) -> tuple[Values, MeasurementPoint]:
-    """The operation's values and the tool's point, or `ValueError` naming the first broken
-    precondition (REQ-PRF-002; what `job` and `model` guarantee)."""
+    # REQ-PRF-002: the values and the tool's point, or `ValueError` naming the broken precondition.
     op, tool = task.operation, task.tool
     names = tuple(name for name, _ in op.parameters)
     point = next((p for p in tool.points if p.number == op.point_number), None)
@@ -70,7 +69,7 @@ def _stock_sides(task: ProfileInput, ctx: Context) -> list[str]:
 
 
 def value_errors(task: ProfileInput, v: Values, ctx: Context) -> list[Diagnostic]:
-    """Every failing value check, REQ-PRF-003 to 009 in that order (REQ-PRF-020)."""
+    # REQ-PRF-020: every failing value check, REQ-PRF-003 to 009 in that order.
     r, flute = task.tool.radius_mm, task.tool.flute_length_mm
     top, bottom = task.stock.top_mm, task.stock.min_mm[2]
     gap, eps = v.air_gap_ratio * r, ctx.tolerances.length_eps_mm

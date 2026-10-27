@@ -16,13 +16,6 @@ from ._passes import PLUNGE_CLASS, level_passes, levels
 from ._types import ProfileInput, Values
 
 
-def _centre_path(task: ProfileInput, t_mm: float, ctx: Context) -> Result[PolygonRegion]:
-    # REQ-PRF-010: every source ID of class MATERIAL; offset2d's diagnostics passed on in order.
-    ids = np.unique(task.contour.ids)
-    classes = SourceClasses(ids, np.full(ids.size, EdgeClass.MATERIAL, dtype=np.int8))
-    return offset_region(task.contour, RegionKind.MATERIAL, t_mm, classes, ctx)
-
-
 def _header(task: ProfileInput, v: Values, axial_offset_mm: float) -> ClHeader:
     # REQ-PRF-018: the feed classes in the order of _passes' CUT_CLASS and PLUNGE_CLASS.
     op, heights = task.operation, link_heights(task.stock)
@@ -62,7 +55,10 @@ def plan_profile(task: ProfileInput, ctx: Context) -> Result[ClOperation]:
         return Result(None, (CANCELLED,))
     if errors := value_errors(task, values, ctx):
         return Result(None, tuple(errors))
-    offset = _centre_path(task, task.tool.radius_mm + values.allowance_mm, ctx)
+    ids = np.unique(task.contour.ids)  # REQ-PRF-010: every source ID of class MATERIAL
+    classes = SourceClasses(ids, np.full(ids.size, EdgeClass.MATERIAL, dtype=np.int8))
+    t_mm = task.tool.radius_mm + values.allowance_mm
+    offset = offset_region(task.contour, RegionKind.MATERIAL, t_mm, classes, ctx)
     if ctx.cancel.is_cancelled:
         return Result(None, (CANCELLED,))
     if offset.value is None:

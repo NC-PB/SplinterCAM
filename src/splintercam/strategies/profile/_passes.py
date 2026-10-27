@@ -20,23 +20,22 @@ def _pass_count(depth: float, step: float, eps: float) -> int:
 
 
 def first_level(top: float, bottom: float, step: float, eps: float) -> float:
-    """z_1 of `levels`, without building the others (REQ-PRF-005)."""
+    # z_1 of `levels` without building the others (REQ-PRF-005, DEC-PRF-007 (5)).
     n = _pass_count(top - bottom, step, eps)
     return bottom if n == 1 else top - (top - bottom) / n
 
 
 def levels(top: float, bottom: float, step: float, eps: float) -> list[float]:
-    """z_i = z_top - i·Δ, i = 1 … n, of equal depth Δ, the last z_bottom exactly (REQ-PRF-016)."""
+    # REQ-PRF-016: z_i = z_top - i·Δ of equal depth Δ, the last z_bottom exactly.
     n = _pass_count(top - bottom, step, eps)
-    delta = (top - bottom) / n
-    return [top - i * delta for i in range(1, n)] + [bottom]
+    return [top - i * ((top - bottom) / n) for i in range(1, n)] + [bottom]
 
 
 def level_passes(
     loop: NDArray[np.float64], approach: tuple[float, float], zs: list[float]
 ) -> tuple[LevelPass, ...]:
-    """One pass per level: WHERE P is not S, P → S at the plunge feed (APPROACH) and S → P at the
-    cutting feed (RETRACT) round the CW loop from S to S (REQ-PRF-017; research 22, trap 1)."""
+    # REQ-PRF-017, research 22 trap 1: WHERE P is not S, P → S at the plunge feed (APPROACH),
+    # the CW loop from S to S, S → P at the cutting feed (RETRACT).
     apart = (loop[0, 0], loop[0, 1]) != approach  # DEC-PRF-007 (3): the points, not d > 0
     p = np.array([approach], dtype=np.float64)
     points = np.concatenate([p, loop, p]) if apart else loop

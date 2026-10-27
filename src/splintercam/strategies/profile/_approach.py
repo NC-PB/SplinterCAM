@@ -46,10 +46,8 @@ def _start(p: NDArray[np.float64], k: int, at_vertex: bool) -> tuple[Point, Poin
 
 
 def approach_point(s: Point, n: Point, stock: StockBox, clearance: float) -> Point:
-    """P = S + d·n with the smallest d >= 0 at which P lies `clearance` = R + g from the stock box
-    in XY: the ray's exit from the box grown by the clearance with round corners, against the
-    grown sides (a side whose normal component is 0 skipped) or a corner's circle; S where it is
-    clear already (REQ-PRF-014; DEC-PRF-003). `n` is a unit vector."""
+    # REQ-PRF-014, DEC-PRF-003, DEC-PRF-007 (4): S + d·n, n a unit vector, at the ray's exit from
+    # the stock box grown by c with round corners; a side with a normal component of 0 skipped.
     (sx, sy), (nx, ny), c = s, n, clearance
     (x0, y0, _), (x1, y1, _) = stock.min_mm, stock.max_mm
     gx, gy = max(x0 - sx, 0.0, sx - x1), max(y0 - sy, 0.0, sy - y1)
@@ -88,9 +86,8 @@ def _blocked(p: NDArray[np.float64], skip: list[int], s: Point, end: Point) -> b
 def start_and_approach(
     region: PolygonRegion, arc_ids: NDArray[np.int64], stock: StockBox, clearance: float
 ) -> tuple[NDArray[np.float64] | None, Point]:
-    """The CW loop from S to S and P: S on the longest line edge, else, or where that approach is
-    blocked, at the smallest vertex; no loop and S where that is blocked too (REQ-PRF-012 to
-    015)."""
+    # REQ-PRF-012 to 015: the CW loop from S and P, S on the longest line edge or, when that is
+    # blocked or missing, at the smallest vertex; no loop (and that S) when it is blocked too.
     p = region.points
     k = _longest_line_edge(region, arc_ids)
     candidates = [(0, True)] if k is None else [(k, False), (0, True)]
