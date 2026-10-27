@@ -63,7 +63,7 @@
 ## DEC-NCX-007: The subprocess: argument list, drained pipes, no timeout, cancel by polling
 
 - Date: 2026-10-27; decided by: ours, the clock exception provisional on AQ-010 item 6
-- Status: Accepted 2026-10-27 (AQ-010 item 6: the clock exception confirmed)
+- Status: Accepted 2026-10-27 (AQ-010 item 6: the clock exception confirmed); the reader threads and the one regular expression over the whole text superseded by DEC-NCX-013
 - Decision: each step is started with an argument list, no shell, in `call.work_dir`, with the parent's environment. stdout and stderr are read to their end while the process runs (reader threads), decoded as UTF-8 with replacement; stderr is parsed with one compiled regular expression over the whole text; stdout goes to `ctx.logger` at debug level, and for `format --check` into `NCX_STEP_FAILED`'s message. There is no timeout; the wait polls `ctx.cancel` at a fixed interval, a named constant citing this entry, and stops the process when it is set.
 - Why: a full pipe blocks the child (one `CMP020` per coordinate is a lot of text). No shell means no quoting. Research 27 gives no run time, and a made-up timeout could kill a slow, correct run; cancellation covers a hung one. The poll interval reads the clock, which docs/dev/03, rule 5 keeps out of layers below 6; waiting on a subprocess cannot avoid it, so AQ-010 item 6 asks Peter to confirm the exception.
 - Rejected: `shell=True`; `wait()` with unread pipes; a fixed timeout.
@@ -95,3 +95,57 @@
 - Why: the three compilers write `SECTION` as a comment line on every control (research 27, trap 15: Heidenhain `* - …`, Siemens `; …`, Fanuc `( … )`), so the operator sees the name; a second copy adds a line and nothing else.
 - Rejected: `COMMENT="<name>"` after `SECTION`.
 - Where: REQ-NCX-002.
+
+## DEC-NCX-011: A section ends at its operation's last move
+
+- Date: 2026-10-27; decided by: ours (implementation, plan 0007 step 6)
+- Status: Accepted 2026-10-27; confirmed by Peter (AQ-027 item 1), the SPEC's `last_line` comment changed to match
+- Decision: `NcxSection.last_line` is the line of the operation's last move. For every section but the last that is the line before the next `SECTION`; for the last, the program end is read as the closing blocks `COOLANT=OFF`, `SPINDLE=OFF`, `PROGRAM=END`, `FILE=END`, so a message on them has the location `program`.
+- Why: REQ-NCX-001 writes the spindle and coolant stop after the operations, not in one, and a message about the program's end blocks (an unknown `SPINDLE=OFF`, RR-006) is not an operation's fault. REQ-NCX-021's `program` location exists for such lines.
+- Rejected: the last section running to the line before `PROGRAM=END` (it would take the program's closing blocks into the last operation).
+- Where: REQ-NCX-002, 021; `src/splintercam/ncx/_write.py`.
+
+## DEC-NCX-012: A tol the tolerance set refuses is reported, not swallowed
+
+- Date: 2026-10-27; decided by: ours (implementation)
+- Status: Accepted 2026-10-27; confirmed by Peter (AQ-027 item 2), in the SPEC's failure table and REQ-NCX-017
+- Decision: when `ToleranceSet.for_operation(tol)` has no value for an operation's tol (below 2/875 mm or above 1 mm, REQ-FND-010), `write_ncx` returns no program and reports foundation's diagnostic (`TOL_BELOW_MINIMUM`, `TOL_ABOVE_MAXIMUM`) with the operation as its location, after the operation's other errors.
+- Why: `cl` accepts any positive tol (REQ-CL-017), and REQ-NCX-009 needs the reserve share of the operation's tolerance set. A tol without a set has no rounding allowance; no requirement names the case, and errors are never swallowed. In plan 0007 `model` checks tol first, so the case does not occur.
+- Rejected: `0.1·tol` computed directly (a second copy of REQ-FND-009's share); raising `ValueError` (the record itself is valid).
+- Where: REQ-NCX-009, 017; `src/splintercam/ncx/_write.py`.
+
+## DEC-NCX-013: The pipes are drained by `Popen.communicate` with a timeout; stderr is read line by line
+
+- Date: 2026-10-27; decided by: ours (implementation of DEC-NCX-007)
+- Status: Accepted 2026-10-27; supersedes DEC-NCX-007 in part (its reader threads, and its one regular expression over the whole text)
+- Decision: each step waits in `Popen.communicate(timeout=…)` at the poll interval of DEC-NCX-007, decoding UTF-8 with replacement, and looks at `ctx.cancel` after each timeout; when it is set, the process is killed and its pipes read to the end. No reader threads of our own. stderr is read line by line, each line matched with one compiled regular expression, so a line in no known form is found and kept (REQ-NCX-020); a line of only spaces is dropped.
+- Why: `communicate` reads both pipes to their end while it waits (threads on Windows, a selector elsewhere), and the Python documentation guarantees that a timeout loses no output and the call may be repeated. DEC-NCX-007's reader threads are what it does inside; writing them again adds code and nothing else. The test `test_a_long_output_does_not_block` prints 10^5 lines on each pipe.
+- Rejected: our own reader threads (the same, longer); `wait()` with unread pipes (blocks on a full pipe); one `finditer` over the whole text (it skips what does not match, and the unread lines must be kept). The line loop is over `ncx`'s messages, not over points; 10^5 lines take well under a second.
+- Where: REQ-NCX-018, 024; `src/splintercam/ncx/_run.py`.
+
+## DEC-NCX-014: Readings of the message rules: one `NCX_STRICT_FAILED`, a speed names no move, compile fails closed
+
+- Date: 2026-10-27; decided by: ours (readings of REQ-NCX-010, 020 to 022 and 025; (d) to (f) after the CNC review the same day)
+- Status: Accepted 2026-10-27
+- Decision: (a) `compile`'s warnings other than `CMP020` keep their place; one `NCX_STRICT_FAILED` follows the step's messages, whatever their number. (b) REQ-NCX-010 names the move for a coordinate or a feed, one diagnostic per move; a spindle speed of 10^9 or more belongs to the operation, not to a move, and its message names the speed. (c) A `CMP020` from `format` or `check` is kept as `ncx` reports it; only `compile`'s are counted. (d) The NCX file is recognised by its resolved path, so a message naming it relatively or through `..` still finds its operation. (e) An unread line from `compile` (REQ-NCX-020's `NCX_OUTPUT_UNREAD`) counts as one of its warnings and adds `NCX_STRICT_FAILED`. (f) Only a `CMP020` of severity WARNING is counted as `NCX_ROUNDED`; one at another severity stays as `ncx` reports it.
+- Why: (a) REQ-NCX-025 orders `ncx`'s own messages as printed; the added error is the step's verdict, and one is enough to fail the run. (b) The speed is a header value, written in the tool block. (c) REQ-NCX-022 counts the `CMP020`s of `compile`; `check` does not round (research 26, Checked condition 3), so one from `check` would be news. (d) `ncx`'s path form has not been seen (AQ-025); an exact comparison would lose the operation on `/var` against `/private/var` on macOS. (e) and (f) fail closed (CNC review): `compile` runs without `--strict`, so a warning in a form the parser does not know (a column number, another case, a wrapped line; the form is unchecked at the pin, AQ-025) would otherwise pass as a WARNING, and a `CMP020` raised to ERROR by a later pin would pass as an INFO count. REQ-NCX-022 fails `compile`'s warnings other than `CMP020`; an unread line may be one.
+- Rejected: one `NCX_STRICT_FAILED` per warning (repeats the same verdict).
+- Where: REQ-NCX-010, 022, 025; `src/splintercam/ncx/_refusals.py`, `src/splintercam/ncx/_messages.py`.
+
+## DEC-NCX-015: Preconditions of `run_ncx`; a value not finite is out of range; a cancel during the last step counts
+
+- Date: 2026-10-27; decided by: ours (spec review the same day)
+- Status: Accepted 2026-10-27
+- Decision: (a) `run_ncx` raises `ValueError` naming the fields of `call` whose path is not absolute, before any step (REQ-NCX-018 says every path is absolute; a relative `ncx_file` would be read by `ncx` against `work_dir`, another file than `job` wrote). (b) A value that is written (X and Y but on move 0, Z, the centre of an arc, the feed of a LINE or ARC) and is not finite is reported as `NCX_VALUE_OUT_OF_RANGE` with the values of 10^9 or more: `cl` checks z and a apart, and z + a can overflow to infinity, which would otherwise print as `0.0`. (c) When `ctx.cancel` is set while the last step runs and that step ends before the next poll, `run_ncx` returns `CANCELLED`, not its steps. (d) A relative file name in `ncx`'s messages is taken against `call.work_dir`, where `ncx` runs.
+- Why: preconditions are programming errors, `ValueError` as in `cl` (DEC-CL-002); a silent wrong coordinate is never acceptable; REQ-NCX-024 says a token set while a step runs ends in `CANCELLED`.
+- Rejected: a diagnostic for a relative path (it is the caller's bug, not an outcome); leaving overflow to `cl` (`cl` has no a + z rule).
+- Where: REQ-NCX-010, 018, 021, 024; `src/splintercam/ncx/_run.py`, `_moves.py`, `_messages.py`.
+
+## DEC-NCX-016: Arcs whose chord is below 0.001 mm are refused
+
+- Date: 2026-10-27; decided by: Peter (AQ-026 item 1)
+- Status: Accepted 2026-10-27; to be replaced by NCXchange's check at the machine's step once its D363 is at the pin (T-039)
+- Decision: `write_ncx` refuses every ARC with |sweep| below 2π whose chord, the distance in XY from the previous move's end to its end in the record's values, is below `_MIN_ARC_CHORD_MM` = 0.001 mm, as `NCX_ARC_CHORD_TOO_SHORT` naming the operation and the move (REQ-NCX-026). Full circles are exempt; their end is their start by REQ-CL-014. An arc that also prints degenerate gets both errors, REQ-NCX-016's first.
+- Why: NCXchange rounds both ends to the machine's step, 0.001 mm on the three shipped mills (research 27, `[format]` decimals 3); an arc shorter than that can end on its start after rounding, and a control reads end = start as a full circle, a 360° pass through the part. D-149 gives the consistency to NCXchange, but D363 is not implemented at f74559c. The constant is the coarsest step of the shipped files, not the machine's own, which D-148 keeps out of `ncx`. The chord is measured on the record, before the writer's rounding, so the rule does not depend on REQ-NCX-016's.
+- Rejected: leaving it to NCXchange alone (unchecked at the pin, AQ-026 option (a)); reading the step from the machine file (D-148).
+- Where: REQ-NCX-026; `src/splintercam/ncx/_refusals.py`.

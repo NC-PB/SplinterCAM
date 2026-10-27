@@ -36,7 +36,7 @@ Answered 2026-10-11: all as recommended. For question 2, step 1 checks the three
 - [x] 3. **`model`: the slice's job data.** Tool (flat end mill, measurement point), stock box, setup (work offset, frame), operation parameters as declarations (D-018), held in memory. Size: about 200 + 200.
 - [x] 4. **`cl`: the toolpath record subset** of topic 26: moves, feeds, spindle, tool, work offset, comments, operation name and note (feature map, section 6). Size: about 150 + 200.
 - [ ] 5. **`strategies/profile` with the slice's `toolpath` links.** `offset_region` GROW of the material contour by R + allowance; depth passes; start point; climb; clearance-height retract. Size: about 250 + 300.
-- [ ] 6. **`ncx`: the writer and the call.** NCX at the resolution of D-149; `ncx check --strict` and `ncx compile` run as a subprocess; NCXchange's messages mapped to the operation (feature map, section 8). Size: about 200 + 250.
+- [x] 6. **`ncx`: the writer and the call.** NCX at the resolution of D-149; `ncx check --strict` and `ncx compile` run as a subprocess; NCXchange's messages mapped to the operation (feature map, section 8). Size: about 200 + 250.
 - [ ] 7. **`job` and `apps/cli`.** A small job file (JSON) naming the DXF, stock, tool, setup and operation; `splintercam run job.json` writes the NCX and the NC program. End-to-end test: a rectangle with filleted corners → `ncx check --strict` passes, the NC program compiles; a golden case `profile-rectangle-fillets` in `testdata/zoo/`. Size: about 200 + 250.
 - [ ] 8. **Peter's dry run** on the chosen machine's control or simulator; findings back as decisions or research requests; handover.
 
