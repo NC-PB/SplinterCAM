@@ -92,9 +92,8 @@ def _descent(plan: LinkPlan, stock: StockBox) -> str | None:
     (x_min, y_min, _), (x_max, y_max, _) = stock.min_mm, stock.max_mm
     dx = max(x_min - px, 0.0, px - x_max)
     dy = max(y_min - py, 0.0, py - y_max)
-    radius = plan.tool.radius_mm
-    if dx * dx + dy * dy <= radius * radius:
-        return f"approach point {(px, py)!r} lies within R = {radius!r} of the stock box"
+    if dx * dx + dy * dy <= plan.tool.radius_mm * plan.tool.radius_mm:
+        return f"approach point {(px, py)!r} lies within R of the stock box"
     return None
 
 
@@ -106,11 +105,9 @@ def _each(plan: LinkPlan, rule: Callable[[LevelPass], str | None]) -> str | None
     return None
 
 
-def plan_breach(
-    header: ClHeader, plan: LinkPlan, stock: StockBox, h: LinkHeights
-) -> tuple[str, str] | None:
-    """The first rule broken and its text, naming the first pass and row breaking it, or None
-    (REQ-TP-013). Each rule runs only once the rules before it hold."""
+def plan_breach(header: ClHeader, plan: LinkPlan, stock: StockBox, h: LinkHeights) -> str | None:
+    """The first rule broken, as "REQ-TP-nnn: text" naming the first pass and row breaking it, or
+    None (REQ-TP-013). Each rule runs only once the rules before it hold."""
     rules: tuple[tuple[str, Callable[[], str | None]], ...] = (
         ("REQ-TP-001", lambda: _heights(stock.top_mm, h)),
         ("REQ-TP-007", lambda: _header(header, h)),
@@ -122,5 +119,5 @@ def plan_breach(
     )
     for requirement, rule in rules:
         if (text := rule()) is not None:
-            return requirement, text
+            return f"{requirement}: {text}"
     return None

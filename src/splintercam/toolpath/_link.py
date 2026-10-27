@@ -34,8 +34,9 @@ def _single(kind: MoveKind, role: Role, end: tuple[float, ...], feed: int, link:
     return tuple(np.array(value, dtype=dtype) for value, dtype in zip(values, _DTYPES, strict=True))
 
 
-def _rapid(x: float, y: float, z: float, link: float) -> _Block:
-    return _single(MoveKind.RAPID, Role.LINK, (x, y, z), NO_FEED_CLASS, link)
+def _rapid(x: float, y: float, z: float) -> _Block:
+    # Research 10, Method 5: a rapid's link height is the height it moves at, h_c or h_r.
+    return _single(MoveKind.RAPID, Role.LINK, (x, y, z), NO_FEED_CLASS, z)
 
 
 def _cut(level: LevelPass) -> _Block:
@@ -53,17 +54,11 @@ def _moves(plan: LinkPlan, clearance: float, retract: float) -> ClMoves:
     # Research 10, Method 1 to 4 (REQ-TP-002): Z first, over P at h_c; per pass down to h_r, feed
     # down to z_i, the pass, up to h_c.
     px, py = plan.approach_xy_mm
-    blocks = [
-        _rapid(math.nan, math.nan, clearance, clearance),
-        _rapid(px, py, clearance, clearance),
-    ]
+    blocks = [_rapid(math.nan, math.nan, clearance), _rapid(px, py, clearance)]
     for level in plan.passes:
         descent = (px, py, level.z_mm)
-        blocks.append(_rapid(px, py, retract, retract))
-        blocks.append(
-            _single(MoveKind.LINE, Role.APPROACH, descent, plan.plunge_feed_class, math.nan)
-        )
-        blocks += [_cut(level), _rapid(px, py, clearance, clearance)]
+        plunge = _single(MoveKind.LINE, Role.APPROACH, descent, plan.plunge_feed_class, math.nan)
+        blocks += [_rapid(px, py, retract), plunge, _cut(level), _rapid(px, py, clearance)]
     return ClMoves(*(np.concatenate(column) for column in zip(*blocks, strict=True)))
 
 
@@ -75,8 +70,6 @@ def link_operation(header: ClHeader, plan: LinkPlan, stock: StockBox, ctx: Conte
     Implements: REQ-TP-001 to REQ-TP-014.
     """
     heights = link_heights(stock)
-    breach = plan_breach(header, plan, stock, heights)
-    if breach is not None:
-        requirement, text = breach
-        raise ValueError(f"operation {header.name!r}: {requirement}: {text}")
+    if (breach := plan_breach(header, plan, stock, heights)) is not None:
+        raise ValueError(f"operation {header.name!r}: {breach}")
     return make_operation(header, _moves(plan, heights.clearance_mm, heights.retract_mm), ctx)
