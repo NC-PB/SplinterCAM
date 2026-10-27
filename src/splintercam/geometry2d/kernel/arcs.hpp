@@ -47,6 +47,10 @@ enum class RowStatus : std::int8_t { ok = 0, curve_invalid = 1, arc_inconsistent
 void rows_from_ends(const EndRows& ends, double length_eps_mm, std::span<double> rows,
                     std::span<std::int8_t> status);
 
+// Per curve row, whatever its values, its status into `status`, the row as given (REQ-G2D-248).
+void check_arc_rows(std::span<const double> rows, double length_eps_mm,
+                    std::span<std::int8_t> status);
+
 // Per curve row the box [x_min, y_min, x_max, y_max] of `bounding_box` into `boxes` (m × 4)
 // (REQ-G2D-245). The octant test is a copy of _box.py's (geometry2d AGENTS.md, sweep tests).
 void row_boxes(std::span<const double> rows, std::span<double> boxes);
