@@ -477,6 +477,14 @@ void bind(nb::module_& m) {
         nb::arg("rows"), nb::arg("length_eps_mm"), nb::arg("out"),
         "Write per curve row 0 (consistent), 1 (P1 off the circle) or 2 (sweep does not fit).");
     m.def(
+        "check_arc_rows",
+        [](const Rows& rows, double length_eps_mm, const Int8Out& status) {
+            check_rows(rows.shape(0), {status.shape(0)});
+            check_arc_rows(view(rows), length_eps_mm, view(status));
+        },
+        nb::arg("rows"), nb::arg("length_eps_mm"), nb::arg("status"),
+        "Write per curve row 0 (ok), 1 (curve invalid) or 2 (arc inconsistent) (REQ-G2D-248).");
+    m.def(
         "rows_from_ends",
         [](const PointRows& p0, const PointRows& p1, const Values& values, bool values_are_sweeps,
            double length_eps_mm, const RowsOut& rows, const Int8Out& status) {
