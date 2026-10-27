@@ -42,6 +42,7 @@ class ClHeader:
     tol_mm: float  # the operation tolerance (D-029); the writer's rounding allowance
     feed_classes: tuple[tuple[str, float], ...]  # (class name, mm/min), by ClMoves.feed_class
     clearance_height_mm: float  # D-062, work frame
+    retract_height_mm: float  # h_r (D-062, AQ-018): no RAPID ends below it
 
 
 @dataclass(frozen=True, slots=True, eq=False)

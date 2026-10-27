@@ -27,6 +27,9 @@ Public API: `./__init__.py`. No C++ part. Depends on: foundation, geometry2d (`c
   copy P's x and y bit for bit; one ulp off, it counts as a move in the plane and raises
   REQ-CL-011 when it starts below its link height. Copy the same float into a link height and the
   move's z, never a recomputed one.
+- REQ-CL-022 (DEC-CL-008, plan 0007 only): a RAPID that moves in the plane must start and end at
+  the clearance height or above, and no RAPID may end below the header's retract height,
+  whatever its link height. A test record with a rapid in the plane at h_r fails here.
 - Move 1 always counts as a move in the plane (its start's x and y are unknown): its link height
   must not lie above move 0's z, and move 1 must end at the clearance height or above (REQ-CL-012).
 - DEC-CL-006: an arc is checked in the direction it is written, and the check is not symmetric in

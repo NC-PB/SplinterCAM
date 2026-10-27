@@ -29,6 +29,7 @@ HEADER = ClHeader(
     tol_mm=0.01,
     feed_classes=(("plunge", 300.0), ("cut", 1000.0)),
     clearance_height_mm=H_C,
+    retract_height_mm=H_R,
 )
 
 
@@ -170,19 +171,16 @@ def _cut(draw: st.DrawFn, start: tuple[float, float], z: float, arc_first: bool)
 @st.composite
 def operations(draw: st.DrawFn, with_arc: bool = False) -> list[Move]:
     """A valid operation: one to three passes at random levels below h_r, each reached by a
-    rapid in the plane at h_c or at h_r, and the end at h_c. `with_arc`: the first pass's cut
-    starts with an arc."""
+    rapid in the plane at h_c (or none) and a rapid down to h_r, and the end at h_c (research
+    10, Method; AQ-018). `with_arc`: the first pass's cut starts with an arc."""
     moves = [rapid(NAN, NAN, H_C, H_C)]
     x, y = draw(_coord), draw(_coord)
     moves.append(rapid(x, y, H_C, H_C))
     for index in range(draw(st.integers(1, 3))):
         if draw(st.booleans()):
-            moves.append(rapid(x, y, H_C, H_C))
-            moves.append(rapid(x, y, H_R, H_R))
-        else:
-            moves.append(rapid(x, y, H_R, H_R))
             x, y = draw(_coord), draw(_coord)
-            moves.append(rapid(x, y, H_R, H_R))
+            moves.append(rapid(x, y, H_C, H_C))
+        moves.append(rapid(x, y, H_R, H_R))
         z = draw(_level) - 1.0
         moves.append(line(x, y, z, Role.APPROACH, PLUNGE))
         cut = draw(_cut((x, y), z, with_arc and index == 0))

@@ -69,3 +69,13 @@
 - Why: (a) −0.0 and +0.0 are the same point; the writer prints both as 0 (`.claude/rules/ncx.md`: no "-0"), so the full circle prints with end = start and the vertical rapid stays vertical. A comparison of the bits would refuse a producer that computed one end as −0.0, for no effect on the machine. (b) `ClHeader` is typed; pyright strict, which every producer passes, rejects each of these (a str is not a `tuple[str, ...]`), and REQ-CL-017 names ranges only. Checking types too would cost lines of the 310-line budget for errors the type checker already finds. (c) REQ-CL-006 and 012 hold for it; `ncx` writes the tool call and nothing else.
 - Rejected: comparing bits with `view(np.int64)` (refuses equal points); type checks per field as model's `check_job` does (that module checks user input, DEC-MDL-003; this one checks code).
 - Where: REQ-CL-011, 014, 017; `_moves.py`, `_header.py`.
+
+## DEC-CL-008: Plan 0007's links as a rule of the record; the retract height in the header
+
+- Date: 2026-10-27; decided by: Peter (AQ-018 (c)); the range of the retract height and the exact comparisons ours
+- Status: Accepted
+- Decision: `ClHeader` gains `retract_height_mm` (h_r). REQ-CL-022 refuses a RAPID that changes x or y and starts or ends below the clearance height, and any RAPID that ends below h_r, whatever its link height. It runs after REQ-CL-016 (REQ-CL-020: by ID). h_r must be finite and not above the clearance height; equal is allowed. The comparisons, and whether x or y changes, are exact, as DEC-CL-004's.
+- Why: REQ-CL-011 checks a RAPID only against the link height the producer writes. A producer bug that copies the target z into the link height passed `cl`, and the writer would have put a diagonal G0 into the stock on the machine (cnc-reviewer, AQ-018). Research 10, Method 1 to 5, gives plan 0007's links: rapids in the plane at h_c, the descent at P to h_r, so `cl` can refuse anything else without knowing the stock. Research 10 test 1, against the stock, stays in step 5. h_r below h_c follows research 10 (h_c = stock top + 5, h_r = stock top + 3); equal is harmless for every rule and keeps the range simple.
+- Rejected: leaving it to step 5 alone (AQ-018 (a): one bug in the producer would reach the writer unchecked); a link height restricted to {h_c, h_r} (the same protection with a rule on a value instead of on the move, and no protection for a RAPID whose link height is right but whose z is not).
+- Consequence: a later plan with rapids in the plane below h_c (D-087) replaces REQ-CL-022 by a new SPEC entry. `strategies/profile` passes h_r into the header.
+- Where: REQ-CL-017, 020, 022; `_types.py`, `_header.py`, `_moves.py`.

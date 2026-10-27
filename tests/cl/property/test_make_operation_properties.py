@@ -11,7 +11,7 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from cl_strategies import COLUMNS, H_C, HEADER, Move, changed, columns, operations, refusal
+from cl_strategies import COLUMNS, H_C, H_R, HEADER, Move, changed, columns, operations, refusal
 from splintercam.cl import NO_FEED_CLASS, MoveKind, Role, make_operation
 from splintercam.foundation import Context
 
@@ -69,6 +69,21 @@ def test_a_last_rapid_below_the_clearance_height_is_named(
     lowered = changed(columns(moves), "end_mm", (last, 2), lower)
     with pytest.raises(ValueError, match=refusal("REQ-CL-012", last)):
         make_operation(HEADER, changed(lowered, "link_height_mm", last, lower), ctx)
+
+
+@pytest.mark.req("REQ-CL-022", "REQ-CL-020")
+@_SETTINGS
+@given(operations(), st.data())
+def test_a_descent_below_the_retract_height_is_named(
+    ctx: Context, moves: list[Move], data: st.DataObject
+) -> None:
+    # A rapid down to h_r lowered, with its link height, so REQ-CL-011 still holds.
+    descents = [i for i, m in enumerate(moves) if m.kind == MoveKind.RAPID and m.end[2] == H_R]
+    move = data.draw(st.sampled_from(descents))
+    lower = H_R - data.draw(st.integers(1, 2**10)) * 2.0**-10
+    lowered = changed(columns(moves), "end_mm", (move, 2), lower)
+    with pytest.raises(ValueError, match=refusal("REQ-CL-022", move)):
+        make_operation(HEADER, changed(lowered, "link_height_mm", move, lower), ctx)
 
 
 @pytest.mark.req("REQ-CL-016", "REQ-CL-020")
@@ -131,6 +146,7 @@ _HEADER_BREAKERS: tuple[tuple[str, object], ...] = (
     ("name", "a b"), ("note", ("\x00",)), ("tool_number", 0), ("point_number", -1),
     ("axial_offset_mm", -1.0), ("spindle_rpm", math.nan), ("tol_mm", 0.0),
     ("feed_classes", (("cut", -1.0),)), ("clearance_height_mm", math.inf),
+    ("retract_height_mm", 6.0),
 )  # fmt: skip
 
 

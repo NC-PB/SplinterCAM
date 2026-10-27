@@ -32,12 +32,14 @@ def test_every_header_field_reads_back(ctx: Context) -> None:
         tol_mm=0.02,
         feed_classes=(("plunge", 250.0), ("cut", 1200.0), ("lead", 600.0)),
         clearance_height_mm=4.5,  # the record's moves at h_c = 5 lie above it
+        retract_height_mm=2.5,  # its descents end at 3
     )
     held = make_operation(header, columns(profile_moves()), ctx).header
     assert (held.name, held.note) == ("Outside_Profile_2", header.note)
     assert (held.tool_number, held.point_number, held.axial_offset_mm) == (12, 2, 0.5)
     assert (held.spindle_rpm, held.tol_mm, held.clearance_height_mm) == (12000.0, 0.02, 4.5)
     assert held.feed_classes == (("plunge", 250.0), ("cut", 1200.0), ("lead", 600.0))
+    assert held.retract_height_mm == 2.5
 
 
 # One wrong value per field, in the order of `ClHeader` (REQ-CL-020).
@@ -68,7 +70,19 @@ _BROKEN: list[tuple[str, object]] = [
     ("feed_classes", (("cut", 300.0), ("cut", 1000.0))),
     ("clearance_height_mm", NAN),
     ("clearance_height_mm", -math.inf),
+    ("retract_height_mm", NAN),
+    ("retract_height_mm", -math.inf),
+    ("retract_height_mm", math.nextafter(5.0, math.inf)),  # above the clearance height 5
 ]
+
+
+@pytest.mark.req("REQ-CL-017")
+def test_the_retract_height_may_equal_the_clearance_height(ctx: Context) -> None:
+    # Ours (DEC-CL-008): h_r = h_c is not above it. The profile's descents end at 3, so the
+    # record is cut down to the tool change and one rapid at h_c.
+    header = replace(HEADER, retract_height_mm=HEADER.clearance_height_mm)
+    moves = columns(profile_moves()[:2])
+    assert make_operation(header, moves, ctx).header.retract_height_mm == 5.0
 
 
 @pytest.mark.req("REQ-CL-017", "REQ-CL-020")

@@ -29,6 +29,9 @@ _VALID: tuple[tuple[str, Callable[[ClHeader], bool]], ...] = (
     ("feed_classes", lambda h: len({name for name, _ in h.feed_classes}) == len(h.feed_classes)
      and all(name and _positive(feed) for name, feed in h.feed_classes)),
     ("clearance_height_mm", lambda h: math.isfinite(h.clearance_height_mm)),
+    # Research 10, Method: h_r lies below h_c; equal is harmless (DEC-CL-008).
+    ("retract_height_mm", lambda h: math.isfinite(h.retract_height_mm)
+     and h.retract_height_mm <= h.clearance_height_mm),
 )  # fmt: skip
 
 

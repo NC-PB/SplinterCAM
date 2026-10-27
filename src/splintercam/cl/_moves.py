@@ -108,11 +108,25 @@ def _link_heights(rows: _Rows) -> Mask:
     return np.where(rows.rapid, ~np.isfinite(link), ~np.isnan(link))
 
 
+def _in_plane(rows: _Rows) -> Mask:
+    # Exact (DEC-CL-004). Move 1 starts at (NaN, NaN, z), so it moves in the plane.
+    end = rows.moves.end_mm
+    return (rows.start[:, 0] != end[:, 0]) | (rows.start[:, 1] != end[:, 1])
+
+
 def _rapids_above_links(rows: _Rows) -> Mask:
-    # D-062, D-087; exact (DEC-CL-004). Move 1 starts at (NaN, NaN, z), so it moves in the plane.
-    end, link = rows.moves.end_mm, rows.moves.link_height_mm
-    in_plane = (rows.start[:, 0] != end[:, 0]) | (rows.start[:, 1] != end[:, 1])
-    return rows.rapid & ((end[:, 2] < link) | (in_plane & (rows.start[:, 2] < link)))
+    # D-062, D-087; exact (DEC-CL-004).
+    end_z, link = rows.moves.end_mm[:, 2], rows.moves.link_height_mm
+    return rows.rapid & ((end_z < link) | (_in_plane(rows) & (rows.start[:, 2] < link)))
+
+
+def _slice_links(rows: _Rows) -> Mask:
+    # AQ-018 (c), research 10, Method: plan 0007's rapids move in the plane at h_c or above and
+    # end at h_r or above, whatever their link height; exact (DEC-CL-004, DEC-CL-008).
+    end_z, start_z = rows.moves.end_mm[:, 2], rows.start[:, 2]
+    clearance, retract = rows.header.clearance_height_mm, rows.header.retract_height_mm
+    low_in_plane = _in_plane(rows) & ((start_z < clearance) | (end_z < clearance))
+    return rows.rapid & (low_in_plane | (end_z < retract))
 
 
 def _clearance(rows: _Rows) -> Mask:
@@ -181,6 +195,8 @@ _RULES: tuple[tuple[str, str, Callable[[_Rows], Mask]], ...] = (
     ("REQ-CL-015", "an ARC's end z must equal its start z", _planar),
     ("REQ-CL-016", "the ARC's end is off its circle or its sweep, or its radius is not above "
      "eps_len", _on_circle),
+    ("REQ-CL-022", "plan 0007: a RAPID moves in the plane at the clearance height or above and "
+     "ends at the retract height or above", _slice_links),
 )  # fmt: skip
 
 
