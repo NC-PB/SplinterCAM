@@ -102,8 +102,8 @@ def default_context() -> Context: ...
 
 ## Invariants
 
-- `run_job` writes only into the output folder and its own working folder, and nothing into the output folder before stage 8 (REQ-JOB-001, 010, 016, 018). Unit test with a fault per stage.
-- A report with an ERROR or `CANCELLED` has `nc_files == ()`; a report with `ok` has `ncx_file` and at least one file in `nc_files` (REQ-JOB-017, 019, 021).
+- `run_job` writes only into the output folder and its own working folder, and nothing into the output folder before stage 8 (REQ-JOB-001, 010, 016, 018). Property test: a fault injected at a generated stage, and a fake `ncx` with generated outcomes; the files present afterwards are compared with the stage reached.
+- A report with an ERROR or `CANCELLED` has `nc_files == ()`; a report with `ok` has `ncx_file` and at least one file in `nc_files` (REQ-JOB-017, 019, 021). Checked on every report of the property test above.
 
 ## Tolerance budget
 

@@ -53,7 +53,7 @@ def entry() -> NoReturn: ...                              # sys.exit(main()); th
 ## Invariants
 
 - The exit code is a function of the report and `--strict` alone (REQ-CLI-005). Property test over generated reports.
-- stdout names files only for a run with exit code 0 (REQ-CLI-003, 004).
+- stdout names files only for a run with exit code 0 (REQ-CLI-003, 004). The same property test checks stdout for every generated report.
 
 ## Tolerance budget
 
