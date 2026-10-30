@@ -12,6 +12,7 @@ from cl_strategies import full_circle
 from ncx_programs import PROFILE, RECT_FILLETS, record, words, written
 from splintercam.foundation import Context, ToleranceSet
 from splintercam.ncx import write_ncx
+from splintercam.ncx._moves import move_blocks, printed
 
 _START = [
     "FILE=BEGIN NCX=1",
@@ -19,7 +20,7 @@ _START = [
     "FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF",
     "ORIGIN=1",
     'SECTION="PROFILE_1"',
-    "TOOL=1 OFFSET:LEN=1 RPM=8000.0 SPINDLE=CW",
+    "TOOL=1 OFFSET:LEN=1 SPINDLE=CW RPM=8000.0",
     "COOLANT=ON",
     "RAPID Z=5.0",
     "RAPID X=50.0 Y=-15.0 Z=5.0",
@@ -70,7 +71,7 @@ def test_two_operations_of_one_tool_have_one_tool_block(ctx: Context) -> None:
         'SECTION="PROFILE_1"',
         'COMMENT="Rohteil 105 x 65"',
         'COMMENT="Spannung oben"',
-        "TOOL=1 OFFSET:LEN=1 RPM=8000.0 SPINDLE=CW",
+        "TOOL=1 OFFSET:LEN=1 SPINDLE=CW RPM=8000.0",
     ]
     b = lines.index('SECTION="B"')
     assert lines[b + 1] == "RAPID Z=5.0"
@@ -120,8 +121,13 @@ def test_a_full_circle_ends_at_its_start(ctx: Context, sweep: float, word: str) 
 @pytest.mark.req("REQ-NCX-007")
 @pytest.mark.parametrize("offset", [1.0, 40.0])
 def test_the_axial_offset_raises_every_z(ctx: Context, offset: float) -> None:
-    flat = written(ctx).text.split("\n")
-    raised = written(ctx, replace(PROFILE, axial_offset_mm=offset)).text.split("\n")
+    # write_ncx refuses a ≠ 0 in the slice (REQ-NCX-013, AQ-035); the shift is checked on the
+    # move blocks, where it stays for when a setup sheet or NCX's point words exist.
+    def blocks(axial_offset_mm: float) -> list[str]:
+        (operation,) = record(ctx, replace(PROFILE, axial_offset_mm=axial_offset_mm)).operations
+        return move_blocks(operation, printed(operation))
+
+    flat, raised = blocks(0.0), blocks(offset)
     assert len(flat) == len(raised)
     moved = 0
     for before, after in zip(flat, raised, strict=True):
