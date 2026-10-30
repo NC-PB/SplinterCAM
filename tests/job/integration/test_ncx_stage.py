@@ -293,3 +293,42 @@ def test_a_temporary_folder_inside_the_output_folder_is_refused(
     assert _errors(report) == ["JOB_WORK_DIR_UNWRITABLE"]
     assert listing(out) == ["RECT_FILLETS.ncx"]
     assert fake_ncx.calls == []
+
+
+@pytest.mark.req("REQ-JOB-019", "REQ-JOB-021")
+def test_a_cancel_during_the_move_leaves_no_nc_file(
+    job_file: Path, tmp_path: Path, fake_ncx: FakeRunNcx, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ctx = default_context()
+    fake_ncx.files = ("a.h", "b.h")
+    real_copy = shutil.copyfile
+
+    def then_cancel(source: Path, target: Path) -> object:
+        copied = real_copy(source, target)
+        ctx.cancel.cancel()  # as from another thread while a slow stick is written
+        return copied
+
+    monkeypatch.setattr("splintercam.job._output.shutil.copyfile", then_cancel)
+    report = _run(job_file, tmp_path / "out", ctx, fake_ncx.exe)
+    assert report.diagnostics[-1].code == "CANCELLED"
+    assert codes(report.diagnostics).count("CANCELLED") == 1
+    assert listing(tmp_path / "out") == ["RECT_FILLETS.ncx"]
+    assert report.nc_files == ()
+    assert not report.ok
+
+
+@pytest.mark.req("REQ-JOB-018")
+def test_a_temporary_folder_reached_through_a_link_into_the_output_is_refused(
+    job_file: Path, tmp_path: Path, fake_ncx: FakeRunNcx, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    out, link = tmp_path / "out", tmp_path / "tmp-link"
+    out.mkdir()
+    try:
+        link.symlink_to(out, target_is_directory=True)
+    except OSError as error:  # Windows without the symlink privilege
+        pytest.skip(f"no symbolic link here: {error}")
+    monkeypatch.setattr(tempfile, "tempdir", str(link))
+    report = _run(job_file, out, default_context(), fake_ncx.exe)
+    assert _errors(report) == ["JOB_WORK_DIR_UNWRITABLE"]
+    assert listing(out) == ["RECT_FILLETS.ncx"]  # no stray folder: checked before mkdtemp
+    assert fake_ncx.calls == []

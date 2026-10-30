@@ -385,3 +385,26 @@ def test_a_repeated_key_is_one_diagnostic_whatever_its_first_value(
 ) -> None:
     text = _text(example()).replace('"part": {', '"part": null, "part": {', 1)
     assert _errors(_run(tmp_path, ctx, text)) == [("JOB_KEY_REPEATED", "part")]
+
+
+@pytest.mark.req("REQ-JOB-002")
+def test_values_nested_deeper_than_the_layout_are_invalid(tmp_path: Path, ctx: Context) -> None:
+    # Balanced, so Python's json reads it; job must not recurse over it (DEC-JOB-009 (7)).
+    text = _text(example()).replace(
+        '"diameter_mm": 10.0', '"diameter_mm": ' + "[" * 600 + "]" * 600
+    )
+    assert _errors(_run(tmp_path, ctx, text)) == [("JOB_FILE_INVALID", "line 1, column 1")]
+    one_level = _text(example()).replace('"diameter_mm": 10.0', '"diameter_mm": [[1]]')
+    report = _run(
+        tmp_path / "2", ctx, one_level
+    )  # still the layout's depth + 1: model's type error
+    assert [code for code, _ in _errors(report)] == ["VALUE_TYPE_INVALID"]
+
+
+@pytest.mark.req("REQ-JOB-002", "REQ-JOB-006")
+def test_an_int_that_rounds_to_the_largest_double_reaches_model(
+    tmp_path: Path, ctx: Context
+) -> None:
+    big = "17976931348623158" + "0" * 292  # above the largest double, but rounds to it
+    text = _text(example()).replace('"diameter_mm": 10.0', '"diameter_mm": ' + big)
+    assert [code for code, _ in _errors(_run(tmp_path, ctx, text))] == ["VALUE_TYPE_INVALID"]

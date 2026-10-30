@@ -30,8 +30,8 @@ moved only after a clean run. Contract: `./SPEC.md`. Why it is built this way: `
 - A report with an ERROR or `CANCELLED` has `nc_files == ()`; compiled files reach the output
   folder only after a clean `run_ncx` (REQ-JOB-019, DEC-JOB-008, 011).
 - Stage 1's diagnostics come in the layout's key order, unknown and repeated keys after their
-  object's keys by code point, `JOB_INPUTS` last (REQ-JOB-020). A new key goes into `_LAYOUT` in
-  its place; a value `job` checks itself goes into `_checks`.
+  object's keys by code point, then `JOB_MACHINE_OVERRIDDEN`, `JOB_INPUTS` last (REQ-JOB-020).
+  A new key goes into `_LAYOUT` in its place; a value `job` checks itself goes into `_checks`.
 - `job` passes values to `model` as read; it never checks a type `model` checks (DEC-JOB-003).
 
 ## Known pitfalls
@@ -42,6 +42,10 @@ moved only after a clean run. Contract: `./SPEC.md`. Why it is built this way: `
   digit limit; it is caught with the hooks' error.
 - The tests replace `splintercam.job._output.run_ncx` and `splintercam.job._run.REGISTRY`; an
   import of either name elsewhere is not replaced (DEC-JOB-012).
+- `job` never recurses over values: `depth` in `_json.py` refuses nesting beyond `_MAX_DEPTH`
+  first (DEC-JOB-009 (7)); a new layout level raises it by itself.
+- A stage that returns no value must report an ERROR or `CANCELLED`; `_Run.take` raises
+  `ValueError` otherwise (a producer's bug).
 - macOS file systems ignore case: two test files `B.h` and `b.h` are one file.
 - `tests/support/job_files.py` loads the golden case's `make_part.py` with bytecode writing off,
   so no `__pycache__` appears in `testdata/`.

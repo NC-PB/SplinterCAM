@@ -12,6 +12,7 @@ from splintercam.foundation import (
     CANCELLED,
     TOLERANCE_DEFAULTS,
     Context,
+    Diagnostic,
     Result,
     Severity,
     ToleranceSet,
@@ -148,3 +149,57 @@ def test_a_cancel_while_the_ncx_file_is_written_still_names_it(
     assert report.ncx_file == tmp_path / "out" / "RECT_FILLETS.ncx"
     assert listing(tmp_path / "out") == ["RECT_FILLETS.ncx"]
     assert report.nc_files == ()
+
+
+@pytest.mark.req("REQ-JOB-014")
+def test_a_strategy_with_no_value_is_an_error_after_another_operations_failure(
+    tmp_path: Path, ctx: Context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    job = example()
+    job["operations"].append(dict(operation(job), name="PROFILE_2"))
+
+    def plan(task: ProfileInput, op_ctx: Context) -> Result[ClOperation]:
+        del op_ctx
+        if task.operation.name == "PROFILE_1":
+            return Result(None, (Diagnostic("FAKE", Severity.ERROR, "fails", None),))
+        return Result(None, ())
+
+    _fake_registry(monkeypatch, plan)
+    with pytest.raises(ValueError, match="no value and no error"):
+        _run(job_folder(tmp_path / "job", job), tmp_path / "out", ctx)
+
+
+@pytest.mark.req("REQ-JOB-001")
+def test_a_stage_with_no_value_and_only_a_warning_is_a_programming_error(
+    job_file: Path, tmp_path: Path, ctx: Context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    warning = Diagnostic("FAKE_WARNING", Severity.WARNING, "no value", None)
+
+    def no_value(*_: object) -> Result[object]:
+        return Result(None, (warning,))
+
+    monkeypatch.setattr("splintercam.job._run.read_dxf_contour", no_value)
+    with pytest.raises(ValueError, match="no value and no error"):
+        _run(job_file, tmp_path / "out", ctx)
+
+
+@pytest.mark.req("REQ-JOB-016")
+def test_a_partial_file_that_cannot_be_removed_is_named(
+    job_file: Path, tmp_path: Path, ctx: Context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken(self: Path, data: bytes) -> int:
+        del self, data
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(Path, "write_bytes", broken)
+
+    def kept(path: Path) -> bool:
+        del path
+        return False
+
+    monkeypatch.setattr("splintercam.job._output._removed", kept)
+    report = _run(job_file, tmp_path / "out", ctx)
+    message = report.diagnostics[-1].message
+    assert report.diagnostics[-1].code == "JOB_OUTPUT_UNWRITABLE"
+    assert "No space left" in message  # the first reason kept
+    assert ".RECT_FILLETS.ncx.partial left there" in message
