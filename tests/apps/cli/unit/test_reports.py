@@ -47,13 +47,17 @@ def test_the_golden_case_text_report(
 
 
 @pytest.mark.req("REQ-CLI-003")
+@pytest.mark.req("REQ-CLI-004")
 def test_relative_paths_are_printed_absolute(
     fake_run_job: FakeRunJob, capsys: pytest.CaptureFixture[str]
 ) -> None:
     fake_run_job.report = report(ncx_file=Path("out/A.ncx"), nc_files=(Path("out/A.h"),))
+    ncx_file, nc_file = str(Path("out/A.ncx").absolute()), str(Path("out/A.h").absolute())
     assert main(_RUN) == 0
-    lines = capsys.readouterr().out.splitlines()
-    assert lines == [str(Path("out/A.ncx").absolute()), str(Path("out/A.h").absolute())]
+    assert capsys.readouterr().out.splitlines() == [ncx_file, nc_file]
+    assert main([*_RUN, "--json"]) == 0
+    parsed = json.loads(capsys.readouterr().out)
+    assert (parsed["ncx_file"], parsed["nc_files"]) == (ncx_file, [nc_file])
 
 
 @pytest.mark.req("REQ-CLI-003")
@@ -101,8 +105,9 @@ def test_a_failed_run_prints_nothing_on_stdout(
 def test_a_warned_run_under_strict_prints_nothing_on_stdout(
     fake_run_job: FakeRunJob, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    fake_run_job.report = report(diagnostic("JOB_MACHINE_OVERRIDDEN", Severity.WARNING, "machine"),
-                                 ncx_file=tmp_path / "A.ncx")  # fmt: skip
+    # The compiled file is in the folder: a warning does not stop `run_job` (AQ-040).
+    warning = diagnostic("JOB_MACHINE_OVERRIDDEN", Severity.WARNING, "machine")
+    fake_run_job.report = report(warning, ncx_file=tmp_path / "A.ncx", nc_files=(tmp_path / "A.h",))
     assert main([*_RUN, "--strict"]) == 1
     out, err = capsys.readouterr()
     assert out == ""

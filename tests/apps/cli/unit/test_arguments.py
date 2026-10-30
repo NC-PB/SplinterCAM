@@ -46,6 +46,7 @@ def test_the_cli_imports_only_job_from_splintercam() -> None:
     assert {name for name in imported if name.startswith("splintercam")} == {"splintercam.job"}
 
 
+@pytest.mark.req("REQ-CLI-005")
 @pytest.mark.req("REQ-CLI-006")
 @pytest.mark.parametrize(
     "argv",
@@ -74,9 +75,10 @@ def test_help_is_code_0_on_stdout(
     assert fake_run_job.calls == []
 
 
+@pytest.mark.req("REQ-CLI-001")
 @pytest.mark.req("REQ-CLI-006")
 def test_run_help_names_every_option(capsys: pytest.CaptureFixture[str]) -> None:
-    main(["run", "--help"])
+    assert main(["run", "--help"]) == 0
     out = capsys.readouterr().out
     for option in ("JOB_FILE", "--output", "--ncx", "--machine", "--strict", "--json"):
         assert option in out

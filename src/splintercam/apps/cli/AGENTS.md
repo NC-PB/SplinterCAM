@@ -32,3 +32,7 @@ over `job.run_job`: the arguments, one call, the text or JSON report and the exi
 - Hypothesis refuses function-scoped fixtures: the property test patches with `mock.patch` and
   captures with `contextlib.redirect_stdout`, not `monkeypatch` and `capsys`.
 - `apps/__init__.py` only groups modules and must import nothing (arch-check).
+- `ruff format` on this folder also formats the SPEC's Python block; format only `*.py`.
+- `# fmt: skip` with text after it is not a skip: ruff reformats the statement.
+- A warning does not stop `run_job`: under `--strict` the exit is 1 but the NC program may be in
+  the output folder (AQ-040). Never test "nothing on stdout" with a report that has no files.
