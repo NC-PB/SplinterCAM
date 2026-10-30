@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """`ncx`'s stderr as diagnostics, each at the operation its line belongs to (REQ-NCX-020 to
-022, 025; research 27, The NCX writer and the `ncx` call)."""
+022, 025, 027; research 27, The NCX writer and the `ncx` call)."""
 
 import bisect
 import re
@@ -28,8 +28,8 @@ def read_messages(
     step: NcxStep, stderr: str, call: NcxCall, sections: tuple[NcxSection, ...]
 ) -> list[Diagnostic]:
     """`step`'s stderr lines in the order printed; in `compile`, the CMP020s as one
-    `NCX_ROUNDED` per location at the place of its first, and any other WARNING or unread line
-    followed, at the end, by `NCX_STRICT_FAILED` (DEC-NCX-006, 014)."""
+    `NCX_ROUNDED` per location at the place of its first. Any other WARNING or unread line, in
+    every step, is followed at the end by `NCX_STRICT_FAILED` (DEC-NCX-006, 014, 017)."""
     found: list[Diagnostic] = []
     rounded: dict[str, tuple[int, int]] = {}  # location: (index in found, count)
     ours: dict[str, bool] = {}  # file as printed: is it `ncx_file` (DEC-NCX-014 (d))
@@ -40,7 +40,7 @@ def read_messages(
             if raw.strip():
                 where = f"ncx {step.value}"
                 found.append(Diagnostic("NCX_OUTPUT_UNREAD", Severity.WARNING, raw, where))
-                strict = strict or step is NcxStep.COMPILE  # DEC-NCX-014 (e): fail closed
+                strict = True  # DEC-NCX-014 (e), DEC-NCX-017: fail closed
             continue
         file, code, text = match["file"], match["code"], match["text"]
         if file not in ours:
@@ -51,8 +51,8 @@ def read_messages(
         else:  # the machine file or another input: no operation (REQ-NCX-021)
             location, text = f"ncx {step.value}", f"{file}: {text}"
         severity = Severity[match["severity"]]
-        warning = step is NcxStep.COMPILE and severity is Severity.WARNING
-        if warning and code == _ROUNDED:  # another severity stays as ncx gave it
+        warning = severity is Severity.WARNING
+        if warning and step is NcxStep.COMPILE and code == _ROUNDED:  # another severity stays
             index, count = rounded.get(location, (len(found), 0))
             if count == 0:
                 found.append(Diagnostic("NCX_ROUNDED", Severity.INFO, "", location))
@@ -64,9 +64,10 @@ def read_messages(
         message = f"{count} values rounded to the machine's decimals ({_ROUNDED}, D-149)"
         found[index] = Diagnostic("NCX_ROUNDED", Severity.INFO, message, location)
     if strict:
+        where = f"ncx {step.value}"
+        accepted = f" other than {_ROUNDED}" if step is NcxStep.COMPILE else ""
         message = (
-            f"ncx compile reported a warning other than {_ROUNDED} or an unread line; "
-            "it fails as under --strict"
+            f"{where} reported a warning{accepted} or an unread line; it fails as under --strict"
         )
-        found.append(Diagnostic("NCX_STRICT_FAILED", Severity.ERROR, message, "ncx compile"))
+        found.append(Diagnostic("NCX_STRICT_FAILED", Severity.ERROR, message, where))
     return found

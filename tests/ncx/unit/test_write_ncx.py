@@ -12,6 +12,7 @@ from cl_strategies import full_circle
 from ncx_programs import PROFILE, RECT_FILLETS, record, words, written
 from splintercam.foundation import Context, ToleranceSet
 from splintercam.ncx import write_ncx
+from splintercam.ncx._moves import move_blocks, printed
 
 _START = [
     "FILE=BEGIN NCX=1",
@@ -120,8 +121,13 @@ def test_a_full_circle_ends_at_its_start(ctx: Context, sweep: float, word: str) 
 @pytest.mark.req("REQ-NCX-007")
 @pytest.mark.parametrize("offset", [1.0, 40.0])
 def test_the_axial_offset_raises_every_z(ctx: Context, offset: float) -> None:
-    flat = written(ctx).text.split("\n")
-    raised = written(ctx, replace(PROFILE, axial_offset_mm=offset)).text.split("\n")
+    # write_ncx refuses a ≠ 0 in the slice (REQ-NCX-013, AQ-035); the shift is checked on the
+    # move blocks, where it stays for when a setup sheet or NCX's point words exist.
+    def blocks(axial_offset_mm: float) -> list[str]:
+        (operation,) = record(ctx, replace(PROFILE, axial_offset_mm=axial_offset_mm)).operations
+        return move_blocks(operation, printed(operation))
+
+    flat, raised = blocks(0.0), blocks(offset)
     assert len(flat) == len(raised)
     moved = 0
     for before, after in zip(flat, raised, strict=True):

@@ -26,7 +26,13 @@ def _at(line: int, rest: str) -> str:
     return f"{_NCX}({line}): {rest}"
 
 
-@pytest.mark.req("REQ-NCX-020")
+def _strict(step: NcxStep) -> Diagnostic:
+    # REQ-NCX-027 (AQ-036 item 4): a warning or an unread line in `format --check` or `check`.
+    message = f"ncx {step.value} reported a warning or an unread line; it fails as under --strict"
+    return Diagnostic("NCX_STRICT_FAILED", Severity.ERROR, message, f"ncx {step.value}")
+
+
+@pytest.mark.req("REQ-NCX-020", "REQ-NCX-027")
 def test_the_three_severities_are_read() -> None:
     found = _read(
         NcxStep.CHECK,
@@ -38,16 +44,47 @@ def test_the_three_severities_are_read() -> None:
         Diagnostic("VM440", Severity.ERROR, "F on a RAPID", "operation 1 (A)"),
         Diagnostic("CMP020", Severity.WARNING, "X95.1234567 written as X95.123", "operation 1 (A)"),
         Diagnostic("VM001", Severity.INFO, "note", "operation 1 (A)"),
+        _strict(NcxStep.CHECK),
     ]
 
 
-@pytest.mark.req("REQ-NCX-020")
+@pytest.mark.req("REQ-NCX-020", "REQ-NCX-027")
 def test_other_lines_are_kept_verbatim() -> None:
     found = _read(NcxStep.FORMAT, "Unhandled exception: (3): ERROR", "", "   ", "x(1): FATAL A: b")
     assert found == [
-        Diagnostic("NCX_OUTPUT_UNREAD", Severity.WARNING, line, "ncx format")
-        for line in ("Unhandled exception: (3): ERROR", "x(1): FATAL A: b")
+        *(
+            Diagnostic("NCX_OUTPUT_UNREAD", Severity.WARNING, line, "ncx format")
+            for line in ("Unhandled exception: (3): ERROR", "x(1): FATAL A: b")
+        ),
+        _strict(NcxStep.FORMAT),
     ]
+
+
+@pytest.mark.req("REQ-NCX-027")
+@pytest.mark.parametrize("step", [NcxStep.FORMAT, NcxStep.CHECK])
+@pytest.mark.parametrize(
+    ("line", "code"),
+    [
+        (_at(6, "WARNING VM300: unused word"), "VM300"),
+        (f"{_NCX}(6,3): warning VM300: x", "NCX_OUTPUT_UNREAD"),
+    ],
+)
+def test_format_and_check_fail_closed(step: NcxStep, line: str, code: str) -> None:
+    # Peter, AQ-036 item 4: as compile does (DEC-NCX-014 (e)), whatever the exit code.
+    found = _read(step, line, _at(7, "INFO VM001: note"))
+    assert [(d.code, d.severity) for d in found] == [
+        (code, Severity.WARNING),
+        ("VM001", Severity.INFO),
+        ("NCX_STRICT_FAILED", Severity.ERROR),
+    ]
+    assert found[-1] == _strict(step)
+
+
+@pytest.mark.req("REQ-NCX-027")
+@pytest.mark.parametrize("step", [NcxStep.FORMAT, NcxStep.CHECK])
+def test_format_and_check_pass_with_errors_and_infos_only(step: NcxStep) -> None:
+    found = _read(step, _at(6, "ERROR VM440: x"), _at(7, "INFO VM001: y"), "", "  ")
+    assert [d.code for d in found] == ["VM440", "VM001"]
 
 
 @pytest.mark.req("REQ-NCX-020")
@@ -75,11 +112,12 @@ def test_the_line_gives_the_operation(line: int, location: str) -> None:
     assert [d.location for d in found] == [location]
 
 
-@pytest.mark.req("REQ-NCX-021")
+@pytest.mark.req("REQ-NCX-021", "REQ-NCX-027")
 def test_another_file_is_named_and_not_mapped() -> None:
     found = _read(NcxStep.CHECK, f"{_MACHINE}(5): WARNING CFG002: unknown key 'x'")
     assert found == [
-        Diagnostic("CFG002", Severity.WARNING, f"{_MACHINE}: unknown key 'x'", "ncx check")
+        Diagnostic("CFG002", Severity.WARNING, f"{_MACHINE}: unknown key 'x'", "ncx check"),
+        _strict(NcxStep.CHECK),
     ]
 
 
@@ -141,10 +179,14 @@ def test_the_ncx_file_is_found_by_its_resolved_path() -> None:
     assert [d.location for d in found] == ["operation 1 (A)", "operation 2 (B)"]
 
 
-@pytest.mark.req("REQ-NCX-022")
+@pytest.mark.req("REQ-NCX-022", "REQ-NCX-027")
 def test_cmp020_outside_compile_is_kept() -> None:
+    # Kept as ncx reports it (DEC-NCX-014 (c)), and a warning of check: it fails (DEC-NCX-017).
     found = _read(NcxStep.CHECK, _at(6, "WARNING CMP020: a"))
-    assert [(d.code, d.severity) for d in found] == [("CMP020", Severity.WARNING)]
+    assert [(d.code, d.severity) for d in found] == [
+        ("CMP020", Severity.WARNING),
+        ("NCX_STRICT_FAILED", Severity.ERROR),
+    ]
 
 
 @pytest.mark.req("REQ-NCX-025")

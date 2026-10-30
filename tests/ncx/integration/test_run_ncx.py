@@ -17,6 +17,7 @@ _PROGRAM = NcxProgram("", (NcxSection("operation 1 (A)", 5, 50, 0.001),))
 _ALL = (NcxStep.FORMAT, NcxStep.CHECK, NcxStep.COMPILE)
 _ERROR = "{ncx}(7): ERROR VM440: F on a RAPID\n"
 _WARNING = "{ncx}(7): WARNING VM300: unused word\n"
+_UNREAD = "Unhandled exception\n"
 
 
 def _codes(found: tuple[Diagnostic, ...]) -> list[str]:
@@ -93,6 +94,21 @@ def test_an_error_with_exit_0_stops_before_compile(ctx: Context, fake_ncx: MakeF
     assert _codes(result.diagnostics) == ["VM440"]
 
 
+@pytest.mark.req("REQ-NCX-019", "REQ-NCX-027")
+@pytest.mark.parametrize("step", ["format", "check"])
+@pytest.mark.parametrize(("stderr", "code"), [(_WARNING, "VM300"), (_UNREAD, "NCX_OUTPUT_UNREAD")])
+def test_a_warning_with_exit_0_fails_and_stops_before_compile(
+    ctx: Context, fake_ncx: MakeFake, step: str, stderr: str, code: str
+) -> None:
+    # Peter, AQ-036 item 4: format --check and check --strict fail closed as compile does.
+    fake = fake_ncx(**{step: Step(stderr=stderr)})
+    result = run_ncx(fake.call, _PROGRAM, ctx)
+    assert not result.ok
+    assert fake.ran() == [NcxStep.FORMAT, NcxStep.CHECK]
+    assert _codes(result.diagnostics) == [code, "NCX_STRICT_FAILED"]
+    assert result.diagnostics[-1].location == f"ncx {step}"
+
+
 @pytest.mark.req("REQ-NCX-019", "REQ-NCX-023")
 def test_a_format_difference_still_runs_check(ctx: Context, fake_ncx: MakeFake) -> None:
     fake = fake_ncx(format=Step(exit=1, stdout="-RAPID  Z=5.0\n+RAPID Z=5.0\n"))
@@ -108,8 +124,10 @@ def test_a_format_difference_still_runs_check(ctx: Context, fake_ncx: MakeFake) 
     assert "+RAPID Z=5.0" in failed.message
 
 
-@pytest.mark.req("REQ-NCX-023")
-@pytest.mark.parametrize(("stderr", "codes"), [(_WARNING, ["VM300"]), ("", [])])
+@pytest.mark.req("REQ-NCX-023", "REQ-NCX-027")
+@pytest.mark.parametrize(
+    ("stderr", "codes"), [(_WARNING, ["VM300", "NCX_STRICT_FAILED"]), ("", [])]
+)
 def test_exit_1_is_a_failed_step(
     ctx: Context, fake_ncx: MakeFake, stderr: str, codes: list[str]
 ) -> None:
@@ -120,7 +138,7 @@ def test_exit_1_is_a_failed_step(
     assert "check" in result.diagnostics[-1].message
 
 
-@pytest.mark.req("REQ-NCX-023")
+@pytest.mark.req("REQ-NCX-023", "REQ-NCX-027")
 @pytest.mark.parametrize("code", [2, 3])
 def test_another_exit_code_stops_the_call(ctx: Context, fake_ncx: MakeFake, code: int) -> None:
     fake = fake_ncx(format=Step(exit=code, stderr=_WARNING))
@@ -128,7 +146,7 @@ def test_another_exit_code_stops_the_call(ctx: Context, fake_ncx: MakeFake, code
     assert not result.ok
     assert result.value == (NcxStep.FORMAT,)
     assert fake.ran() == [NcxStep.FORMAT]
-    assert _codes(result.diagnostics) == ["VM300", "NCX_CALL_FAILED"]
+    assert _codes(result.diagnostics) == ["VM300", "NCX_STRICT_FAILED", "NCX_CALL_FAILED"]
     assert str(code) in result.diagnostics[-1].message
 
 
@@ -154,7 +172,7 @@ def test_cancelled_at_entry_runs_nothing(ctx: Context, fake_ncx: MakeFake) -> No
     assert fake.ran() == []
 
 
-@pytest.mark.req("REQ-NCX-024", "REQ-NCX-025")
+@pytest.mark.req("REQ-NCX-024", "REQ-NCX-025", "REQ-NCX-027")
 def test_cancelled_while_a_step_runs(ctx: Context, fake_ncx: MakeFake) -> None:
     fake = fake_ncx(format=Step(stderr=_WARNING), check=Step(sleep=60.0))
     started = time.monotonic()
@@ -163,7 +181,7 @@ def test_cancelled_while_a_step_runs(ctx: Context, fake_ncx: MakeFake) -> None:
     watcher.join()
     assert time.monotonic() - started < 50.0  # the check was stopped, not waited for
     assert result.value is None
-    assert _codes(result.diagnostics) == ["VM300", "CANCELLED"]
+    assert _codes(result.diagnostics) == ["VM300", "NCX_STRICT_FAILED", "CANCELLED"]
     assert fake.ran() == [NcxStep.FORMAT, NcxStep.CHECK]
 
 
@@ -188,12 +206,14 @@ def test_cancelled_during_the_last_step(
     assert result.diagnostics == (CANCELLED,)
 
 
-@pytest.mark.req("REQ-NCX-018", "REQ-NCX-020")
+@pytest.mark.req("REQ-NCX-018", "REQ-NCX-020", "REQ-NCX-027")
 def test_output_is_decoded_as_utf8_with_replacement(ctx: Context, fake_ncx: MakeFake) -> None:
     fake = fake_ncx(format=Step(stderr="bad \udcff byte\n"))
     result = run_ncx(fake.call, _PROGRAM, ctx)
+    strict = "ncx format reported a warning or an unread line; it fails as under --strict"
     assert [(d.code, d.message) for d in result.diagnostics] == [
-        ("NCX_OUTPUT_UNREAD", "bad � byte")
+        ("NCX_OUTPUT_UNREAD", "bad � byte"),
+        ("NCX_STRICT_FAILED", strict),  # REQ-NCX-027
     ]
 
 
