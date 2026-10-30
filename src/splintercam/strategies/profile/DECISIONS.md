@@ -60,3 +60,38 @@
 - Why: the split rule allows vectorised NumPy; geometry2d's predicates take arrays (REQ-G2D-201). `architecture/modules.yaml` has `kernel: false` for the module.
 - Rejected: a Python loop over edges for the start point or the blocked check.
 - Where: REQ-PRF-012 to 015, 022.
+
+## DEC-PRF-007: Implementation choices the SPEC leaves open
+
+- Date: 2026-10-27; decided by: ours (plan 0007, step 5, implementation)
+- Status: Accepted 2026-10-27
+- Decision: (1) the preconditions are checked before `ctx.cancel` at entry, so a broken call raises even when cancelled (as offset2d's `offset_region`). (2) `PROFILE_STOCK_SMALL` is one diagnostic naming every side the part passes ("x min", "y min", "x max", "y max"), the part's box from geometry2d's `row_boxes` (an arc by its true extent, not its ends). (3) P differs from S when the points differ, not when d > 0; only then does a pass get its APPROACH and RETRACT rows. (4) The approach point's exit is first taken against the box grown by c with square corners; where that exit lies beside a side of the stock it is the answer, else the larger root of the corner circle's quadratic, the corner the one the square exit lies past. (5) `PROFILE_TOP_TOO_HIGH` reads z_1 by REQ-PRF-016's formula without building the other levels. (6) The loop from offset2d must turn left at its first vertex, `orient2d` exact, else `ValueError` (a broken promise of offset2d's, not a user error; cnc review).
+- Why: (1) a programming error is not an outcome the user can cause, so it must not hide behind a cancel. (2) one value error per check, as REQ-PRF-020 counts them, and every side at once spares a round trip; the ends of an arc would miss a fillet bulging past the stock. (3) a d that rounds away in S + d·n would give zero-length moves at the plunge feed. (4) The rounded grown box lies inside the square one, and the stretch of the ray between the two exits lies in one corner region, so the square exit tells which corner circle the ray leaves by; no search, `sqrt` only (REQ-PRF-014, 022). (5) a tiny step-down must not build a list of every level for a check. (6) climb milling rests on offset2d returning its outer loop CCW (research 22, Method 2); were that ever broken, the reversal would mill conventional and nothing after it would notice. The first vertex is the loop's smallest point (REQ-OFF-038), so it is convex and the exact sign of its turn is the loop's orientation; a float area sum would round to a random sign far from the origin (spec review: a 2 mm part at 1e9 mm) and is a reduction in a decision (D-055).
+- Rejected: (2) one diagnostic per side (four codes for one cause); (3) a threshold on d (a magic number).
+- Where: REQ-PRF-002, 005, 009, 012, 014, 017, 021.
+
+## DEC-PRF-008: How the tests measure the band
+
+- Date: 2026-10-27; decided by: ours (plan 0007, step 5, tests)
+- Status: Accepted 2026-10-27
+- Decision: the exact smallest distance of a cut edge from the true contour is computed where it is exact in closed form: for a rounded rectangle (research 22 tests 1 to 3, and the property test's boxes) as the segment's distance from the inner rectangle less the corner radius; for a circle (test 5) from its centre; for polygons of lines (the property test's stars) as segment-to-segment distances. For the property test's stars of bulged rows (lines and arcs, not convex) the distance is taken at the edges' vertices and midpoints with offset2d's oracle, as offset2d's own band test does.
+- Why: the part is convex in the first two cases, so its distance is the inner shape's less a radius; lines need no arc. An exact segment-to-arc distance for arbitrary arcs would be a new oracle of its own; offset2d's REQ-OFF-025 tests sample the same way.
+- Rejected: dense sampling of every edge (not exact either, slower).
+- Where: REQ-PRF-011; SPEC, Test plan.
+
+## DEC-PRF-009: Reading REQ-PRF-012's source IDs and REQ-PRF-017's "d > 0"
+
+- Date: 2026-10-27; decided by: ours (spec review of the implementation)
+- Status: Accepted 2026-10-27; the SPEC's wording may follow at its next change
+- Decision: REQ-PRF-012's "each edge keeping its source ID when the CCW loop is reversed" is met by choosing S from offset2d's IDs on the CCW loop, before the reversal; the record carries no IDs (cl, Later), so none are reversed. REQ-PRF-017's "WHERE d > 0" is read as "where P is not S" (DEC-PRF-007 (3)).
+- Why: research 22, trap 2 guards against a start edge picked by a shifted ID, which the test of REQ-PRF-012 checks (S on a long side, then on to that side's CCW start). A d that rounds away gives P = S, and the moves of "d > 0" would then have no length.
+- Where: REQ-PRF-012, 017.
+
+## DEC-PRF-010: The smallest step-down and the largest air gap ratio
+
+- Date: 2026-10-27; decided by: Peter (AQ-030 (a), AQ-031 (a)); the placement in the code ours
+- Status: Accepted 2026-10-27
+- Decision: `stepdown_mm` is declared [0.01, ∞) and `air_gap_ratio` (0, 2] (`MIN_STEPDOWN_MM`, `MAX_AIR_GAP_RATIO` in `_types.py`), so model's `check_job` refuses values outside them. The profile also refuses a step-down below 0.01 mm with `PROFILE_STEP_DOWN`, after the flute-length case, and in the same check a step-down whose pass count (z_top − z_bottom) / a_p,max is not finite. REQ-PRF-005 then has no levels and is skipped, as when REQ-PRF-004 fails. The air gap's upper end is the declaration's alone.
+- Why: a step-down typed in µm builds days of passes; one whose quotient overflows crashed `math.ceil` inside REQ-PRF-005 (spec review). The profile's own step-down check stays a backstop for a caller without `check_job`, as the flute check is. A ratio above 2 puts P far beside the stock, where the approach at the plunge feed crosses whatever stands there (AQ-031).
+- Rejected: a largest pass count (AQ-030 (b): a number without machining meaning); an upper air gap check in REQ-PRF-009 (AQ-031 (b): the declaration does it).
+- Where: REQ-PRF-001, 005, 008, 020.

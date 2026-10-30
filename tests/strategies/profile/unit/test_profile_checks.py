@@ -1,0 +1,432 @@
+# SPDX-License-Identifier: Apache-2.0
+"""Unit tests for what the profile refuses before and at the offset: the declarations, the
+preconditions, the nine value checks, the region check and cancellation (REQ-PRF-001 to 010, 020,
+021; research 22, Parameters, Traps and tests 3 and 4)."""
+
+import dataclasses
+import math
+
+import numpy as np
+import pytest
+
+from geometry2d_checks import codes, polygon
+from model_jobs import example_job
+from offset2d_strategies import circle, to_curve_rows
+from profile_checks import STOCK, make_context, operation, task, with_stock
+from splintercam.cl import ClOperation
+from splintercam.foundation import CANCELLED, Context, Diagnostic, Result, Severity
+from splintercam.geometry2d import CurveRows, PolygonRegion, RegionKind
+from splintercam.model import FlatEndMill, StockBox, Unit, check_job
+from splintercam.offset2d import EdgeClass, SourceClasses, offset_region
+from splintercam.strategies.profile import DECLARATIONS, STRATEGY_ID, ProfileInput, plan_profile
+
+AT = "operation (PROFILE_1)"
+_OFFSET = "splintercam.strategies.profile._plan.offset_region"  # patched to watch the offset
+
+
+def _refused(result: Result[ClOperation], code: str) -> str:
+    # The one diagnostic `code`, an error at the operation; its message.
+    assert result.value is None
+    found = [d for d in result.diagnostics if d.code == code]
+    assert len(found) == 1, codes(result)
+    assert found[0].severity is Severity.ERROR
+    assert found[0].location == AT
+    return found[0].message
+
+
+def _plan(ctx: Context, **changed: object) -> Result[ClOperation]:
+    return plan_profile(task(ctx, **changed), ctx)  # type: ignore[arg-type]
+
+
+@pytest.mark.req("REQ-PRF-001")
+def test_the_declarations_in_order_with_units_defaults_and_ranges() -> None:
+    inf = math.inf
+    expected = [
+        ("allowance_mm", Unit.MM, 0.0, -inf, True, inf, True),
+        ("z_top_mm", Unit.MM, None, -inf, True, inf, True),
+        ("z_bottom_mm", Unit.MM, None, -inf, True, inf, True),
+        ("stepdown_mm", Unit.MM, None, 0.01, False, inf, True),  # [0.01, inf), AQ-030
+        ("cut_feed_mm_per_min", Unit.MM_PER_MIN, None, 0.0, True, inf, True),
+        ("plunge_feed_mm_per_min", Unit.MM_PER_MIN, None, 0.0, True, inf, True),
+        ("air_gap_ratio", Unit.RATIO, 0.2, 0.0, True, 2.0, False),  # (0, 2], AQ-031
+    ]
+    got = [(d.name, d.unit, d.default, d.low, d.low_open, d.high, d.high_open)
+           for d in DECLARATIONS]  # fmt: skip
+    assert got == expected
+    assert all(d.source for d in DECLARATIONS)
+    assert STRATEGY_ID == "profile"
+
+
+@pytest.mark.req("REQ-PRF-001")
+@pytest.mark.parametrize(
+    ("name", "value", "ok"),
+    [("stepdown_mm", 0.01, True), ("stepdown_mm", 0.009, False),
+     ("air_gap_ratio", 2.0, True), ("air_gap_ratio", 2.001, False)],
+)  # fmt: skip
+def test_check_job_holds_the_step_down_and_air_gap_ranges(name: str, value: float,
+                                                          ok: bool) -> None:  # fmt: skip
+    ctx = make_context()
+    checked = check_job(example_job((operation(**{name: value}),)), {STRATEGY_ID: DECLARATIONS},
+                        ctx)  # fmt: skip
+    assert checked.ok is ok
+    if not ok:
+        assert codes(checked) == ["PARAM_OUT_OF_RANGE"]
+
+
+@pytest.mark.req("REQ-PRF-001")
+def test_check_job_accepts_the_example_job_with_the_declarations() -> None:
+    ctx = make_context()
+    given = tuple((n, v) for n, v in operation().parameters if n != "air_gap_ratio")
+    op = dataclasses.replace(operation(), parameters=given)
+    checked = check_job(example_job((op,)), {STRATEGY_ID: DECLARATIONS}, ctx)
+    assert checked.ok, codes(checked)
+    assert checked.value is not None
+    assert checked.value.setup.operations[0] == operation()  # air gap ratio completed to 0.2
+
+
+def _broken(ctx: Context, case: str) -> tuple[ProfileInput, Context]:
+    good = task(ctx)
+    op, params = good.operation, good.operation.parameters
+    shifted = good.contour.rows + np.array([200.0, 0.0, 200.0, 0.0, 200.0, 0.0, 0.0])
+    two_loops = CurveRows(
+        np.concatenate([good.contour.rows, shifted]),
+        np.concatenate([good.contour.ids, good.contour.ids + 8]),
+        np.array([0, 8], dtype=np.int64),
+    )
+    changed = {
+        "strategy": dataclasses.replace(op, strategy="pocket"),
+        "missing": dataclasses.replace(op, parameters=params[:-1]),
+        "order": dataclasses.replace(op, parameters=(params[1], params[0], *params[2:])),
+        "point": dataclasses.replace(op, point_number=2),
+    }
+    if case in changed:
+        return dataclasses.replace(good, operation=changed[case]), ctx
+    if case == "tool":
+        return dataclasses.replace(good, tool=FlatEndMill(2, 10.0, 30.0)), ctx
+    if case == "loops":
+        return dataclasses.replace(good, contour=two_loops), ctx
+    return good, make_context(0.02)  # a context of another tol
+
+
+@pytest.mark.req("REQ-PRF-002")
+@pytest.mark.parametrize(
+    ("case", "named"),
+    [("strategy", "strategy 'pocket'"), ("missing", "parameters"), ("order", "parameters"),
+     ("point", "no point 2"), ("tool", "tool 2"), ("loops", "one loop"), ("tol", "tolerance")],
+)  # fmt: skip
+def test_a_broken_precondition_raises_naming_it(case: str, named: str) -> None:
+    given, context = _broken(make_context(), case)
+    with pytest.raises(ValueError, match="PROFILE_1") as raised:
+        plan_profile(given, context)
+    assert named in str(raised.value)
+
+
+@pytest.mark.req("REQ-PRF-003")
+def test_research_22_test_3_an_allowance_of_minus_r_is_refused() -> None:
+    _refused(_plan(make_context(), allowance_mm=-5.0), "PROFILE_ALLOWANCE")
+    message = _refused(_plan(make_context(), allowance_mm=-6.0), "PROFILE_ALLOWANCE")
+    assert "allowance -6.0" in message
+    assert "-R -5.0" in message
+    assert _plan(make_context(), allowance_mm=-4.9).ok
+
+
+@pytest.mark.req("REQ-PRF-004")
+@pytest.mark.parametrize("z_bottom", [0.0, 1.0])
+def test_a_bottom_not_below_the_top_is_refused(z_bottom: float) -> None:
+    result = _plan(make_context(), z_bottom_mm=z_bottom)
+    message = _refused(result, "PROFILE_DEPTH_INVALID")
+    assert f"z_bottom {z_bottom!r}" in message
+    assert "z_top 0.0" in message
+    assert "PROFILE_TOP_TOO_HIGH" not in codes(result)  # REQ-PRF-020: no levels to check
+
+
+@pytest.mark.req("REQ-PRF-005")
+def test_a_first_level_at_h_r_is_refused() -> None:
+    # z_top 7, z_bottom -1, step 4: z_1 = 3 = h_r (stock top 0).
+    message = _refused(
+        _plan(make_context(), z_top_mm=7.0, z_bottom_mm=-1.0), "PROFILE_TOP_TOO_HIGH"
+    )
+    assert "first level 3.0" in message
+    assert "h_r 3.0" in message
+
+
+@pytest.mark.req("REQ-PRF-005")
+def test_a_stock_top_where_h_r_rounds_to_h_c_is_refused() -> None:
+    result = _plan(make_context(), stock=with_stock(STOCK, z1=1e16))
+    _refused(result, "PROFILE_TOP_TOO_HIGH")
+
+
+@pytest.mark.req("REQ-PRF-005")
+def test_a_first_pass_deeper_than_the_step_down_below_the_stock_top_is_refused() -> None:
+    result = _plan(make_context(), stock=with_stock(STOCK, z1=0.5), stepdown_mm=1.0)
+    message = _refused(result, "PROFILE_FIRST_PASS_DEEP")
+    assert "1.5" in message
+    assert codes(result) == ["PROFILE_FIRST_PASS_DEEP"]
+
+
+@pytest.mark.req("REQ-PRF-005")
+def test_a_first_pass_of_the_step_down_below_the_stock_top_is_accepted_and_eps_more_not() -> None:
+    # Top 0.5, z_top 0, z_bottom -4.5, step 2: three passes of 1.5, the first 2.0 below the top.
+    values = {"z_bottom_mm": -4.5, "stepdown_mm": 2.0}
+    assert _plan(make_context(), stock=with_stock(STOCK, z1=0.5), **values).ok
+    eps = make_context().tolerances.length_eps_mm
+    over = with_stock(STOCK, z1=0.5 + 2.0 * eps)  # 2 + 2·eps below: past step + eps
+    _refused(_plan(make_context(), stock=over, **values), "PROFILE_FIRST_PASS_DEEP")
+
+
+@pytest.mark.req("REQ-PRF-005")
+def test_a_top_above_the_stock_top_is_accepted() -> None:
+    assert _plan(make_context(), z_top_mm=1.0).ok
+
+
+@pytest.mark.req("REQ-PRF-006")
+def test_a_bottom_below_the_stock_bottom_is_refused() -> None:
+    message = _refused(_plan(make_context(), z_bottom_mm=-20.001), "PROFILE_BELOW_STOCK")
+    assert "z_bottom -20.001" in message
+    assert "stock bottom -20.0" in message
+    assert _plan(make_context(), z_bottom_mm=-20.0).ok
+
+
+@pytest.mark.req("REQ-PRF-007")
+def test_research_22_test_4_deeper_than_the_flute_length_is_refused() -> None:
+    deep = with_stock(STOCK, z0=-40.0)
+    message = _refused(_plan(make_context(), stock=deep, z_bottom_mm=-30.001), "PROFILE_TOO_DEEP")
+    assert "depth 30.001" in message
+    assert "flute 30.0" in message
+    assert _plan(make_context(), stock=deep, z_bottom_mm=-30.0).ok
+
+
+@pytest.mark.req("REQ-PRF-007")
+def test_the_depth_is_measured_from_the_stock_top_not_from_z_top() -> None:
+    # z_top -25 to z_bottom -31: 6 mm of cut, but 31 mm below the stock top.
+    deep = with_stock(STOCK, z0=-40.0)
+    result = _plan(make_context(), stock=deep, z_top_mm=-25.0, z_bottom_mm=-31.0, stepdown_mm=30.0)
+    _refused(result, "PROFILE_TOO_DEEP")
+
+
+@pytest.mark.req("REQ-PRF-008")
+def test_a_step_down_above_the_flute_length_is_refused() -> None:
+    assert _plan(make_context(), stepdown_mm=30.0).ok
+    _refused(_plan(make_context(), stepdown_mm=30.001), "PROFILE_STEP_DOWN")
+
+
+@pytest.mark.req("REQ-PRF-008")
+def test_a_step_down_below_a_hundredth_is_refused() -> None:
+    # AQ-030 (a): 0.01 mm the smallest step-down; 5 passes to -0.05.
+    assert _plan(make_context(), z_bottom_mm=-0.05, stepdown_mm=0.01).ok
+    message = _refused(_plan(make_context(), stepdown_mm=0.009), "PROFILE_STEP_DOWN")
+    assert "0.009" in message
+    assert "0.01" in message
+
+
+@pytest.mark.req("REQ-PRF-008", "REQ-PRF-020")
+def test_a_pass_count_that_is_not_finite_is_refused_and_does_not_raise() -> None:
+    # AQ-030: z_top - z_bottom overflows to inf; REQ-PRF-005 has no levels to check.
+    result = _plan(make_context(), z_top_mm=1e308, z_bottom_mm=-1e308)
+    assert codes(result) == ["PROFILE_BELOW_STOCK", "PROFILE_TOO_DEEP", "PROFILE_STEP_DOWN"]
+    assert "pass count" in _refused(result, "PROFILE_STEP_DOWN")
+
+
+@pytest.mark.req("REQ-PRF-009")
+@pytest.mark.parametrize(
+    ("corner", "value", "side"),
+    [("x0", 0.001, "x min"), ("y0", 0.001, "y min"), ("x1", 99.999, "x max"),
+     ("y1", 59.999, "y max")],
+)  # fmt: skip
+def test_a_part_past_a_side_of_the_stock_is_refused(corner: str, value: float, side: str) -> None:
+    message = _refused(_plan(make_context(), stock=with_stock(STOCK, **{corner: value})),
+                       "PROFILE_STOCK_SMALL")  # fmt: skip
+    assert side in message
+
+
+@pytest.mark.req("REQ-PRF-009")
+def test_a_part_touching_the_stock_is_accepted() -> None:
+    flush = with_stock(STOCK, x0=0.0, y0=0.0, x1=100.0, y1=60.0)
+    assert _plan(make_context(), stock=flush).ok
+
+
+@pytest.mark.req("REQ-PRF-009")
+def test_an_air_gap_not_above_eps_len_is_refused() -> None:
+    _refused(_plan(make_context(), air_gap_ratio=1e-7), "PROFILE_AIR_GAP")
+    eps = make_context().tolerances.length_eps_mm
+    ratio = eps / 5.0  # g = ratio·R = eps_len exactly at R = 5
+    assert ratio * 5.0 == eps
+    _refused(_plan(make_context(), air_gap_ratio=ratio), "PROFILE_AIR_GAP")
+    assert _plan(make_context(), air_gap_ratio=2.0 * ratio).ok
+
+
+@pytest.mark.req("REQ-PRF-009")
+def test_an_arc_past_the_stock_is_refused_by_its_extent_not_its_ends() -> None:
+    # Two half circles from (20, 0): their ends lie at y = 0, their top at y = 20.
+    ctx = make_context()
+    part = to_curve_rows([circle(0.0, 0.0, 20.0, 0.0, 2)], ctx)
+    stock = StockBox((-30.0, -30.0, -20.0), (30.0, 19.999, 0.0))
+    message = _refused(plan_profile(task(ctx, contour=part, stock=stock), ctx),
+                       "PROFILE_STOCK_SMALL")  # fmt: skip
+    assert "y max" in message
+
+
+@pytest.mark.req("REQ-PRF-010")
+def test_research_22_test_1_gives_one_loop() -> None:
+    result = _plan(make_context())
+    assert result.ok, codes(result)
+    assert codes(result) == []
+
+
+@pytest.mark.req("REQ-PRF-010")
+def test_a_c_shape_closing_round_a_hole_is_refused_with_its_loop_count() -> None:
+    ctx = make_context()
+    c_shape = polygon([(0, 0), (60, 0), (60, 27), (45, 27), (45, 15), (15, 15), (15, 45),
+                       (45, 45), (45, 33), (60, 33), (60, 60), (0, 60)], ctx)  # fmt: skip
+    stock = with_stock(STOCK, x1=65.0, y1=65.0)
+    message = _refused(plan_profile(task(ctx, contour=c_shape, stock=stock), ctx), "PROFILE_REGION")
+    assert "2" in message
+
+
+@pytest.mark.req("REQ-PRF-010", "REQ-PRF-021")
+def test_offset2d_cancelled_gives_cancelled_alone(monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx = make_context()
+
+    def cancelling(*args: object) -> Result[PolygonRegion]:
+        ctx.cancel.cancel()  # offset2d sees it at its entry and returns no value
+        return offset_region(*args)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(_OFFSET, cancelling)
+    assert plan_profile(task(ctx), ctx).diagnostics == (CANCELLED,)
+
+
+@pytest.mark.req("REQ-PRF-021")
+def test_cancelled_after_the_offset_gives_cancelled_alone(monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx = make_context()
+
+    def then_cancel(*args: object) -> Result[PolygonRegion]:
+        result = offset_region(*args)  # type: ignore[arg-type]
+        ctx.cancel.cancel()
+        return result
+
+    monkeypatch.setattr(_OFFSET, then_cancel)
+    result = plan_profile(task(ctx), ctx)
+    assert result.value is None
+    assert result.diagnostics == (CANCELLED,)
+
+
+def _no_offset(*args: object) -> Result[PolygonRegion]:
+    raise AssertionError("the offset ran")
+
+
+_WARNING = Diagnostic("CLEANUP_MERGED", Severity.WARNING, "from offset2d", "loop 0")
+
+
+def _warning_offset(*args: object) -> Result[PolygonRegion]:
+    # The real offset with a warning of offset2d's own in front of it.
+    result = offset_region(*args)  # type: ignore[arg-type]
+    return Result(result.value, (_WARNING, *result.diagnostics))
+
+
+@pytest.mark.req("REQ-PRF-010")
+def test_offset2d_without_a_value_gives_its_diagnostics_alone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    crossing = Diagnostic("LOOPS_CROSS", Severity.ERROR, "two loops cross", "loop 0")
+    monkeypatch.setattr(_OFFSET, lambda *args: Result(None, (_WARNING, crossing)))  # type: ignore[misc]
+    ctx = make_context()
+    result = plan_profile(task(ctx), ctx)
+    assert result.value is None
+    assert result.diagnostics == (_WARNING, crossing)
+
+
+@pytest.mark.req("REQ-PRF-010", "REQ-PRF-019")
+def test_offset2ds_diagnostics_come_first_with_a_value_and_before_profile_region(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_OFFSET, _warning_offset)
+    ctx = make_context()
+    result = plan_profile(task(ctx), ctx)
+    assert result.ok
+    assert result.diagnostics == (_WARNING,)
+    c_shape = polygon([(0, 0), (60, 0), (60, 27), (45, 27), (45, 15), (15, 15), (15, 45),
+                       (45, 45), (45, 33), (60, 33), (60, 60), (0, 60)], ctx)  # fmt: skip
+    region = plan_profile(
+        task(ctx, contour=c_shape, stock=with_stock(STOCK, x1=65.0, y1=65.0)), ctx
+    )
+    assert codes(region) == ["CLEANUP_MERGED", "PROFILE_REGION"]
+
+
+@pytest.mark.req("REQ-PRF-015")
+def test_an_approach_blocked_at_both_candidates_is_refused_naming_s(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # No real part reaches it (DEC-PRF-003): the blocked check is forced.
+    monkeypatch.setattr("splintercam.strategies.profile._approach._blocked", lambda *a: True)  # type: ignore[misc]
+    monkeypatch.setattr(_OFFSET, _warning_offset)
+    ctx = make_context()
+    result = plan_profile(task(ctx), ctx)
+    message = _refused(result, "PROFILE_APPROACH_BLOCKED")
+    assert codes(result) == ["CLEANUP_MERGED", "PROFILE_APPROACH_BLOCKED"]
+    first = offset_region(task(ctx).contour, RegionKind.MATERIAL, 5.0, _classes(ctx), ctx).value
+    assert first is not None
+    assert repr((float(first.points[0, 0]), float(first.points[0, 1]))) in message
+
+
+def _classes(ctx: Context) -> SourceClasses:
+    ids = np.unique(task(ctx).contour.ids)
+    return SourceClasses(ids, np.full(ids.size, int(EdgeClass.MATERIAL), dtype=np.int8))
+
+
+@pytest.mark.req("REQ-PRF-012")
+def test_a_clockwise_loop_from_offset2d_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    # DEC-PRF-007 (6): reversed, the loop would be milled conventional; offset2d broke its promise.
+    def clockwise(*args: object) -> Result[PolygonRegion]:
+        region = offset_region(*args).value  # type: ignore[arg-type]
+        assert region is not None
+        back = slice(None, None, -1)
+        points, ids = region.points[back].copy(), region.source_ids[back].copy()
+        return Result(PolygonRegion(points, region.loop_starts, ids, region.fixed[back].copy()))
+
+    monkeypatch.setattr(_OFFSET, clockwise)
+    ctx = make_context()
+    with pytest.raises(ValueError, match="not CCW"):
+        plan_profile(task(ctx), ctx)
+
+
+@pytest.mark.req("REQ-PRF-021")
+def test_cancelled_at_entry_gives_cancelled_alone_without_the_offset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ctx = make_context()
+    ctx.cancel.cancel()
+    monkeypatch.setattr(_OFFSET, _no_offset)
+    result = plan_profile(task(ctx), ctx)
+    assert result.value is None
+    assert result.diagnostics == (CANCELLED,)
+
+
+@pytest.mark.req("REQ-PRF-020")
+def test_every_value_error_is_reported_in_order_and_no_offset_runs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ctx = make_context()
+    monkeypatch.setattr(_OFFSET, _no_offset)
+    result = plan_profile(task(ctx, allowance_mm=-6.0, z_bottom_mm=1.0), ctx)
+    assert result.value is None
+    assert codes(result) == ["PROFILE_ALLOWANCE", "PROFILE_DEPTH_INVALID"]
+    # The depth check before the later ones, its levels skipped.
+    small = with_stock(STOCK, x1=99.0)
+    later = plan_profile(task(ctx, stock=small, z_bottom_mm=1.0, air_gap_ratio=1e-7), ctx)
+    assert codes(later) == ["PROFILE_DEPTH_INVALID", "PROFILE_STOCK_SMALL", "PROFILE_AIR_GAP"]
+
+
+@pytest.mark.req("REQ-PRF-020")
+def test_six_failing_value_checks_report_in_requirement_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ctx = make_context()
+    monkeypatch.setattr(_OFFSET, _no_offset)
+    tool = FlatEndMill(1, 10.0, 0.5)  # flute 0.5: the depth and the step-down exceed it
+    stock = StockBox((1.0, -5.0, -5.0), (105.0, 65.0, 0.5))  # top 0.5, part past x min
+    result = plan_profile(task(ctx, tool=tool, stock=stock, z_bottom_mm=-6.0, stepdown_mm=1.0,
+                               air_gap_ratio=1e-7), ctx)  # fmt: skip
+    assert codes(result) == [
+        "PROFILE_FIRST_PASS_DEEP", "PROFILE_BELOW_STOCK", "PROFILE_TOO_DEEP",
+        "PROFILE_STEP_DOWN", "PROFILE_STOCK_SMALL", "PROFILE_AIR_GAP",
+    ]  # fmt: skip

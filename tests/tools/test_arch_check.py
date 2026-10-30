@@ -179,6 +179,20 @@ def test_python_in_no_module_or_unparsable_fails(tmp_path: Path) -> None:
     assert found[1] == "splintercam/stray/s.py: Python file in no module of modules.yaml"
 
 
+def test_a_group_folders_init_passes_only_without_imports(tmp_path: Path) -> None:
+    # strategies/ groups strategies/pocket and strategies/profile; stray/ groups nothing.
+    assert _check(tmp_path, {"strategies/__init__.py": '"""Strategies."""\n'}) == []
+    found = _check(tmp_path, {"strategies/__init__.py": "import os\n", "stray/__init__.py": ""})
+    assert found == [
+        "splintercam/strategies/__init__.py: Python file in no module of modules.yaml",
+        "splintercam/stray/__init__.py: Python file in no module of modules.yaml",
+    ]
+    unparsable = _check(tmp_path / "other", {"strategies/__init__.py": "def (:\n"})
+    assert unparsable == [
+        "splintercam/strategies/__init__.py: Python file in no module of modules.yaml"
+    ]
+
+
 @pytest.mark.parametrize(
     ("entry", "expected"),
     [
