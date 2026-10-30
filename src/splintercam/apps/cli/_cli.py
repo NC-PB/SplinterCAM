@@ -14,14 +14,11 @@ from splintercam.job import Diagnostic, JobReport, Severity, run_job
 # The input could not be read at all: 2, as `ncx` exits for unreadable input or a missing
 # machine file (research 27, Exit codes; DEC-CLI-002).
 _UNREADABLE = frozenset({"JOB_FILE_UNREADABLE", "DXF_UNREADABLE", "JOB_MACHINE_NOT_FOUND"})
-# Every character that breaks or hides a line, after the backslash itself, so a line reads back
-# as one diagnostic and an escape cannot be confused with the text (DEC-CLI-003).
+# One diagnostic per line, as `NCX_OUTPUT_UNREAD` holds ncx's text verbatim: the backslash and
+# every character that breaks or hides a line but tab escaped (DEC-CLI-001, 003).
 _CONTROLS = (*range(0x20), 0x7F, *range(0x80, 0xA0), 0x2028, 0x2029)
-_ESCAPES = {ord("\\"): "\\\\", ord("\n"): "\\n", ord("\r"): "\\r"} | {
-    c: f"\\x{c:02x}" if c < 0x100 else f"\\u{c:04x}"
-    for c in _CONTROLS
-    if c not in (0x09, 0x0A, 0x0D)
-}
+_ESCAPES = {c: f"\\x{c:02x}" if c < 0x100 else f"\\u{c:04x}" for c in _CONTROLS if c != 0x09} | {
+    ord("\\"): "\\\\", ord("\n"): "\\n", ord("\r"): "\\r"}  # fmt: skip
 _AFTER_A_FAILED_RUN = (
     "exit 0: a usable run, its files on stdout; 1: an error, a cancel or, with --strict, a "
     "warning; 2: unreadable input. After 1 or 2, take no file from the output folder: files may "
@@ -55,14 +52,9 @@ def exit_code(report: JobReport, strict: bool) -> int:
     return 0 if report.ok and not warned else 1
 
 
-def _escape(text: str) -> str:
-    # One diagnostic per line: `NCX_OUTPUT_UNREAD` holds ncx's text verbatim (DEC-CLI-001, 003).
-    return text.translate(_ESCAPES)
-
-
 def _line(d: Diagnostic) -> str:
-    where = "" if d.location is None else f" {_escape(d.location)}"
-    return f"{d.severity.name} {d.code}{where}: {_escape(d.message)}"
+    where = "" if d.location is None else f" {d.location.translate(_ESCAPES)}"
+    return f"{d.severity.name} {d.code}{where}: {d.message.translate(_ESCAPES)}"
 
 
 def _print_report(report: JobReport, code: int, as_json: bool) -> None:
@@ -73,9 +65,9 @@ def _print_report(report: JobReport, code: int, as_json: bool) -> None:
     if as_json:
         diagnostics = [{"code": d.code, "severity": d.severity.name, "message": d.message,
                         "location": d.location} for d in report.diagnostics]  # fmt: skip
-        sys.stdout.write(json.dumps({"diagnostics": diagnostics, "ncx_file": ncx_file,
-                                     "nc_files": nc_files, "exit_code": code},
-                                    sort_keys=True, ensure_ascii=True) + "\n")  # fmt: skip
+        found = {"diagnostics": diagnostics, "ncx_file": ncx_file, "nc_files": nc_files,
+                 "exit_code": code}  # fmt: skip
+        sys.stdout.write(json.dumps(found, sort_keys=True) + "\n")  # ensure_ascii by default
         return
     sys.stderr.writelines(_line(d) + "\n" for d in report.diagnostics)
     sys.stdout.writelines(path + "\n" for path in filter(None, [ncx_file, *nc_files]))

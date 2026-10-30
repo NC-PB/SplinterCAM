@@ -54,7 +54,6 @@ def test_relative_paths_are_printed_absolute(
     assert main(_RUN) == 0
     lines = capsys.readouterr().out.splitlines()
     assert lines == [str(Path("out/A.ncx").absolute()), str(Path("out/A.h").absolute())]
-    assert all(Path(line).is_absolute() for line in lines)
 
 
 @pytest.mark.req("REQ-CLI-003")
