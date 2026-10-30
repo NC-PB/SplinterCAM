@@ -60,6 +60,29 @@ jobs:
           tools/arch-check
           tools/size-check
           echo "| docs only: arch-check and size-check | pass |" >> "$RUNNER_TEMP/timings.md"
+      # The pinned ncx for the real-ncx integration test (plan 0007 question 3; AQ-025, Peter 2026-10-27):
+      # NCXchange at f74559c, built with .NET 10 on the Ubuntu runner only.
+      - name: pinned NCXchange
+        if: steps.scope.outputs.full == 'true' && matrix.os == 'ubuntu-24.04'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: NC-PB/NCXchange_
+          ref: f74559c04a8c548d55d45c9bea04f48118e009e3
+          path: ncxchange
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        if: steps.scope.outputs.full == 'true' && matrix.os == 'ubuntu-24.04'
+        with:
+          global-json-file: ncxchange/global.json
+      - name: build ncx
+        if: steps.scope.outputs.full == 'true' && matrix.os == 'ubuntu-24.04'
+        run: |
+          start=$SECONDS
+          dotnet publish ncxchange/src/Ncx.Cli/Ncx.Cli.csproj -c Release -o "$RUNNER_TEMP/ncx"
+          ln -s "$RUNNER_TEMP/ncx/Ncx.Cli" "$RUNNER_TEMP/ncx/ncx"
+          echo "$RUNNER_TEMP/ncx" >> "$GITHUB_PATH"
+          echo "SPLINTERCAM_NCXCHANGE=$GITHUB_WORKSPACE/ncxchange" >> "$GITHUB_ENV"
+          "$RUNNER_TEMP/ncx/ncx" --version || true
+          echo "| build pinned ncx | $((SECONDS - start)) s |" >> "$RUNNER_TEMP/timings.md"
       - name: bootstrap
         if: steps.scope.outputs.full == 'true'
         run: |
