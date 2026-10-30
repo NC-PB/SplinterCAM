@@ -12,7 +12,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from cli_fakes import FakeRunJob, report
+from cli_fakes import FakeRunJob, escaped, report
 from splintercam.apps.cli import main
 from splintercam.job import Diagnostic, JobReport, Severity
 
@@ -76,4 +76,4 @@ def test_the_exit_code_is_a_function_of_the_report_and_strict(
         assert [line.split(" ", 2)[1].rstrip(":") for line in lines] == [
             *(d.code for d in diagnostics), *closing]  # fmt: skip
         if closing:
-            assert lines[-1].endswith(", ".join(files))
+            assert lines[-1].endswith(", ".join(escaped(Path(f)) for f in files))

@@ -104,6 +104,34 @@ def test_a_temporary_folder_left_after_the_move_takes_the_files_back(
 
 
 @pytest.mark.req("REQ-JOB-019")
+def test_a_file_the_take_back_cannot_remove_stays_named(
+    job_file: Path, tmp_path: Path, ctx: Context, fake_ncx: FakeRunNcx,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:  # fmt: skip
+    out = tmp_path / "out"
+    real_unlink = Path.unlink
+
+    def refuse_rmtree(path: Path) -> None:
+        raise PermissionError(13, "Permission denied", str(path))
+
+    def refuse_the_program(self: Path, missing_ok: bool = False) -> None:
+        if self == out / "RECT_FILLETS.h":
+            raise PermissionError(13, "Permission denied", str(self))
+        real_unlink(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr("splintercam.job._output.shutil.rmtree", refuse_rmtree)
+    monkeypatch.setattr(Path, "unlink", refuse_the_program)
+    report = _run(job_file, out, ctx, fake_ncx, strict=True)
+    temporary = fake_ncx.calls[0].work_dir.parent
+    monkeypatch.undo()
+    try:
+        assert codes(report.diagnostics)[-2:] == ["JOB_WORK_DIR_LEFT", "JOB_STRICT_WITHHELD"]
+        assert report.nc_files == (out / "RECT_FILLETS.h",)  # still there, so named (DEC-JOB-016)
+    finally:
+        shutil.rmtree(temporary)
+
+
+@pytest.mark.req("REQ-JOB-019")
 def test_strict_with_no_staged_file_is_still_an_error(
     job_file: Path, tmp_path: Path, ctx: Context, fake_ncx: FakeRunNcx
 ) -> None:

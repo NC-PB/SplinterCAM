@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from cli_fakes import escaped
 from job_files import CASE, MACHINE, FakeRunNcx, listing
 from splintercam.apps.cli import main
 
@@ -29,6 +30,7 @@ def _run(argv: list[str], capsys: pytest.CaptureFixture[str]) -> tuple[int, str,
     return code, out, err
 
 
+@pytest.mark.req("REQ-CLI-004")
 @pytest.mark.req("REQ-CLI-007")
 @pytest.mark.parametrize("as_json", [False, True])
 def test_the_same_job_twice_prints_the_same_report_but_for_the_folders(
@@ -56,6 +58,7 @@ def test_the_same_job_twice_prints_the_same_report_but_for_the_folders(
         assert found == [*codes, "FILES_LEFT"]  # the NCX file is there (AQ-040 (c))
 
 
+@pytest.mark.req("REQ-CLI-003")
 @pytest.mark.req("REQ-CLI-005")
 def test_without_ncx_an_error_and_nothing_on_stdout(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -65,7 +68,7 @@ def test_without_ncx_an_error_and_nothing_on_stdout(
     assert (code, out) == (1, "")
     *_, error, left = err.splitlines()
     assert error.startswith("ERROR JOB_NCX_NOT_FOUND")
-    assert left.endswith(str(tmp_path / "out" / "RECT_FILLETS.ncx"))
+    assert left.endswith(escaped(tmp_path / "out" / "RECT_FILLETS.ncx"))
 
 
 @pytest.mark.req("REQ-CLI-001")
@@ -88,7 +91,8 @@ def test_a_warning_under_strict_leaves_no_nc_program(
     *_, withheld, left = err.splitlines()
     assert "JOB_MACHINE_OVERRIDDEN" in err
     assert withheld.startswith("INFO JOB_STRICT_WITHHELD")
-    assert left == f"INFO FILES_LEFT: left on disk, not for the machine: {out / 'RECT_FILLETS.ncx'}"
+    ncx_file = escaped(out / "RECT_FILLETS.ncx")
+    assert left == f"INFO FILES_LEFT: left on disk, not for the machine: {ncx_file}"
 
 
 @pytest.mark.req("REQ-CLI-005")

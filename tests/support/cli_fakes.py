@@ -27,6 +27,12 @@ def report(*diagnostics: Diagnostic, ncx_file: Path | None = None,
     return JobReport(diagnostics, None, ncx_file, nc_files)
 
 
+def escaped(path: Path) -> str:
+    """`path` as the text report writes it: backslashes doubled, so a Windows path matches
+    (DEC-CLI-003); the test paths hold no other escaped character."""
+    return str(path).replace("\\", "\\\\")
+
+
 def diagnostic(code: str, severity: Severity = Severity.ERROR, location: str | None = None,
                message: str = "what happened") -> Diagnostic:  # fmt: skip
     return Diagnostic(code, severity, message, location)

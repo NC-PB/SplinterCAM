@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from cli_fakes import FakeRunJob, diagnostic, report
+from cli_fakes import FakeRunJob, diagnostic, escaped, report
 from splintercam.apps.cli import main
 from splintercam.job import Severity
 
@@ -90,7 +90,7 @@ def test_backslashes_and_every_other_line_break_are_escaped(
 
 
 def _left(*paths: Path) -> str:
-    return f"INFO FILES_LEFT: left on disk, not for the machine: {', '.join(map(str, paths))}\n"
+    return f"INFO FILES_LEFT: left on disk, not for the machine: {', '.join(map(escaped, paths))}\n"
 
 
 @pytest.mark.req("REQ-CLI-003")
@@ -146,8 +146,8 @@ def test_a_path_left_is_escaped_as_a_message(
     path = Path("o\nut", "A.ncx")
     fake_run_job.report = report(diagnostic("NCX_STEP_FAILED"), ncx_file=path)
     assert main(_RUN) == 1
-    escaped = str(path.absolute()).replace("\\", "\\\\").replace("\n", "\\n")
-    assert capsys.readouterr().err.splitlines()[-1].endswith(f": {escaped}")
+    expected = escaped(path.absolute()).replace("\n", "\\n")
+    assert capsys.readouterr().err.splitlines()[-1].endswith(f": {expected}")
 
 
 @pytest.mark.req("REQ-CLI-004")
