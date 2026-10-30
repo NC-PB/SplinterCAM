@@ -81,6 +81,8 @@ def _plan_all(job: JobData, contour: CurveRows, ctx: Context) -> Result[tuple[Cl
         found += (relocate(d, index, operation.name) for d in result.diagnostics)
         if result.value is not None:
             planned.append(result.value)
+        elif not ctx.cancel.is_cancelled and all(d.severity is not Severity.ERROR for d in found):
+            raise ValueError(f"operation {index}: the strategy gave no value and no error")
     return Result(tuple(planned), tuple(found))
 
 
@@ -95,8 +97,13 @@ def _stages(run: _Run, job_file: Path, output_dir: Path, machine_file: Path | No
     operations = run.take(_plan_all(job, part.loop, run.ctx))
     run.cl_data = run.take(Result(make_cl_data(job.setup.work_offset, operations, run.ctx)))
     program = run.take(write_ncx(run.cl_data, read.program, run.ctx))
-    run.ncx_file = run.take(write_ncx_file(output, read.program.name, program))
-    run.nc_files = run.take(compile_ncx(read.ncx, run.ncx_file, read.machine, program, run.ctx))
+    written = write_ncx_file(output, read.program.name, program)
+    run.ncx_file = written.value  # named even when a cancel comes now: the file is there
+    ncx_file = run.take(written)
+    # The last stage: a cancel after it stops nothing more (REQ-JOB-021), so no poll.
+    compiled = compile_ncx(read.ncx, ncx_file, read.machine, program, run.ctx)
+    run.found += compiled.diagnostics
+    run.nc_files = compiled.value or ()
 
 
 def run_job(job_file: Path, output_dir: Path, *, ncx_executable: Path | None = None,

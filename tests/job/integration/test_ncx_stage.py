@@ -243,3 +243,30 @@ def test_a_folder_or_a_file_already_there_is_not_moved(
     assert listing(out) == ["RECT_FILLETS.ncx"]
     assert (out / "RECT_FILLETS.ncx").read_text(encoding="ascii").startswith("FILE=BEGIN")
     assert report.nc_files == ()
+
+
+@pytest.mark.req("REQ-JOB-018")
+def test_a_temporary_folder_that_cannot_be_made_is_an_error(
+    job_file: Path, tmp_path: Path, fake_ncx: FakeRunNcx, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def refuse(**_: object) -> str:
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr("splintercam.job._output.tempfile.mkdtemp", refuse)
+    report = _run(job_file, tmp_path / "out", default_context(), fake_ncx.exe)
+    assert _errors(report) == ["JOB_WORK_DIR_UNWRITABLE"]
+    assert listing(tmp_path / "out") == ["RECT_FILLETS.ncx"]
+    assert report.ncx_file == tmp_path / "out" / "RECT_FILLETS.ncx"
+    assert fake_ncx.calls == []
+
+
+@pytest.mark.req("REQ-JOB-018")
+def test_a_temporary_folder_inside_the_output_folder_is_refused(
+    job_file: Path, tmp_path: Path, fake_ncx: FakeRunNcx, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    out = tmp_path / "out"
+    monkeypatch.setattr(tempfile, "tempdir", str(out))  # as TMPDIR set to the output folder
+    report = _run(job_file, out, default_context(), fake_ncx.exe)
+    assert _errors(report) == ["JOB_WORK_DIR_UNWRITABLE"]
+    assert listing(out) == ["RECT_FILLETS.ncx"]
+    assert fake_ncx.calls == []

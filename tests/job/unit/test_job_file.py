@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from job_files import MACHINE, Job, codes, example, job_folder, listing, operation
+from job_files import CASE, MACHINE, Job, codes, example, job_folder, listing, operation
 from splintercam.foundation import Context, Diagnostic, Severity
 from splintercam.job import JobReport, run_job
 from splintercam.job._layout import read_job_file
@@ -428,3 +428,34 @@ def test_numbers_that_are_finite_pass(tmp_path: Path) -> None:
     assert read.value is not None
     value = dict(read.value.data.setup.operations[0].parameters)["z_bottom_mm"]
     assert math.isfinite(value)
+
+
+@pytest.mark.req("REQ-JOB-002")
+def test_a_file_nested_too_deeply_is_invalid(tmp_path: Path, ctx: Context) -> None:
+    report = _run(tmp_path, ctx, '{"a": ' + "[" * 100_000)
+    assert _errors(report) == [("JOB_FILE_INVALID", "line 1, column 1")]
+
+
+@pytest.mark.req("REQ-JOB-002")
+def test_an_int_beyond_the_double_range_is_invalid(tmp_path: Path, ctx: Context) -> None:
+    big = "1" + "0" * 400  # an int json reads, beyond the largest double
+    report = _run(tmp_path, ctx, '{"version": 1,\n "a": ' + big + ', "b": NaN}')
+    assert _errors(report) == [("JOB_FILE_INVALID", "line 2, column 7")]
+    assert codes(_run(tmp_path / "2", ctx, '{"a": ' + "9" * 5000 + "}").diagnostics) == [
+        "JOB_FILE_INVALID"
+    ]
+
+
+@pytest.mark.req("REQ-JOB-005")
+def test_a_repeated_key_is_one_diagnostic_whatever_its_first_value(
+    tmp_path: Path, ctx: Context
+) -> None:
+    text = _text(example()).replace('"part": {', '"part": null, "part": {', 1)
+    assert _errors(_run(tmp_path, ctx, text)) == [("JOB_KEY_REPEATED", "part")]
+
+
+@pytest.mark.req("REQ-JOB-009")
+def test_the_golden_job_without_a_machine_file_is_refused(tmp_path: Path, ctx: Context) -> None:
+    report = run_job(CASE / "job.json", tmp_path / "out", ctx=ctx)
+    assert _errors(report) == [("JOB_MACHINE_NOT_FOUND", "machine")]
+    assert not (tmp_path / "out").exists()

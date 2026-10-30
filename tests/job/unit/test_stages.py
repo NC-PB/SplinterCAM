@@ -432,3 +432,36 @@ def test_the_default_context(job_file: Path, tmp_path: Path) -> None:
     ctx.progress(0.5)
     report = run_job(job_file, tmp_path / "out", ncx_executable=tmp_path / "no-ncx")
     assert _errors(report) == ["JOB_NCX_NOT_FOUND"]
+
+
+@pytest.mark.req("REQ-JOB-014")
+def test_a_strategy_with_no_value_and_no_error_is_a_programming_error(
+    job_file: Path, tmp_path: Path, ctx: Context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def plan(task: ProfileInput, op_ctx: Context) -> Result[ClOperation]:
+        del task, op_ctx
+        return Result(None, ())  # would leave the operation out of the program (DEC-JOB-002)
+
+    _fake_registry(monkeypatch, plan)
+    with pytest.raises(ValueError, match="no value and no error"):
+        _run(job_file, tmp_path / "out", ctx)
+    assert listing(tmp_path / "out") == []
+
+
+@pytest.mark.req("REQ-JOB-016", "REQ-JOB-021")
+def test_a_cancel_while_the_ncx_file_is_written_still_names_it(
+    job_file: Path, tmp_path: Path, ctx: Context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real = Path.write_bytes
+
+    def then_cancel(self: Path, data: bytes) -> int:
+        written = real(self, data)
+        ctx.cancel.cancel()
+        return written
+
+    monkeypatch.setattr(Path, "write_bytes", then_cancel)
+    report = _run(job_file, tmp_path / "out", ctx)
+    assert report.diagnostics[-1] == CANCELLED
+    assert report.ncx_file == tmp_path / "out" / "RECT_FILLETS.ncx"
+    assert listing(tmp_path / "out") == ["RECT_FILLETS.ncx"]
+    assert report.nc_files == ()

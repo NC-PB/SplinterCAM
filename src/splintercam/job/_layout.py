@@ -84,7 +84,7 @@ def _checks(machine: Path | None) -> Mapping[str, Check]:
         if not _named(value):
             return _value(False, "a non-empty string")
         if machine is None or not machine.is_file():
-            return ("JOB_MACHINE_NOT_FOUND", f"the machine file {machine} does not exist")
+            return ("JOB_MACHINE_NOT_FOUND", f"the machine file {machine} is not a file")
         return None
 
     def tool_type(value: object, tool: JsonObject) -> tuple[str, str] | None:
@@ -129,6 +129,8 @@ class _Walk:
         for key, spec in layout.keys:
             here, generic = (f"{path}.{key}", f"{kind}.{key}") if path else (key, key)
             given = value.get(key)
+            if names.count(key) > 1:
+                continue  # one diagnostic per key: JOB_KEY_REPEATED below (DEC-JOB-009)
             if key in layout.optional and given is None:
                 continue  # absent and null mean the same (DEC-JOB-003)
             if key not in names or (given is None and spec != LEAF):

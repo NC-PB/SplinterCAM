@@ -9,7 +9,7 @@ import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
-from splintercam.foundation import Context, Diagnostic, Result, Severity
+from splintercam.foundation import CANCELLED, Context, Diagnostic, Result, Severity
 from splintercam.ncx import NcxCall, NcxProgram, run_ncx
 
 
@@ -101,18 +101,28 @@ def compile_ncx(executable: Path | None, ncx_file: Path, machine: Path, program:
         what = "no ncx on the PATH" if executable is None else f"{executable} does not exist"
         text = f"{what}: the NCX file is written, no NC program"  # plan 0007, question 3
         return Result(None, (Diagnostic("JOB_NCX_NOT_FOUND", Severity.ERROR, text),))
+    try:
+        temporary = Path(tempfile.mkdtemp(prefix="splintercam-job-"))
+    except OSError as error:
+        text = f"cannot make a temporary folder for ncx: {error}"
+        return Result(None, (Diagnostic("JOB_WORK_DIR_UNWRITABLE", Severity.ERROR, text),))
     found: list[Diagnostic] = []
     nc_files: tuple[Path, ...] = ()
-    temporary = Path(tempfile.mkdtemp(prefix="splintercam-job-"))
     try:
+        if ncx_file.parent in temporary.parents:  # REQ-JOB-018: never inside the output folder
+            raise OSError(f"{temporary} lies in the output folder; set TMPDIR or TEMP elsewhere")
         work, staging = temporary / "work", temporary / "staging"
         work.mkdir()
         staging.mkdir()
+    except OSError as error:
+        text = f"cannot make the working folders for ncx: {error}"
+        found.append(_error("JOB_WORK_DIR_UNWRITABLE", text, temporary))  # DEC-JOB-014
+    else:
         ran = run_ncx(NcxCall(executable, work, ncx_file, machine, staging), program, ctx)
         found += ran.diagnostics
-        if (
-            ran.ok and not ctx.cancel.is_cancelled
-        ):  # a cancel after the last step: none (DEC-JOB-011)
+        if ran.ok and ctx.cancel.is_cancelled:  # a late cancel moves none (DEC-JOB-011)
+            found.append(CANCELLED)
+        elif ran.ok:
             nc_files = _move(staging, ncx_file.parent, found)
     finally:
         try:

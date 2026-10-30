@@ -5,6 +5,7 @@ infinite number (REQ-JOB-002; DEC-JOB-003)."""
 import json
 import math
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,6 +30,13 @@ def _finite(text: str) -> float:
     return value
 
 
+def _finite_int(text: str) -> int:
+    # An int beyond the double range is no number model can take (REQ-JOB-002: reads as inf).
+    if abs(value := int(text)) > sys.float_info.max:
+        raise ValueError(text)
+    return value
+
+
 # A JSON string, or a number or constant: a pass after Python's json stopped on one finds it
 # (RFC 8259 has no NaN or infinities; DEC-JOB-003).
 _TOKENS = re.compile(r'"(?:[^"\\]|\\.)*"|-?(?:Infinity|NaN)|-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?')
@@ -44,11 +52,6 @@ def _not_finite_at(text: str) -> int:
     # range (as 1e400, or an int over its digit limit, which is beyond it too).
     tokens = (m for m in _TOKENS.finditer(text) if m.group()[0] != '"')
     return next((m.start() for m in tokens if not math.isfinite(float(m.group()))), 0)
-
-
-def _kind(value: object) -> str:
-    kinds = ((bool, "a boolean"), (str, "a string"), (list, "an array"), (type(None), "null"))
-    return next((name for kind, name in kinds if isinstance(value, kind)), "a number")
 
 
 def _invalid(where: str, message: str, code: str = "JOB_FILE_INVALID") -> Result[JsonObject]:
@@ -69,14 +72,21 @@ def read_json(path: Path) -> Result[JsonObject]:
     except UnicodeDecodeError as error:
         head = data[: error.start].decode("utf-8-sig")
         return _invalid(_where(head, len(head)), "the job file is not UTF-8")
+    return _parse(text)
+
+
+def _parse(text: str) -> Result[JsonObject]:
     try:
         value = json.loads(text, object_pairs_hook=lambda pairs: JsonObject(tuple(pairs)),
-                           parse_constant=_finite, parse_float=_finite)  # fmt: skip
+                           parse_constant=_finite, parse_float=_finite,
+                           parse_int=_finite_int)  # fmt: skip
     except json.JSONDecodeError as error:
         return _invalid(f"line {error.lineno}, column {error.colno}", f"not JSON: {error.msg}")
-    except ValueError:  # from _finite, or an int beyond the digit limit of Python's json
+    except RecursionError:
+        return _invalid("line 1, column 1", "arrays or objects nested too deeply")
+    except ValueError:  # from the hooks, or an int beyond the digit limit of Python's json
         message = "NaN and infinite numbers are not JSON (RFC 8259)"
         return _invalid(_where(text, _not_finite_at(text)), message)
     if not isinstance(value, JsonObject):
-        return _invalid("line 1, column 1", f"the job file holds {_kind(value)}, not one object")
+        return _invalid("line 1, column 1", "the job file holds no JSON object")
     return Result(value)
