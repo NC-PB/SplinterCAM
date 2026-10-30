@@ -144,7 +144,7 @@ The NCX writer (topic 27) turns the record into the canonical NCX text file (D-0
 | --- | --- |
 | program start | `FILE=BEGIN NCX=1`, `PROGRAM=BEGIN NAME="…" NUMBER=n`, then a complete header `FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF` (writers must emit a complete header; Fanuc needs `NUMBER`, `CMP300`; motion before `UNITS` is `VM200`) |
 | setup | `ORIGIN=n` |
-| operation header | `SECTION="name"`; tool change `TOOL=n RPM=s SPINDLE=CW` with the operation's point words in one block (D-155, R1-11); a change of point without a tool change goes with the operation's first move, at clearance height (D-154) (Heidenhain takes the speed from `TOOL CALL`); `COOLANT=ON`; `TOLERANCE=… TOLERANCE_MODE=…` and, while NCXchange D151 is open, `TOLERANCE:ROTARY=…` from a declared parameter stored in radians and shown in degrees (D-028; default still open, T-039) |
+| operation header | `SECTION="name"`; tool change `TOOL=n SPINDLE=CW RPM=s` (canonical order: `SPINDLE` ranks before `RPM`) with the operation's point words in one block (D-155, R1-11); a change of point without a tool change goes with the operation's first move, at clearance height (D-154) (Heidenhain takes the speed from `TOOL CALL`); `COOLANT=ON`; `TOLERANCE=… TOLERANCE_MODE=…` and, while NCXchange D151 is open, `TOLERANCE:ROTARY=…` from a declared parameter stored in radians and shown in degrees (D-028; default still open, T-039) |
 | control compensation | the point words and a `COMMENT="…"` at the start of the operation naming the point and what its radius register must hold: r plus wear, only wear when r = 0 (below) |
 | RAPID | `RAPID X Y Z`, never with `F` (`VM440`) |
 | LINE | `LINE X Y Z`, `F=` only where the feed changes (modal) |

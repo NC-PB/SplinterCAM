@@ -33,7 +33,7 @@ def _tool_block(operation: ClOperation) -> str:
     header = operation.header
     rpm = to_text(to_steps(np.array([header.spindle_rpm])))[0]
     tool = header.tool_number
-    return f"TOOL={tool} OFFSET:LEN={tool} RPM={rpm} SPINDLE=CW"
+    return f"TOOL={tool} OFFSET:LEN={tool} SPINDLE=CW RPM={rpm}"
 
 
 def _operation_blocks(index: int, operation: ClOperation, columns: Printed) -> list[str]:

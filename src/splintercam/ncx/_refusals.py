@@ -77,7 +77,7 @@ def _short_arcs(operation: ClOperation, columns: Printed) -> NDArray[np.intp]:
 def operation_errors(
     where: str, operation: ClOperation, first: ClHeader, columns: Printed
 ) -> list[Diagnostic]:
-    """REQ-NCX-003, 010, 013, 015, 016 and 026 for one operation, in that order."""
+    """REQ-NCX-003, 010, 013 (k, then a), 015, 016 and 026 for one operation, in that order."""
     header = operation.header
     found: list[Diagnostic] = []
     if (header.tool_number, header.spindle_rpm) != (first.tool_number, first.spindle_rpm):
@@ -96,6 +96,13 @@ def operation_errors(
     if header.point_number != 1:
         message = f"point {header.point_number}: only point 1 until NCX has point words (AQ-005)"
         found.append(_error("NCX_POINT_UNSUPPORTED", message, where))
+    if header.axial_offset_mm != 0.0:  # exact (DEC-NCX-018)
+        message = (
+            f"point {header.point_number}: axial offset a = {header.axial_offset_mm!r} mm; every "
+            "Z would be output a above the tip with nothing in the program to say so; only "
+            "a = 0 until a setup sheet or NCX's point words exist (AQ-035)"
+        )
+        found.append(_error("NCX_POINT_OFFSET_UNSUPPORTED", message, where))
     for index, line in enumerate(header.note, start=1):
         character = _NOT_IN_NOTE.search(line)
         if character is not None:
