@@ -43,8 +43,9 @@ class _Run:
     """One run's diagnostics and files so far; `take` ends the run after a stage that reports an
     error or after a cancel, which it reports once (REQ-JOB-001, 021)."""
 
-    def __init__(self, ctx: Context) -> None:
+    def __init__(self, ctx: Context, strict: bool) -> None:
         self.ctx = ctx
+        self.strict = strict  # a warning withholds the NC program (AQ-040 (b))
         self.found: list[Diagnostic] = []
         self.cl_data: ClData | None = None
         self.ncx_file: Path | None = None
@@ -103,19 +104,24 @@ def _stages(run: _Run, job_file: Path, output_dir: Path, machine_file: Path | No
     run.ncx_file = written.value  # named even when a cancel comes now: the file is there
     ncx_file = run.take(written)
     # The last stage: a cancel after it stops nothing more (REQ-JOB-021), so no poll.
-    compiled = compile_ncx(read.ncx, ncx_file, read.machine, program, run.ctx)
+    compiled = compile_ncx(
+        read, ncx_file, program, run.ctx, tuple(run.found) if run.strict else None
+    )
     run.found += compiled.diagnostics
     run.nc_files = compiled.value or ()
 
 
-def run_job(job_file: Path, output_dir: Path, *, ncx_executable: Path | None = None,
-            machine_file: Path | None = None, ctx: Context | None = None) -> JobReport:  # fmt: skip
+def run_job(  # noqa: PLR0913 (the SPEC's reviewed interface; `strict` from Peter, AQ-040 (b))
+            job_file: Path, output_dir: Path, *, ncx_executable: Path | None = None,
+            machine_file: Path | None = None, ctx: Context | None = None,
+            strict: bool = False) -> JobReport:  # fmt: skip
     """Run the job of `job_file` into `output_dir`: the NCX file and, after a clean `ncx` run,
     the NC program. `machine_file` overrides the job's machine; `ncx_executable` None takes
-    `ncx` from the PATH. A `ValueError` from `cl` or `ncx` is a producer's bug and not caught.
+    `ncx` from the PATH; `strict` withholds the NC program after any WARNING (AQ-040 (b)). A
+    `ValueError` from `cl` or `ncx` is a producer's bug and not caught.
 
     Implements: REQ-JOB-001, REQ-JOB-011 to 015, REQ-JOB-020 to 022."""
-    run = _Run(default_context() if ctx is None else ctx)
+    run = _Run(default_context() if ctx is None else ctx, strict)
     with contextlib.suppress(_Stopped):
         _stages(run, job_file, output_dir, machine_file, ncx_executable)
     return JobReport(tuple(run.found), run.cl_data, run.ncx_file, run.nc_files)

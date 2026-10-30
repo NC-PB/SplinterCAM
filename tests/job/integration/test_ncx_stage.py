@@ -255,6 +255,35 @@ def test_a_failed_move_leaves_no_nc_file(
 
 
 @pytest.mark.req("REQ-JOB-019")
+def test_a_moved_file_that_cannot_be_removed_is_named_by_its_absolute_path(
+    job_file: Path, tmp_path: Path, fake_ncx: FakeRunNcx, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The move fails at b.h and a.h, already placed, will not go: the person must find it
+    # (DEC-JOB-016, cnc review M2 of AQ-040's change).
+    fake_ncx.files = ("a.h", "b.h")
+    out = tmp_path / "out"
+    real_copy, real_unlink = shutil.copyfile, Path.unlink
+
+    def second_fails(source: Path, target: Path) -> object:
+        if Path(source).name == "b.h":
+            raise OSError(28, "No space left on device")
+        return real_copy(source, target)
+
+    def keep_a(self: Path, missing_ok: bool = False) -> None:
+        if self == out / "a.h":
+            raise PermissionError(13, "Permission denied", str(self))
+        real_unlink(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr("splintercam.job._output.shutil.copyfile", second_fails)
+    monkeypatch.setattr(Path, "unlink", keep_a)
+    report = _run(job_file, out, default_context(), fake_ncx.exe)
+    monkeypatch.undo()
+    [error] = [d for d in report.diagnostics if d.code == "JOB_OUTPUT_UNWRITABLE"]
+    assert error.message.endswith(f"left there, remove by hand: {out / 'a.h'}")
+    assert report.nc_files == ()
+
+
+@pytest.mark.req("REQ-JOB-019")
 @pytest.mark.parametrize("entry", ["sub/", "RECT_FILLETS.ncx"])
 def test_a_folder_or_a_file_already_there_is_not_moved(
     job_file: Path, tmp_path: Path, ctx: Context, fake_ncx: FakeRunNcx, entry: str
