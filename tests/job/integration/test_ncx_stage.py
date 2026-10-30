@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from job_files import FakeRunNcx, codes, listing
+from job_files import MACHINE, FakeRunNcx, codes, listing
 from splintercam.foundation import CANCELLED, Context, Diagnostic, Severity
 from splintercam.job import JobReport, default_context, run_job
 
@@ -87,15 +87,15 @@ def test_ncx_runs_in_a_new_folder_outside_the_output(
 def test_relative_paths_reach_ncx_absolute(
     job_file: Path, tmp_path: Path, fake_ncx: FakeRunNcx, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    (tmp_path / "machine.toml").write_bytes(b"")
+    (tmp_path / MACHINE).write_bytes(b"")  # the job's name: no override warning (AQ-036)
     monkeypatch.chdir(tmp_path)
     report = run_job(Path("job") / "job.json", Path("out"), ncx_executable=Path("bin") / "ncx",
-                     machine_file=Path("machine.toml"), ctx=default_context())  # fmt: skip
+                     machine_file=Path(MACHINE), ctx=default_context())  # fmt: skip
     assert report.ok, report.diagnostics
     [call] = fake_ncx.calls
     assert call.executable == tmp_path / "bin" / "ncx"
     assert call.ncx_file == tmp_path / "out" / "RECT_FILLETS.ncx"
-    assert call.machine_file == tmp_path / "machine.toml"
+    assert call.machine_file == tmp_path / MACHINE
     assert call.work_dir.is_absolute()
     assert call.output_dir.is_absolute()
     assert report.nc_files == (tmp_path / "out" / "RECT_FILLETS.h",)

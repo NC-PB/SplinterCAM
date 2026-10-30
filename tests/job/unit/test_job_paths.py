@@ -63,21 +63,25 @@ def test_a_machine_file_given_is_taken_against_the_current_folder(
                      machine_file=Path("other.toml"), ctx=ctx)  # fmt: skip
     assert "JOB_MACHINE_NOT_FOUND" not in codes(report.diagnostics)
     assert str(tmp_path / "cwd" / "other.toml") in _only(report, "JOB_INPUTS").message
+    assert _only(report, "JOB_MACHINE_OVERRIDDEN").location == "machine"  # AQ-036 2 (b)
 
 
-@pytest.mark.req("REQ-JOB-009")
-@pytest.mark.parametrize("given", [False, True])
-def test_a_missing_machine_file_stops_the_run(tmp_path: Path, ctx: Context, given: bool) -> None:
+@pytest.mark.req("REQ-JOB-009", "REQ-JOB-020")
+@pytest.mark.parametrize("given", [None, MACHINE, "m.toml"])
+def test_a_missing_machine_file_stops_the_run(
+    tmp_path: Path, ctx: Context, given: str | None
+) -> None:
     job = example()
-    if not given:
+    if given is None:
         job["machine"] = "missing.toml"
-    # The job's machine name, so the override is no warning (AQ-036): only "not found" is tested.
-    machine = tmp_path / "missing" / MACHINE if given else None
+    machine = None if given is None else tmp_path / "missing" / given
     report = _run(tmp_path, ctx, job, machine_file=machine)
     assert _errors(report) == [("JOB_MACHINE_NOT_FOUND", "machine")]
-    missing = machine if given else tmp_path / "job" / "missing.toml"
+    missing = machine or tmp_path / "job" / "missing.toml"
     assert str(missing) in report.diagnostics[0].message
-    assert codes(report.diagnostics) == ["JOB_MACHINE_NOT_FOUND", "JOB_INPUTS"]
+    # A file of another name given on the call is also an override (AQ-036 2 (b)).
+    overridden = ["JOB_MACHINE_OVERRIDDEN"] if given == "m.toml" else []
+    assert codes(report.diagnostics) == ["JOB_MACHINE_NOT_FOUND", *overridden, "JOB_INPUTS"]
     assert not (tmp_path / "out").exists()
 
 
@@ -125,7 +129,7 @@ def test_a_machine_file_of_another_name_is_a_warning(
     assert (overridden.severity, overridden.location) == (Severity.WARNING, "machine")
     assert "fanuc-mill-30i.toml" in overridden.message
     assert MACHINE in overridden.message
-    assert codes(report.diagnostics)[:2] == ["JOB_MACHINE_OVERRIDDEN", "JOB_INPUTS"]
+    assert codes(report.diagnostics) == ["JOB_MACHINE_OVERRIDDEN", "JOB_INPUTS", "DXF_PART_SIZE"]
     assert fake_ncx.calls[0].machine_file == other  # the given file is used (DEC-JOB-004)
     assert report.ok  # a warning: the program is still compiled (AQ-036 1 (a))
 
@@ -139,6 +143,25 @@ def test_a_machine_file_of_the_jobs_name_elsewhere_is_no_warning(
                      machine_file=same, ctx=ctx)  # fmt: skip
     assert codes(report.diagnostics) == ["JOB_INPUTS", "DXF_PART_SIZE"]
     assert fake_ncx.calls[0].machine_file == same
+
+
+@pytest.mark.req("REQ-JOB-009")
+@pytest.mark.parametrize(
+    ("in_job", "given", "warned"),
+    [
+        (f"machines/{MACHINE}", MACHINE, False),  # the folder in the job is not compared
+        (MACHINE, MACHINE.upper(), True),  # names compared case included (DEC-JOB-015)
+        ("", MACHINE, False),  # JOB_VALUE_INVALID already
+        (5, MACHINE, False),
+    ],
+)
+def test_the_override_compares_file_names_only(
+    tmp_path: Path, ctx: Context, in_job: object, given: str, warned: bool
+) -> None:
+    job = example()
+    job["machine"] = in_job
+    report = _run(tmp_path, ctx, job, machine_file=_machine(tmp_path / "given", given))
+    assert ("JOB_MACHINE_OVERRIDDEN" in codes(report.diagnostics)) == warned
 
 
 @pytest.mark.req("REQ-JOB-009", "REQ-JOB-020")
