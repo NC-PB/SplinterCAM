@@ -16,6 +16,10 @@ license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.13,<3.14"
 dependencies = ["ezdxf>=1.4.2", "numpy>=2.5.3"]
 
+[project.scripts]
+# The headless runner (src/splintercam/apps/cli/SPEC.md); no new dependency.
+splintercam = "splintercam.apps.cli.__main__:entry"
+
 [dependency-groups]
 dev = [
   # Build: the project is built without isolation (see [tool.uv]), so these live in the venv.

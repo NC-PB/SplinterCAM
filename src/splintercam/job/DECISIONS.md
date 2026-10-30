@@ -72,7 +72,7 @@
 ## DEC-JOB-008: Compiled files reach the output folder only after a clean `ncx` run
 
 - Date: 2026-10-27; decided by: ours (spec and CNC reviews)
-- Status: Accepted 2026-10-27 (SPEC Reviewed, AQ-011 item 1)
+- Status: Accepted 2026-10-27 (SPEC Reviewed, AQ-011 item 1); amended by DEC-JOB-016 (with `strict`, a warning also withholds the files)
 - Decision: `ncx compile` writes into the staging folder; `run_job` moves its files into the output folder only when `run_ncx` is `ok` (every step exited 0, no ERROR, no `compile` warning but `CMP020`, not cancelled). Otherwise the output folder holds the NCX file alone.
 - Why: research 27, test 5: a program with an error gives no NC file. Without staging, a `compile` killed by a cancel or a crash could leave half a program in the output folder, and a program `compile` warned about (but did not refuse without `--strict`) would look like a good one; either could reach the machine.
 - Rejected: compiling into the output folder and deleting on failure (a crash of the CAM itself leaves the file); marking failed files by name (an operator copying files to the control does not see the mark).
@@ -136,8 +136,18 @@
 ## DEC-JOB-015: A machine file given on the call of another name is a warning
 
 - Date: 2026-10-30; decided by: Peter (AQ-036 2 (b)); the comparison ours
-- Status: Accepted 2026-10-30 (AQ-036)
+- Status: Accepted 2026-10-30 (AQ-036); amended by DEC-JOB-016 (with `strict` the warning withholds the program)
 - Decision: when `machine_file` is given and its file name differs from the file name of the job's `machine`, stage 1 reports `JOB_MACHINE_OVERRIDDEN` (warning) at `machine`, naming both, after stage 1's other diagnostics and before `JOB_INPUTS`. The given file is still used and the program still compiled (AQ-036 1 (a): warnings do not withhold the program; `apps/cli --strict` fails on them). The names are compared as strings, case included, without the folders, so the pinned NCXchange checkout's `machines/heidenhain-itnc530.toml` given for a job naming `heidenhain-itnc530.toml` is no warning. Nothing is reported when the job's `machine` is not a non-empty string (that is `JOB_VALUE_INVALID` already).
 - Why: an override that compiles for another control than the job names showed only as INFO in `JOB_INPUTS` (cnc review S2); a warning is seen and counts under `--strict`. The folder is expected to differ (DEC-JOB-004: the machine files come from the checkout), the name is what tells the control.
 - Rejected: comparing full paths (every CI and end-to-end run would warn); comparing file contents (a copy of the same file in another folder is fine, but reading TOML is `ncx`'s); case-insensitive names (on a file system that ignores case the same file under another case is rare, and a warning there costs nothing).
 - Where: REQ-JOB-009, 020; `_overridden` in `src/splintercam/job/_layout.py`. Supersedes in part DEC-JOB-004 ("every run names the machine file": still true; the override now also warns).
+
+## DEC-JOB-016: `strict` withholds the compiled files after any warning; `JOB_STRICT_WITHHELD`
+
+- Date: 2026-10-30; decided by: Peter (AQ-040 (b)); the details ours
+- Status: Accepted 2026-10-30 (AQ-040)
+- Decision: `run_job(strict=True)` runs every stage as without it: a WARNING stops nothing, the NCX file is written and `ncx` runs (its verdict is reported). After a clean `ncx` run the compiled files are not moved when any WARNING came before the move, from any stage or from `ncx`; they go with the temporary folder. One `JOB_STRICT_WITHHELD` (info) at the output folder says so and counts the warnings. When `ncx` passed but staged no file, `JOB_NO_NC_FILE` (error) is reported as without `strict`, not `JOB_STRICT_WITHHELD`. The one WARNING that can come after the move, `JOB_WORK_DIR_LEFT` (the temporary folder, now named as possibly holding NC files), takes the moved files back under `strict` and adds `JOB_STRICT_WITHHELD`; a file that cannot be removed stays in `nc_files`, so the CLI names it as left. Without `strict` nothing changes. A failed or cancelled `ncx` run adds no `JOB_STRICT_WITHHELD`: its error or `CANCELLED` already withholds the files.
+- Why: under `--strict` a warned run exited 1 while its NC program sat in the output folder (cnc review of `apps/cli`, H1); Peter: a warning then withholds the program as an error does, the NCX file still written. `ncx` still runs, so the person sees all that is wrong in one run. INFO, not a warning or an error: the warnings are the reason and are in the report; another warning would count twice, and an error would change `ok` and the exit code the CLI derives (REQ-CLI-005).
+- Why the take-back: Peter's answer has no exception, and an NC program in the folder after a `--strict` exit 1 is what AQ-040 closed (cnc and spec review of the change). A failed removal of a moved file is named rather than hidden. Why `JOB_NO_NC_FILE` first: `ncx` writing nothing is an error whatever `strict` says, and holding back nothing would hide it (spec review).
+- Rejected: stopping the run at the first warning (no NCX file and no `ncx` verdict, against Peter's "the NCX file still written"); leaving moved files after a late `JOB_WORK_DIR_LEFT` (first draft: an exception to Peter's answer); no diagnostic (the report would not say why `nc_files` is empty with `ok` true).
+- Where: REQ-JOB-001, 019; `_after_ncx` and `_clean_up` in `src/splintercam/job/_output.py`, `run_job` in `src/splintercam/job/_run.py`. Amends DEC-JOB-008 (when the files are moved) and DEC-JOB-015 (with `strict`, its warning withholds the program); the SPEC's `ok` invariant gains "unless `JOB_STRICT_WITHHELD`". The leftovers of a failed move are now named by absolute path in `JOB_OUTPUT_UNWRITABLE` (cnc review M2).

@@ -27,8 +27,9 @@ moved only after a clean run. Contract: `./SPEC.md`. Why it is built this way: `
 
 - Nothing is written into the output folder before stage 8; an output folder that is not new or
   empty is refused and left as it is (REQ-JOB-010, DEC-JOB-005).
-- A report with an ERROR or `CANCELLED` has `nc_files == ()`; compiled files reach the output
-  folder only after a clean `run_ncx` (REQ-JOB-019, DEC-JOB-008, 011).
+- A report with an ERROR or `CANCELLED`, or with `strict` a WARNING before the move, has
+  `nc_files == ()`; compiled files reach the output folder only after a clean `run_ncx`
+  (REQ-JOB-019, DEC-JOB-008, 011, 016).
 - Stage 1's diagnostics come in the layout's key order, unknown and repeated keys after their
   object's keys by code point, `JOB_INPUTS` last (REQ-JOB-020). A new key goes into `_LAYOUT` in
   its place; a value `job` checks itself goes into `_checks`.
