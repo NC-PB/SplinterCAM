@@ -132,3 +132,12 @@
 - Why: the `OSError` escaped `run_job` after the NCX file was written, losing the report (expected outcomes are typed diagnostics, AGENTS.md); REQ-JOB-018 says the folder is outside the output folder, which `tempfile` alone does not ensure.
 - Rejected: `JOB_OUTPUT_UNWRITABLE` (the output folder is fine; the user would look in the wrong place); a temporary folder beside the output folder (the user's folder, DEC-JOB-007).
 - Where: REQ-JOB-018; `compile_ncx` in `src/splintercam/job/_output.py`.
+
+## DEC-JOB-015: A machine file given on the call of another name is a warning
+
+- Date: 2026-10-30; decided by: Peter (AQ-036 2 (b)); the comparison ours
+- Status: Accepted 2026-10-30 (AQ-036)
+- Decision: when `machine_file` is given and its file name differs from the file name of the job's `machine`, stage 1 reports `JOB_MACHINE_OVERRIDDEN` (warning) at `machine`, naming both, after stage 1's other diagnostics and before `JOB_INPUTS`. The given file is still used and the program still compiled (AQ-036 1 (a): warnings do not withhold the program; `apps/cli --strict` fails on them). The names are compared as strings, case included, without the folders, so the pinned NCXchange checkout's `machines/heidenhain-itnc530.toml` given for a job naming `heidenhain-itnc530.toml` is no warning. Nothing is reported when the job's `machine` is not a non-empty string (that is `JOB_VALUE_INVALID` already).
+- Why: an override that compiles for another control than the job names showed only as INFO in `JOB_INPUTS` (cnc review S2); a warning is seen and counts under `--strict`. The folder is expected to differ (DEC-JOB-004: the machine files come from the checkout), the name is what tells the control.
+- Rejected: comparing full paths (every CI and end-to-end run would warn); comparing file contents (a copy of the same file in another folder is fine, but reading TOML is `ncx`'s); case-insensitive names (on a file system that ignores case the same file under another case is rare, and a warning there costs nothing).
+- Where: REQ-JOB-009, 020; `_overridden` in `src/splintercam/job/_layout.py`. Supersedes in part DEC-JOB-004 ("every run names the machine file": still true; the override now also warns).

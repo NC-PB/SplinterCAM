@@ -195,6 +195,19 @@ def _ncx(given: Path | None) -> Path | None:
     return None if found is None else absolute(Path(found))
 
 
+def _overridden(machine: object, machine_file: Path | None) -> tuple[Diagnostic, ...]:
+    # Peter, AQ-036 2 (b): a file given on the call that the job does not name may compile for
+    # another control; compared by file name, so the pinned checkout's copy passes (DEC-JOB-015).
+    if (
+        machine_file is None
+        or not _named(machine)
+        or Path(cast("str", machine)).name == (machine_file.name)
+    ):
+        return ()
+    text = f"compiling for {machine_file.name}, given on the call; the job names {machine}"
+    return (Diagnostic("JOB_MACHINE_OVERRIDDEN", Severity.WARNING, text, "machine"),)
+
+
 def read_job_file(job_file: Path, machine_file: Path | None, ncx_executable: Path | None
                   ) -> Result[JobFile]:  # fmt: skip
     """Stage 1: the job file read and its structure checked, the paths resolved and named.
@@ -219,7 +232,8 @@ def read_job_file(job_file: Path, machine_file: Path | None, ncx_executable: Pat
     inputs = (
         f"machine file {machine_path or 'none'}; {f'ncx {ncx}' if ncx else 'no ncx on the PATH'}"
     )
-    diagnostics = (*walk.out, Diagnostic("JOB_INPUTS", Severity.INFO, inputs))
+    found = (*walk.out, *_overridden(machine, machine_file))
+    diagnostics = (*found, Diagnostic("JOB_INPUTS", Severity.INFO, inputs))
     if walk.out or machine_path is None:
         return Result(None, diagnostics)
     return Result(_job_file(top, folder, machine_path, ncx), diagnostics)

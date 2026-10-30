@@ -31,9 +31,10 @@ _CHECKOUT = os.environ.get("SPLINTERCAM_NCXCHANGE")
 
 
 def _record_run(tmp_path: Path) -> ClOperation:
-    # No ncx: any existing file stands for the machine and the run stops at JOB_NCX_NOT_FOUND
-    # after stage 8, with the record (SPEC, Test plan).
-    stand_in = tmp_path / "machine.toml"
+    # No ncx: any existing file of the job's machine name stands for the machine (no
+    # JOB_MACHINE_OVERRIDDEN, AQ-036) and the run stops at JOB_NCX_NOT_FOUND after stage 8, with
+    # the record (SPEC, Test plan).
+    stand_in = tmp_path / _CHECKS["ncx"]["machine"]
     stand_in.write_bytes(b"")
     report = run_job(CASE / _CASE["input"]["job"], tmp_path / "out",
                      ncx_executable=tmp_path / "no-ncx", machine_file=stand_in,
