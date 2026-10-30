@@ -40,3 +40,7 @@ are NumPy over the record's columns. Depends on: foundation, cl.
 - REQ-NCX-026's 0.001 mm (`_MIN_ARC_CHORD_MM`, DEC-NCX-016) is the shipped mills' step, not a
   tolerance: it goes when NCXchange checks arcs at the machine's step (D363), not when tol
   changes. A test arc for another rule needs a chord of 0.001 mm or more, or it is refused too.
+- `write_ncx` refuses an axial offset a ≠ 0 (REQ-NCX-013, DEC-NCX-018). A test of the Z shift
+  (REQ-NCX-007) checks `move_blocks`; one that reaches 10^9 through a also gets that refusal.
+- Every `ncx` step fails on a WARNING or an unread stderr line (REQ-NCX-027); only `compile`'s
+  `CMP020` is accepted. A fake `ncx` step meant to pass prints no warning.

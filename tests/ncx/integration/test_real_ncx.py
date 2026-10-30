@@ -44,7 +44,11 @@ def test_ncx_accepts_the_program(
     machine_file = Path(_CHECKOUT) / "machines" / f"{machine}.toml"
     call = NcxCall(Path(_NCX).resolve(), work, ncx_file, machine_file, out)
     result = run_ncx(call, program, ctx)
-    assert result.ok, result.diagnostics
+    # Every message in full: pytest cuts a long repr, and the line ncx names is at its end.
+    told = "\n".join(
+        f"{d.code} {d.severity.name} {d.location}: {d.message}" for d in result.diagnostics
+    )
+    assert result.ok, f"{told}\n--- the program ---\n{program.text}"
     assert result.value == (NcxStep.FORMAT, NcxStep.CHECK, NcxStep.COMPILE)
     assert {d.code for d in result.diagnostics} <= {"NCX_ROUNDED"}
     # Z=-3.333333 has more decimals than any shipped mill file: each operation reports its

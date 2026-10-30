@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """The invariants of src/splintercam/ncx/SPEC.md over generated records, values and fake `ncx`
-runs (REQ-NCX-001 to 009, 019 to 024)."""
+runs (REQ-NCX-001 to 009, 013, 019 to 024, 027)."""
 
 from dataclasses import replace
 from fractions import Fraction
@@ -13,9 +13,11 @@ from hypothesis import strategies as st
 from cl_strategies import HEADER, Move, columns, operations
 from ncx_fake import MakeFake, Step
 from ncx_programs import RECT_FILLETS, exact_text, printed, words
-from splintercam.cl import ClOperation, MoveKind, make_cl_data
+from splintercam.cl import ClData, ClOperation, MoveKind, make_cl_data
 from splintercam.foundation import Context
 from splintercam.ncx import NcxProgram, NcxSection, NcxStep, run_ncx, write_ncx
+from splintercam.ncx._moves import move_blocks
+from splintercam.ncx._moves import printed as printed_columns
 
 # The ctx fixture is a frozen value, the same for every example; no deadline under load, as
 # geometry2d's property tests.
@@ -24,16 +26,38 @@ _MOTION = ("RAPID", "LINE", "ARC=")
 _offset = st.integers(0, 2**17).map(lambda k: k * 2.0**-10)
 
 
-@pytest.mark.req("REQ-NCX-001", "REQ-NCX-002", "REQ-NCX-004", "REQ-NCX-005", "REQ-NCX-007")
-@_SETTINGS
-@given(st.lists(operations(), min_size=1, max_size=3), _offset)
-def test_the_program_invariants(ctx: Context, passes: list[list[Move]], offset: float) -> None:
+def _record(ctx: Context, passes: list[list[Move]], offset: float) -> ClData:
     header = replace(HEADER, axial_offset_mm=offset)
     given_ops = tuple(
         ClOperation(replace(header, name=f"OP_{i}"), columns(moves))
         for i, moves in enumerate(passes)
     )
-    result = write_ncx(make_cl_data(1, given_ops, ctx), RECT_FILLETS, ctx)
+    return make_cl_data(1, given_ops, ctx)
+
+
+@pytest.mark.req("REQ-NCX-007", "REQ-NCX-013")
+@_SETTINGS
+@given(st.lists(operations(), min_size=1, max_size=3), _offset)
+def test_the_axial_offset(ctx: Context, passes: list[list[Move]], offset: float) -> None:
+    data = _record(ctx, passes, offset)
+    # REQ-NCX-007 on the move blocks: each written Z within one step of z + a, in move order.
+    expected_z = [move.end[2] + offset for moves in passes for move in moves]
+    blocks = [b for op in data.operations for b in move_blocks(op, printed_columns(op))]
+    written_z = [float(words(block)["Z"]) for block in blocks]
+    np.testing.assert_allclose(written_z, expected_z, rtol=0.0, atol=1e-6)
+    # REQ-NCX-013 (AQ-035): the program is written exactly when a = 0.
+    result = write_ncx(data, RECT_FILLETS, ctx)
+    refusals = ["NCX_POINT_OFFSET_UNSUPPORTED"] * len(passes) if offset else []
+    assert [d.code for d in result.diagnostics] == refusals
+    assert (result.value is None) == bool(offset)
+
+
+@pytest.mark.req("REQ-NCX-001", "REQ-NCX-002", "REQ-NCX-004", "REQ-NCX-005", "REQ-NCX-007")
+@_SETTINGS
+@given(st.lists(operations(), min_size=1, max_size=3))
+def test_the_program_invariants(ctx: Context, passes: list[list[Move]]) -> None:
+    offset = 0.0  # the slice writes a = 0 only (REQ-NCX-013); the shift: test_the_axial_offset
+    result = write_ncx(_record(ctx, passes, offset), RECT_FILLETS, ctx)
     assert result.value is not None, result.diagnostics
     lines = result.value.text.split("\n")
     assert lines[0] == "FILE=BEGIN NCX=1"
@@ -92,7 +116,7 @@ _LINES = {
 _step = st.tuples(st.sampled_from((0, 0, 1, 2)), st.lists(st.sampled_from(sorted(_LINES))))
 
 
-@pytest.mark.req("REQ-NCX-019", "REQ-NCX-022", "REQ-NCX-023")
+@pytest.mark.req("REQ-NCX-019", "REQ-NCX-022", "REQ-NCX-023", "REQ-NCX-027")
 # 12 examples: each starts up to three interpreters (about 0.1 s each), so the default 100
 # would take 30 s; the profiles' larger counts would multiply that (docs/dev/06: about 2 s).
 @settings(
@@ -112,7 +136,9 @@ def test_ok_only_when_every_step_passed(
 
     def passed(index: int) -> bool:
         code, kinds = told[index]
-        strict = index == 2 and ("warning" in kinds or "garbage" in kinds)  # DEC-NCX-014 (e)
+        # DEC-NCX-014 (e), DEC-NCX-017: an unread line or a warning fails every step; in
+        # compile, CMP020 is counted instead.
+        strict = "warning" in kinds or "garbage" in kinds or (index < 2 and "rounded" in kinds)
         return code == 0 and "error" not in kinds and not strict
 
     assert result.ok == all(passed(index) for index in range(3))
