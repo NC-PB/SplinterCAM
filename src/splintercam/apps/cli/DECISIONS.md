@@ -9,7 +9,7 @@
 ## DEC-CLI-001: Diagnostics on stderr, paths on stdout; one JSON object with `--json`
 
 - Date: 2026-10-27; decided by: ours (SPEC draft, plan 0007 step 7)
-- Status: Accepted 2026-10-27 (SPEC Reviewed, AQ-012)
+- Status: Accepted 2026-10-27 (SPEC Reviewed, AQ-012); amended by DEC-CLI-003 item 4 (a producer's log record on stderr) and DEC-CLI-004 (`files_left`, the `FILES_LEFT` line)
 - Decision: the text report prints one line per diagnostic on stderr, `<SEVERITY> <CODE> <location>: <message>` with line breaks escaped, and, only for exit code 0, the written files' absolute paths on stdout; `--json` prints one ASCII object with sorted keys (`diagnostics`, `ncx_file`, `nc_files`, `exit_code`) on stdout and nothing on stderr.
 - Why: a script can read the paths from stdout while a person reads the messages, as `ncx` prints its diagnostics on stderr one per line (research 27). Paths only for a usable run, so a script never picks up the NCX of a failed run as its result (spec review). An escaped line break keeps one diagnostic per line (`NCX_OUTPUT_UNREAD` holds `ncx`'s text verbatim). Sorted keys keep the JSON bytes stable (D-055).
 - Rejected: everything on stdout (a script must filter); `ncx`'s `file(line): SEVERITY CODE: message` form (our locations are operations, not lines).
@@ -44,5 +44,6 @@
 - Status: Accepted 2026-10-30 (AQ-040)
 - Decision: `--strict` is passed to `run_job` as `strict`, so a warning also withholds the NC program (DEC-JOB-016). When the exit code is not 0, the report's files (`ncx_file`, then `nc_files`, absolute) are the files left: with `--json` the key `files_left`, empty otherwise; in the text report one closing stderr line in the diagnostics' form, `INFO FILES_LEFT: left on disk, not for the machine: <paths, ", "-separated>`, escaped as a message (DEC-CLI-003), and no line when there are none. It is a line of the CLI, not a diagnostic of the report, so the JSON's `diagnostics` stay `job`'s. The files left are those the report names; other names in a diagnostic (a file `JOB_OUTPUT_UNWRITABLE` could not remove, the temporary folder of `JOB_WORK_DIR_LEFT`) stay in that diagnostic's message.
 - Why: a failed run can leave the NCX file (written before `ncx` runs) and, from a report that names NC files with a non-zero exit, those too; a script reading only stdout or `ncx_file` saw nothing (cnc review H1, M1). The diagnostics' line form keeps "one line, `<SEVERITY> <CODE> …`" true for every stderr line a script parses.
+- Limits: paths are joined with ", " and escaped as a message (on Windows every backslash doubled), so the line is for people; `--json` is the form for scripts, as the help says.
 - Rejected: listing the output folder (the CLI would read the file system and could name files the run did not write); `FILES_LEFT` as a JSON diagnostic (it would mix the CLI's text into `job`'s report); one line per file (the SPEC asks for one closing line).
 - Where: REQ-CLI-001, 003, 004, 006; `_print_report` in `src/splintercam/apps/cli/_cli.py`.

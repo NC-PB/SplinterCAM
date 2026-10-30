@@ -22,7 +22,8 @@ _ESCAPES = {c: f"\\x{c:02x}" if c < 0x100 else f"\\u{c:04x}" for c in _CONTROLS 
 _AFTER_A_FAILED_RUN = (
     "exit 0: a usable run, its files on stdout; 1: an error, a cancel or, with --strict, a "
     "warning (the NC program then withheld); 2: unreadable input. After 1 or 2, take no file "
-    "from the output folder: the files left there are named by FILES_LEFT (AQ-040)."
+    "from the output folder: FILES_LEFT and the diagnostics name what is left (AQ-040). For "
+    "scripts, --json is the form to parse."
 )
 
 
@@ -72,11 +73,10 @@ def _print_report(report: JobReport, code: int, as_json: bool) -> None:
                  "files_left": left, "exit_code": code}  # fmt: skip
         sys.stdout.write(json.dumps(found, sort_keys=True) + "\n")  # ensure_ascii by default
         return
-    lines = [_line(d) for d in report.diagnostics]
+    sys.stderr.writelines(_line(d) + "\n" for d in report.diagnostics)
     if left:  # DEC-CLI-004: one closing line, in the diagnostics' form
         text = f"left on disk, not for the machine: {', '.join(left)}"
-        lines.append(_line(Diagnostic("FILES_LEFT", Severity.INFO, text)))
-    sys.stderr.writelines(line + "\n" for line in lines)
+        sys.stderr.write(_line(Diagnostic("FILES_LEFT", Severity.INFO, text)) + "\n")
     sys.stdout.writelines(path + "\n" for path in filter(None, [ncx_file, *nc_files]))
 
 

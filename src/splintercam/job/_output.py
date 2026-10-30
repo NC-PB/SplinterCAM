@@ -6,7 +6,7 @@ after a clean run (REQ-JOB-010, 016 to 019; research 27, traps 3, 4, 6, test 5; 
 import functools
 import shutil
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from splintercam.foundation import CANCELLED, Context, Diagnostic, Result, Severity
@@ -74,7 +74,7 @@ def _move(staging: Path, output: Path, found: list[Diagnostic]) -> tuple[Path, .
             _place(target, functools.partial(shutil.copyfile, entry))
             moved.append(target)
     except OSError as error:
-        left = [path.name for path in moved if not _removed(path)]
+        left = [str(path) for path in moved if not _removed(path)]  # absolute: copy-pasteable
         kept = f"; left there, remove by hand: {', '.join(left)}" if left else ""
         text = f"cannot move the NC files into {output}: {error}{kept}"
         found.append(_error("JOB_OUTPUT_UNWRITABLE", text, output))
@@ -92,36 +92,53 @@ def _removed(path: Path) -> bool:
     return True
 
 
-def _after_ncx(ran: Result[tuple[NcxStep, ...]], staging: Path, output: Path, warned: int | None,
-               ctx: Context) -> Result[tuple[Path, ...]]:  # fmt: skip
+def _withheld(output: Path, warned: int) -> Diagnostic:
+    # DEC-JOB-016: INFO, as the warnings say what is wrong; this says the files are held back.
+    text = f"strict: {warned} warning(s) in the run; the compiled files are not moved"
+    return Diagnostic("JOB_STRICT_WITHHELD", Severity.INFO, text, str(output))
+
+
+def _after_ncx(ran: Result[tuple[NcxStep, ...]], staging: Path, output: Path, ctx: Context,
+               prior: Sequence[Diagnostic] | None) -> Result[tuple[Path, ...]]:  # fmt: skip
     # What a run of ncx leaves: nothing after a failure or a late cancel (DEC-JOB-011); with
-    # strict nothing after any warning so far or from ncx (AQ-040 (b), DEC-JOB-016); else the move.
+    # strict (`prior` the run's diagnostics so far) nothing after any warning so far or from ncx,
+    # unless ncx wrote nothing, which `_move` reports (AQ-040 (b), DEC-JOB-016); else the move.
     if not ran.ok:
         return Result(())
     if ctx.cancel.is_cancelled:
         return Result((), (CANCELLED,))
-    if warned is not None:
-        warned += sum(d.severity is Severity.WARNING for d in ran.diagnostics)
-        if warned:  # INFO: the warnings say what is wrong, this says the files are held back
-            text = f"strict: {warned} warning(s) in the run; the compiled files are not moved"
-            return Result(
-                (), (Diagnostic("JOB_STRICT_WITHHELD", Severity.INFO, text, str(output)),)
-            )
+    warned = sum(d.severity is Severity.WARNING for d in (*(prior or ()), *ran.diagnostics))
+    if prior is not None and warned and any(staging.iterdir()):
+        return Result((), (_withheld(output, warned),))
     found: list[Diagnostic] = []
     return Result(_move(staging, output, found), tuple(found))
 
 
+def _clean_up(temporary: Path, moved: tuple[Path, ...], strict: bool,
+              found: list[Diagnostic]) -> tuple[Path, ...]:  # fmt: skip
+    # REQ-JOB-018: removed whatever happened. Under strict its warning, the only one after the
+    # move, takes the moved files back as every warning does; one that will not go stays named.
+    try:
+        shutil.rmtree(temporary)
+    except OSError as error:
+        text = f"cannot remove the temporary folder {temporary}, which may hold NC files: {error}"
+        found.append(Diagnostic("JOB_WORK_DIR_LEFT", Severity.WARNING, text, str(temporary)))
+        if strict and moved:
+            found.append(_withheld(moved[0].parent, 1))
+            return tuple(path for path in moved if not _removed(path))
+    return moved
+
+
 def compile_ncx(read: JobFile, ncx_file: Path, program: NcxProgram, ctx: Context,
-                warned: int | None = None) -> Result[tuple[Path, ...]]:  # fmt: skip
+                prior: Sequence[Diagnostic] | None = None) -> Result[tuple[Path, ...]]:  # fmt: skip
     """Stage 9: `ncx` in a new temporary folder holding the working and the staging folder,
     removed afterwards whatever happened; the compiled files moved into the NCX file's folder
-    only after a clean run (DEC-JOB-007, 008). `warned` None: not strict; else the run's warnings
-    so far, which with `ncx`'s own withhold the files (AQ-040 (b), DEC-JOB-016).
+    only after a clean run (DEC-JOB-007, 008). `prior` None: not strict; else the run's
+    diagnostics so far, whose warnings with `ncx`'s withhold the files (AQ-040 (b), DEC-JOB-016).
 
     Implements: REQ-JOB-017, REQ-JOB-018, REQ-JOB-019."""
-    executable = read.ncx
-    if executable is None or not executable.is_file():
-        what = "no ncx on the PATH" if executable is None else f"{executable} does not exist"
+    if read.ncx is None or not read.ncx.is_file():
+        what = "no ncx on the PATH" if read.ncx is None else f"{read.ncx} does not exist"
         text = f"{what}: the NCX file is written, no NC program"  # plan 0007, question 3
         return Result(None, (Diagnostic("JOB_NCX_NOT_FOUND", Severity.ERROR, text),))
     try:
@@ -141,14 +158,10 @@ def compile_ncx(read: JobFile, ncx_file: Path, program: NcxProgram, ctx: Context
         text = f"cannot make the working folders for ncx: {error}"
         found.append(_error("JOB_WORK_DIR_UNWRITABLE", text, temporary))  # DEC-JOB-014
     else:
-        ran = run_ncx(NcxCall(executable, work, ncx_file, read.machine, staging), program, ctx)
-        done = _after_ncx(ran, staging, ncx_file.parent, warned, ctx)
+        ran = run_ncx(NcxCall(read.ncx, work, ncx_file, read.machine, staging), program, ctx)
+        done = _after_ncx(ran, staging, ncx_file.parent, ctx, prior)
         found += (*ran.diagnostics, *done.diagnostics)
         nc_files = done.value or ()
     finally:
-        try:
-            shutil.rmtree(temporary)
-        except OSError as error:
-            text = f"the temporary folder {temporary} could not be removed: {error}"
-            found.append(Diagnostic("JOB_WORK_DIR_LEFT", Severity.WARNING, text, str(temporary)))
+        nc_files = _clean_up(temporary, nc_files, prior is not None, found)
     return Result(nc_files, tuple(found))

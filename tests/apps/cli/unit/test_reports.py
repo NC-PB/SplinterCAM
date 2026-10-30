@@ -3,6 +3,8 @@
 DEC-CLI-001)."""
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -169,6 +171,32 @@ def test_the_golden_case_json_report(
     assert [list(d) for d in parsed["diagnostics"]] == [
         ["code", "location", "message", "severity"]
     ] * 3
+
+
+# A producer logging an error, as offset2d does after a kernel failure; in a subprocess, as
+# pytest's own logging handlers keep Python's last-resort handler from writing to stderr.
+_LOGGING_RUN = """
+import logging, sys
+from splintercam.apps.cli import _cli
+from splintercam.job import JobReport
+def run_job(*args, **options):
+    logging.getLogger("splintercam.job").error("OFFSET_FAILED, kernel input for replay: [1, 2]")
+    return JobReport((), None, None)
+_cli.run_job = run_job
+sys.exit(_cli.main(["run", "job.json", "--output", "out", "--json"]))
+"""
+
+
+@pytest.mark.req("REQ-CLI-004")
+@pytest.mark.req("REQ-CLI-006")
+def test_a_producers_log_record_reaches_stderr_and_stdout_stays_json() -> None:
+    # Peter, AQ-041 (a): the replay input is kept on stderr; stdout is still one JSON object.
+    run = subprocess.run([sys.executable, "-c", _LOGGING_RUN], capture_output=True, text=True,
+                         check=False, timeout=60)  # fmt: skip
+    assert run.returncode == 0, run.stderr
+    assert run.stderr == "OFFSET_FAILED, kernel input for replay: [1, 2]\n"
+    assert run.stdout.count("\n") == 1
+    assert json.loads(run.stdout)["exit_code"] == 0
 
 
 @pytest.mark.req("REQ-CLI-004")

@@ -102,8 +102,9 @@ def _stages(run: _Run, job_file: Path, output_dir: Path, machine_file: Path | No
     run.ncx_file = written.value  # named even when a cancel comes now: the file is there
     ncx_file = run.take(written)
     # The last stage: a cancel after it stops nothing more (REQ-JOB-021), so no poll.
-    warned = sum(d.severity is Severity.WARNING for d in run.found) if run.strict else None
-    compiled = compile_ncx(read, ncx_file, program, run.ctx, warned)
+    compiled = compile_ncx(
+        read, ncx_file, program, run.ctx, tuple(run.found) if run.strict else None
+    )
     run.found += compiled.diagnostics
     run.nc_files = compiled.value or ()
 
