@@ -59,7 +59,7 @@ modules:
   ncx:                    { layer: 4, kernel: false, depends_on: [foundation, model, cl], research: ["26", "27"], budget: 400 }
   simulation:             { layer: 4, kernel: true,  depends_on: [foundation, geometry3d, model, cl, stock], research: ["08"] }
 
-  job:                    { layer: 5, kernel: false, depends_on: [foundation, geometry2d, io, model, cl, stock, features, toolpath, "strategies/*", kinematics, ncx, simulation], research: [], budget: 360 }
+  job:                    { layer: 5, kernel: false, depends_on: [foundation, geometry2d, io, model, cl, stock, features, toolpath, "strategies/*", kinematics, ncx, simulation], research: [], budget: 470 }
 
   apps/cli:               { layer: 6, kernel: false, depends_on: [job], budget: 90 }
   apps/desktop:           { layer: 6, kernel: false, depends_on: [job] }

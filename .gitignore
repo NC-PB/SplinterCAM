@@ -34,3 +34,6 @@ CLAUDE.local.md
 
 # Git worktrees of Claude Code agents (Peter, 2026-10-09)
 .claude/worktrees/
+
+# The pinned NCXchange checkout of CI (check.yml, AQ-025)
+/ncxchange/
