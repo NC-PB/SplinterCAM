@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""What `write_ncx` refuses, and in which order (REQ-NCX-003, 010, 013 to 017)."""
+"""What `write_ncx` refuses, and in which order (REQ-NCX-003, 010, 013 to 017, 026)."""
 
 import math
 from dataclasses import replace
@@ -8,15 +8,15 @@ import numpy as np
 import pytest
 
 from cl_strategies import Move, arc, framed, full_circle, profile_moves
-from ncx_programs import PROFILE, RECT_FILLETS, record, refused, written
+from ncx_programs import PROFILE, RECT_FILLETS, exact_text, record, refused, words, written
 from splintercam.cl import ClHeader, ClOperation
 from splintercam.foundation import Context, Severity
 from splintercam.ncx import ProgramInfo, write_ncx
-from splintercam.ncx._moves import printed
+from splintercam.ncx._moves import move_blocks, printed
 from splintercam.ncx._refusals import operation_errors
 
 
-@pytest.mark.req("REQ-NCX-010")
+@pytest.mark.req("REQ-NCX-010", "REQ-NCX-013")
 def test_a_z_past_the_double_range_is_refused(ctx: Context) -> None:
     # cl checks z and a apart; z + a can overflow to inf, which must not print as Z=0.0.
     operation = record(ctx).operations[0]
@@ -60,7 +60,7 @@ def test_a_second_tool_or_speed_is_refused(ctx: Context, change: dict[str, float
     assert _codes(ctx, PROFILE, second) == [("NCX_TOOL_CHANGE_UNSUPPORTED", "operation 2 (B)")]
 
 
-@pytest.mark.req("REQ-NCX-010")
+@pytest.mark.req("REQ-NCX-010", "REQ-NCX-013")
 def test_a_value_of_1e9_is_refused(ctx: Context) -> None:
     # The first move's z = h_c = 5 becomes 1e9 with a = 1e9 - 5; a ≠ 0 is refused after the
     # moves (REQ-NCX-013, AQ-035).
@@ -75,6 +75,10 @@ def test_a_value_of_1e9_is_refused(ctx: Context) -> None:
     below = float(np.nextafter(1e9, 0.0))
     found = refused(ctx, replace(PROFILE, axial_offset_mm=below - 5.0))
     assert [d.code for d in found] == ["NCX_POINT_OFFSET_UNSUPPORTED"]  # no value out of range
+    # ... and the largest Z below 10^9 still prints, on the move blocks (REQ-NCX-007).
+    (operation,) = record(ctx, replace(PROFILE, axial_offset_mm=below - 5.0)).operations
+    first = move_blocks(operation, printed(operation))[0]
+    assert words(first)["Z"] == exact_text(5.0 + (below - 5.0))
 
 
 @pytest.mark.req("REQ-NCX-010")
@@ -118,6 +122,23 @@ def test_an_axial_offset_other_than_0_is_refused(ctx: Context, offset: float) ->
 def test_a_point_and_its_offset_are_both_refused_k_first(ctx: Context) -> None:
     found = refused(ctx, replace(PROFILE, point_number=2, axial_offset_mm=1.0))
     assert [d.code for d in found] == ["NCX_POINT_UNSUPPORTED", "NCX_POINT_OFFSET_UNSUPPORTED"]
+
+
+@pytest.mark.req("REQ-NCX-013", "REQ-NCX-017")
+def test_the_offset_refusal_comes_before_the_note_and_the_tol(ctx: Context) -> None:
+    header = replace(PROFILE, point_number=2, axial_offset_mm=1.0, note=("(a)",), tol_mm=0.001)
+    assert [d.code for d in refused(ctx, header)] == [
+        "NCX_POINT_UNSUPPORTED",
+        "NCX_POINT_OFFSET_UNSUPPORTED",
+        "NCX_NOTE_CHARACTER",
+        "TOL_BELOW_MINIMUM",
+    ]
+
+
+@pytest.mark.req("REQ-NCX-013")
+def test_a_negative_zero_offset_is_written(ctx: Context) -> None:
+    # cl takes a = -0.0 (a ≥ 0); it moves no Z, so it is 0 (DEC-NCX-018 (b)).
+    assert written(ctx, replace(PROFILE, axial_offset_mm=-0.0)).text == written(ctx).text
 
 
 @pytest.mark.req("REQ-NCX-014")
@@ -250,7 +271,7 @@ def test_every_error_is_reported_in_order(ctx: Context) -> None:
     ]
 
 
-@pytest.mark.req("REQ-NCX-010", "REQ-NCX-017")
+@pytest.mark.req("REQ-NCX-010", "REQ-NCX-013", "REQ-NCX-017")
 def test_moves_out_of_range_are_named_by_index(ctx: Context) -> None:
     # With a = 1e9 every move at or above z = 0 (the rapids) reaches 1e9, in move order; then
     # a ≠ 0 itself (REQ-NCX-013, AQ-035).

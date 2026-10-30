@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`ncx`'s stderr as diagnostics with their operation (REQ-NCX-020 to 022, 025)."""
+"""`ncx`'s stderr as diagnostics with their operation (REQ-NCX-020 to 022, 025, 027)."""
 
 from pathlib import Path
 
@@ -28,7 +28,7 @@ def _at(line: int, rest: str) -> str:
 
 def _strict(step: NcxStep) -> Diagnostic:
     # REQ-NCX-027 (AQ-036 item 4): a warning or an unread line in `format --check` or `check`.
-    message = f"ncx {step.value} reported a warning or an unread line; it fails as under --strict"
+    message = f"ncx {step.value} reported a warning or an unread line; it fails closed (AQ-036)"
     return Diagnostic("NCX_STRICT_FAILED", Severity.ERROR, message, f"ncx {step.value}")
 
 
@@ -152,7 +152,10 @@ def test_another_compile_warning_fails_as_strict() -> None:
         ("NCX_ROUNDED", Severity.INFO),
         ("NCX_STRICT_FAILED", Severity.ERROR),
     ]
-    assert "compile" in found[2].message
+    assert found[2].message == (
+        "ncx compile reported a warning other than CMP020 or an unread line; "
+        "it fails as under --strict"
+    )
 
 
 @pytest.mark.req("REQ-NCX-020", "REQ-NCX-022")
@@ -177,6 +180,16 @@ def test_the_ncx_file_is_found_by_its_resolved_path() -> None:
     bare = "RECT(2).ncx(60): ERROR VM440: F on a RAPID"  # relative to the work folder
     found = _read(NcxStep.CHECK, roundabout, bare)
     assert [d.location for d in found] == ["operation 1 (A)", "operation 2 (B)"]
+
+
+@pytest.mark.req("REQ-NCX-021", "REQ-NCX-022")
+def test_a_cmp020_of_another_file_fails_compile() -> None:
+    # DEC-NCX-019: only the rounding of the NCX file is the accepted rounding (D-149).
+    found = _read(NcxStep.COMPILE, f"{_MACHINE}(5): WARNING CMP020: a")
+    assert [(d.code, d.severity, d.location) for d in found] == [
+        ("CMP020", Severity.WARNING, "ncx compile"),
+        ("NCX_STRICT_FAILED", Severity.ERROR, "ncx compile"),
+    ]
 
 
 @pytest.mark.req("REQ-NCX-022", "REQ-NCX-027")

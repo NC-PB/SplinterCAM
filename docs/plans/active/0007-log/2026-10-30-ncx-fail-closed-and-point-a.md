@@ -10,5 +10,10 @@
   - `tests/ncx/unit/test_messages.py` and `tests/ncx/integration/test_run_ncx.py`: the tests whose `format`/`check` stderr holds a WARNING or an unread line expect `NCX_STRICT_FAILED` after it.
 - New: `test_an_axial_offset_other_than_0_is_refused` (5e-324, 1e-6, 1, 40), `test_a_point_and_its_offset_are_both_refused_k_first`, `test_format_and_check_fail_closed`, `test_format_and_check_pass_with_errors_and_infos_only`, `test_a_warning_with_exit_0_fails_and_stops_before_compile`.
 - Not changed: the golden job (`src/splintercam/job/SPEC.md`) has a = 0 and a clean `ncx` run, so neither change touches it. `model` still accepts a ≠ 0 (REQ-MDL-006); such a job now stops at `write_ncx` with the new error.
-- Local checks (rule 10): `uv run pytest tests/ncx`, `tools/lint`, `tools/arch-check`, `tools/size-check`.
-- Open: none.
+- Reviews: the cnc-reviewer, spec-reviewer and test-auditor all found no must-fix issue. Their findings were applied:
+  - cnc: `compile`'s `CMP020` is accepted only on the NCX file (DEC-NCX-019, `test_a_cmp020_of_another_file_fails_compile`). Whether `ncx` can print a warning on stdout is asked in `docs/research/requests/RR-017.md`; meanwhile stdout is logged as before.
+  - spec: the CFG002 example, the invariant, the failure table and the order of the step's errors are now worded to match. `format`'s message says "it fails closed", not "as under --strict".
+  - tests: REQ-NCX-013 tags added, and the largest Z below 10^9 is printed again on the move blocks. New tests: `test_the_offset_refusal_comes_before_the_note_and_the_tol` and `test_a_negative_zero_offset_is_written` (a = −0.0 passes).
+- Not run: the real-`ncx` test (`tests/ncx/integration/test_real_ncx.py`) is skipped here, because `ncx` is not on the path, and in CI until AQ-025's job lands. REQ-NCX-027 makes any non-diagnostic stderr line from the real `ncx` fail every job, so that test should run before the dry run (plan 0007, step 8).
+- Local checks (rule 10): `uv run pytest tests/ncx` (123 passed, 6 skipped), `tools/lint`, `tools/arch-check`, `tools/size-check`.
+- Open: RR-017 (box 3, does not block).

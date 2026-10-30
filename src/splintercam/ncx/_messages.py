@@ -52,7 +52,8 @@ def read_messages(
             location, text = f"ncx {step.value}", f"{file}: {text}"
         severity = Severity[match["severity"]]
         warning = severity is Severity.WARNING
-        if warning and step is NcxStep.COMPILE and code == _ROUNDED:  # another severity stays
+        # Only compile's rounding of our file is accepted; another severity stays (DEC-NCX-019).
+        if warning and step is NcxStep.COMPILE and code == _ROUNDED and ours[file]:
             index, count = rounded.get(location, (len(found), 0))
             if count == 0:
                 found.append(Diagnostic("NCX_ROUNDED", Severity.INFO, "", location))
@@ -64,10 +65,16 @@ def read_messages(
         message = f"{count} values rounded to the machine's decimals ({_ROUNDED}, D-149)"
         found[index] = Diagnostic("NCX_ROUNDED", Severity.INFO, message, location)
     if strict:
-        where = f"ncx {step.value}"
-        accepted = f" other than {_ROUNDED}" if step is NcxStep.COMPILE else ""
-        message = (
-            f"{where} reported a warning{accepted} or an unread line; it fails as under --strict"
-        )
-        found.append(Diagnostic("NCX_STRICT_FAILED", Severity.ERROR, message, where))
+        found.append(_strict_failed(step))
     return found
+
+
+def _strict_failed(step: NcxStep) -> Diagnostic:
+    # REQ-NCX-022, 027; DEC-NCX-017 (c): format runs without --strict, so it fails closed.
+    where = f"ncx {step.value}"
+    if step is NcxStep.COMPILE:
+        reported, verdict = f"a warning other than {_ROUNDED}", "it fails as under --strict"
+    else:
+        reported, verdict = "a warning", "it fails closed (AQ-036)"
+    message = f"{where} reported {reported} or an unread line; {verdict}"
+    return Diagnostic("NCX_STRICT_FAILED", Severity.ERROR, message, where)

@@ -210,7 +210,7 @@ def test_cancelled_during_the_last_step(
 def test_output_is_decoded_as_utf8_with_replacement(ctx: Context, fake_ncx: MakeFake) -> None:
     fake = fake_ncx(format=Step(stderr="bad \udcff byte\n"))
     result = run_ncx(fake.call, _PROGRAM, ctx)
-    strict = "ncx format reported a warning or an unread line; it fails as under --strict"
+    strict = "ncx format reported a warning or an unread line; it fails closed (AQ-036)"
     assert [(d.code, d.message) for d in result.diagnostics] == [
         ("NCX_OUTPUT_UNREAD", "bad � byte"),
         ("NCX_STRICT_FAILED", strict),  # REQ-NCX-027

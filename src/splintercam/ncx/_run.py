@@ -56,7 +56,7 @@ def run_ncx(call: NcxCall, program: NcxProgram, ctx: Context) -> Result[tuple[Nc
     the value is the steps that ran (none when cancelled). A relative path in `call` raises
     `ValueError` (a precondition, as DEC-CL-002).
 
-    Implements: REQ-NCX-018 to 025.
+    Implements: REQ-NCX-018 to 025, 027.
     """
     relative = [
         name

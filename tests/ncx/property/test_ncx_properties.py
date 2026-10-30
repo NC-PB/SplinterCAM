@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """The invariants of src/splintercam/ncx/SPEC.md over generated records, values and fake `ncx`
-runs (REQ-NCX-001 to 009, 019 to 024)."""
+runs (REQ-NCX-001 to 009, 013, 019 to 024, 027)."""
 
 from dataclasses import replace
 from fractions import Fraction
