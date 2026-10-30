@@ -20,7 +20,7 @@ _START = [
     "FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF",
     "ORIGIN=1",
     'SECTION="PROFILE_1"',
-    "TOOL=1 OFFSET:LEN=1 RPM=8000.0 SPINDLE=CW",
+    "TOOL=1 OFFSET:LEN=1 SPINDLE=CW RPM=8000.0",
     "COOLANT=ON",
     "RAPID Z=5.0",
     "RAPID X=50.0 Y=-15.0 Z=5.0",
@@ -71,7 +71,7 @@ def test_two_operations_of_one_tool_have_one_tool_block(ctx: Context) -> None:
         'SECTION="PROFILE_1"',
         'COMMENT="Rohteil 105 x 65"',
         'COMMENT="Spannung oben"',
-        "TOOL=1 OFFSET:LEN=1 RPM=8000.0 SPINDLE=CW",
+        "TOOL=1 OFFSET:LEN=1 SPINDLE=CW RPM=8000.0",
     ]
     b = lines.index('SECTION="B"')
     assert lines[b + 1] == "RAPID Z=5.0"
