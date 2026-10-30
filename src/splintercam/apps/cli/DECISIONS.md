@@ -23,3 +23,17 @@
 - Why: the feature map gives 0, 1 and 2; research 27 records `ncx`'s 2 for usage errors, unreadable input or a missing machine file, and the same meaning makes the two tools read alike in CI. A cancelled run has no program, so it is not 0 (spec review).
 - Rejected: 1 for every error (a CI script cannot tell a wrong path from a wrong part).
 - Where: REQ-CLI-005.
+
+## DEC-CLI-003: Readings of the Reviewed wording (escaping, the codes of 2, the help, logging, encoding)
+
+- Date: 2026-10-30; decided by: ours (implementation, after the spec and cnc reviews); item 4 provisional until AQ-041 is answered
+- Status: Accepted 2026-10-30 (items 1 to 3, 5); item 4 Provisional (AQ-041)
+- Decision:
+  1. The text report escapes the backslash first (`\\`), then `\n` and `\r` as REQ-CLI-003 says, and every other character that breaks or hides a line as `\xNN` or `\uNNNN`: C0 controls but tab, DEL, C1 controls (with NEL) and U+2028, U+2029. Text and tab stay as they are.
+  2. `JOB_FILE_UNREADABLE`, `DXF_UNREADABLE` and `JOB_MACHINE_NOT_FOUND` give 2 only as ERRORs. Today they are always ERRORs (`job`, `io`); the reading keeps "INFO never changes the code" of REQ-CLI-005 true whatever a producer does.
+  3. The help of `run` says what the exit codes mean and, after 1 or 2, to take no file from the output folder (the safe default of AQ-040).
+  4. Log records of the producers (`offset2d`'s replay input after a kernel failure) reach stderr through Python's last-resort handler, as before; the CLI sets no logging (AQ-041 (a)).
+  5. stdout keeps the platform's encoding. A path the console's code page cannot encode (a Windows pipe in cp1252) ends in a traceback and exit 1, after the files are written; `--json` is pure ASCII and is the form for scripts.
+- Why: (1) without the backslash escaped, `C:\new` reads as a line break, and `str.splitlines` and terminals break at more than `\n` and `\r` (spec review, cnc review L1); a diagnostic holding `ncx`'s text verbatim must stay one line. (2) the requirement's two sentences agree only under this reading (spec review). (3) a `--strict` run that fails can leave the NC program in the folder (cnc review H1, AQ-040). (4) the replay input is what a kernel bug report needs; muting it loses it (AQ-041). (5) a failing exit code is the safe side, and replacing characters would print a path that does not exist.
+- Rejected: (1) only `\n` and `\r` (ambiguous, breaks on other separators); (2) the code alone (an INFO of that code would change the exit code); (4) a `NullHandler` now (loses the replay input; AQ-041 (b)); (5) `errors="backslashreplace"` on stdout (prints a wrong path with exit 0).
+- Where: REQ-CLI-003, 004, 005, 006; `src/splintercam/apps/cli/_cli.py`.

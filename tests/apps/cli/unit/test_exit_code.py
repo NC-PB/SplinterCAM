@@ -29,6 +29,8 @@ _CANCELLED = diagnostic("CANCELLED", Severity.WARNING)
         ((diagnostic("DXF_UNREADABLE"),), 2, 2),
         ((diagnostic("JOB_MACHINE_NOT_FOUND"),), 2, 2),
         ((_ERROR, diagnostic("JOB_MACHINE_NOT_FOUND")), 2, 2),  # 2 wins over 1, in any order
+        ((diagnostic("DXF_UNREADABLE", Severity.INFO),), 0, 0),  # INFO never changes it
+        ((diagnostic("JOB_FILE_UNREADABLE", Severity.WARNING),), 0, 1),
         ((diagnostic("JOB_FILE_INVALID"),), 1, 1),  # readable but wrong: the job's fault
         ((diagnostic("JOB_NCX_NOT_FOUND"),), 1, 1),
     ],

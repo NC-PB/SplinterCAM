@@ -14,12 +14,26 @@ from splintercam.job import Diagnostic, JobReport, Severity, run_job
 # The input could not be read at all: 2, as `ncx` exits for unreadable input or a missing
 # machine file (research 27, Exit codes; DEC-CLI-002).
 _UNREADABLE = frozenset({"JOB_FILE_UNREADABLE", "DXF_UNREADABLE", "JOB_MACHINE_NOT_FOUND"})
+# Every character that breaks or hides a line, after the backslash itself, so a line reads back
+# as one diagnostic and an escape cannot be confused with the text (DEC-CLI-003).
+_CONTROLS = (*range(0x20), 0x7F, *range(0x80, 0xA0), 0x2028, 0x2029)
+_ESCAPES = {ord("\\"): "\\\\", ord("\n"): "\\n", ord("\r"): "\\r"} | {
+    c: f"\\x{c:02x}" if c < 0x100 else f"\\u{c:04x}"
+    for c in _CONTROLS
+    if c not in (0x09, 0x0A, 0x0D)
+}
+_AFTER_A_FAILED_RUN = (
+    "exit 0: a usable run, its files on stdout; 1: an error, a cancel or, with --strict, a "
+    "warning; 2: unreadable input. After 1 or 2, take no file from the output folder: files may "
+    "be left there (AQ-040)."
+)
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="splintercam", description="SplinterCAM's command line.")
     commands = parser.add_subparsers(dest="command", required=True, metavar="COMMAND")
-    run = commands.add_parser("run", help="run a job file to the NCX file and the NC program")
+    run = commands.add_parser("run", help="run a job file to the NCX file and the NC program",
+                              epilog=_AFTER_A_FAILED_RUN)  # fmt: skip
     run.add_argument("job_file", metavar="JOB_FILE", type=Path, help="the job file (JSON)")
     run.add_argument("--output", required=True, type=Path, metavar="DIR",
                      help="the output folder, new or empty")  # fmt: skip
@@ -34,16 +48,16 @@ def _parser() -> argparse.ArgumentParser:
 
 def exit_code(report: JobReport, strict: bool) -> int:
     """0 a usable run, 1 an error, a cancel or (strict) a warning, 2 unreadable input
-    (REQ-CLI-005; DEC-CLI-002). INFO never changes it."""
-    if any(d.code in _UNREADABLE for d in report.diagnostics):
+    (REQ-CLI-005; DEC-CLI-002). INFO never changes it: the codes of 2 count as errors only."""
+    if any(d.code in _UNREADABLE and d.severity is Severity.ERROR for d in report.diagnostics):
         return 2
     warned = strict and any(d.severity is Severity.WARNING for d in report.diagnostics)
     return 0 if report.ok and not warned else 1
 
 
 def _escape(text: str) -> str:
-    # One diagnostic per line: `NCX_OUTPUT_UNREAD` holds ncx's text verbatim (DEC-CLI-001).
-    return text.replace("\n", "\\n").replace("\r", "\\r")
+    # One diagnostic per line: `NCX_OUTPUT_UNREAD` holds ncx's text verbatim (DEC-CLI-001, 003).
+    return text.translate(_ESCAPES)
 
 
 def _line(d: Diagnostic) -> str:

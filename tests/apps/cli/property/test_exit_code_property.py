@@ -24,8 +24,9 @@ _FILES = (Path("out/A.ncx").absolute(), (Path("out/A.h").absolute(),))
 
 
 def _expected(diagnostics: tuple[Diagnostic, ...], strict: bool) -> int:
-    # REQ-CLI-005 as written, an oracle independent of the code's form.
-    if any(d.code in _INPUT for d in diagnostics):
+    # REQ-CLI-005 as written, an oracle independent of the code's form; the codes of 2 as
+    # errors, since INFO never changes the code (DEC-CLI-003).
+    if any(d.code in _INPUT and d.severity is Severity.ERROR for d in diagnostics):
         return 2
     if any(d.severity is Severity.ERROR or d.code == "CANCELLED" for d in diagnostics):
         return 1
@@ -34,15 +35,13 @@ def _expected(diagnostics: tuple[Diagnostic, ...], strict: bool) -> int:
     return 0
 
 
-def _run(fake: JobReport, argv: list[str]) -> tuple[int, str]:
+def _run(fake: JobReport, argv: list[str]) -> tuple[int, str, str]:
     # No capsys or monkeypatch: Hypothesis refuses function-scoped fixtures.
     out, err = io.StringIO(), io.StringIO()
     with (mock.patch("splintercam.apps.cli._cli.run_job", FakeRunJob(fake)),
           contextlib.redirect_stdout(out), contextlib.redirect_stderr(err)):  # fmt: skip
         code = main(argv)
-    if "--json" in argv:
-        assert err.getvalue() == ""
-    return code, out.getvalue()
+    return code, out.getvalue(), err.getvalue()
 
 
 @pytest.mark.req("REQ-CLI-005")
@@ -56,12 +55,18 @@ def test_the_exit_code_is_a_function_of_the_report_and_strict(
     argv = ["run", "job.json", "--output", "out", *(["--strict"] if strict else []),
             *(["--json"] if as_json else [])]  # fmt: skip
     expected = _expected(diagnostics, strict)
-    code, out = _run(report(*diagnostics, ncx_file=_FILES[0], nc_files=_FILES[1]), argv)
+    code, out, err = _run(report(*diagnostics, ncx_file=_FILES[0], nc_files=_FILES[1]), argv)
     assert code == expected
     if as_json:
+        assert err == ""
         parsed = json.loads(out)
         assert parsed["exit_code"] == expected
         named = [parsed["ncx_file"], *parsed["nc_files"]]
         assert named == ([str(_FILES[0]), str(_FILES[1][0])] if expected == 0 else [None])
+        assert [d["message"] for d in parsed["diagnostics"]] == [d.message for d in diagnostics]
     else:
         assert (out != "") == (expected == 0)
+        # One line per diagnostic, whatever the generated text holds (REQ-CLI-003).
+        assert len(err.splitlines()) == len(diagnostics)
+        assert [line.split(" ", 2)[1].rstrip(":") for line in err.splitlines()] == [
+            d.code for d in diagnostics]  # fmt: skip

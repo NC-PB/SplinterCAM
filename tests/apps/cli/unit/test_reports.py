@@ -70,6 +70,21 @@ def test_line_breaks_are_escaped_one_diagnostic_per_line(
 
 
 @pytest.mark.req("REQ-CLI-003")
+def test_backslashes_and_every_other_line_break_are_escaped(
+    fake_run_job: FakeRunJob, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # DEC-CLI-003: the backslash first, so `C:\new` is not read as a line break; every
+    # character `str.splitlines` breaks at, and ESC, which a terminal acts on; tab and text kept.
+    message = "C:\\new\\run.ncx\v\f\x1c\x85\u2028\u2029\x1b[31m\tÄ"
+    fake_run_job.report = report(diagnostic("NCX_STEP_FAILED", location="a\\b", message=message))
+    assert main(_RUN) == 1
+    err = capsys.readouterr().err
+    assert err == ("ERROR NCX_STEP_FAILED a\\\\b: C:\\\\new\\\\run.ncx\\x0b\\x0c\\x1c\\x85"
+                   "\\u2028\\u2029\\x1b[31m\tÄ\n")  # fmt: skip
+    assert len(err.splitlines()) == 1
+
+
+@pytest.mark.req("REQ-CLI-003")
 def test_a_failed_run_prints_nothing_on_stdout(
     fake_run_job: FakeRunJob, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

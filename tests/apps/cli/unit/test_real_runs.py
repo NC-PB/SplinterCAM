@@ -37,6 +37,7 @@ def test_the_same_job_twice_prints_the_same_report_but_for_the_folders(
     options += ["--json"] if as_json else []
     reports: list[str] = []
     for name in ("first", "second"):
+        (tmp_path / name).mkdir()  # two empty folders, as REQ-CLI-007 says
         code, out, err = _run(["run", _JOB, "--output", str(tmp_path / name), *options], capsys)
         assert code == 1
         reports.append((out + err).replace(str(tmp_path / name), "<output>"))

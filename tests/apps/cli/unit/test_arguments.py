@@ -3,6 +3,8 @@
 (src/splintercam/apps/cli/SPEC.md, REQ-CLI-001, 002, 006)."""
 
 import ast
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -78,6 +80,22 @@ def test_run_help_names_every_option(capsys: pytest.CaptureFixture[str]) -> None
     out = capsys.readouterr().out
     for option in ("JOB_FILE", "--output", "--ncx", "--machine", "--strict", "--json"):
         assert option in out
+    # The safe default of AQ-040 (a): after a failed run, files may be left in the folder.
+    assert "take no file from the output folder" in " ".join(out.split())
+
+
+@pytest.mark.req("REQ-CLI-006")
+@pytest.mark.parametrize(("argv", "code", "on_stdout"), [(["--help"], 0, True),
+                                                         (["run"], 2, False)])  # fmt: skip
+def test_python_dash_m_runs_main_and_returns_its_code(
+    argv: list[str], code: int, on_stdout: bool
+) -> None:
+    # The console script's target is `__main__.entry` (pyproject.toml); `-m` runs the same.
+    run = subprocess.run([sys.executable, "-m", "splintercam.apps.cli", *argv],
+                         capture_output=True, text=True, check=False, timeout=60)  # fmt: skip
+    assert run.returncode == code
+    assert (run.stdout if on_stdout else run.stderr).startswith("usage: splintercam")
+    assert (run.stderr if on_stdout else run.stdout) == ""
 
 
 @pytest.mark.req("REQ-CLI-006")
