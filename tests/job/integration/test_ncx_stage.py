@@ -10,7 +10,7 @@ import pytest
 
 from job_files import FakeRunNcx, codes, listing
 from splintercam.foundation import CANCELLED, Context, Diagnostic, Severity
-from splintercam.job import JobReport, run_job
+from splintercam.job import JobReport, default_context, run_job
 
 
 def _run(job_file: Path, out: Path, ctx: Context, exe: Path | None) -> JobReport:
@@ -204,26 +204,42 @@ def test_a_cancel_after_a_clean_ncx_moves_nothing(
 
 
 @pytest.mark.req("REQ-JOB-019")
+@pytest.mark.parametrize("fails", ["before", "half-way"])
 def test_a_failed_move_leaves_no_nc_file(
-    job_file: Path,
-    tmp_path: Path,
-    ctx: Context,
-    fake_ncx: FakeRunNcx,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+    job_file: Path, tmp_path: Path, fake_ncx: FakeRunNcx, monkeypatch: pytest.MonkeyPatch,
+    fails: str,
+) -> None:  # fmt: skip
+    # Across volumes a move is a copy; a full disk half-way through must not leave a cut-off
+    # program under its real name (DEC-JOB-013).
     fake_ncx.files = ("a.h", "b.h")
-    moved: list[str] = []
-    real_move = shutil.move
+    copied: list[str] = []
+    real_copy = shutil.copyfile
 
     def second_fails(source: Path, target: Path) -> object:
-        if moved:
+        if copied:
+            if fails == "half-way":
+                Path(target).write_bytes(Path(source).read_bytes()[:3])
             raise OSError(28, "No space left on device")
-        moved.append(source.name)
-        return real_move(source, target)
+        copied.append(Path(source).name)
+        return real_copy(source, target)
 
-    monkeypatch.setattr("splintercam.job._output.shutil.move", second_fails)
-    report = _run(job_file, tmp_path / "out", ctx, fake_ncx.exe)
-    assert moved == ["a.h"]
+    monkeypatch.setattr("splintercam.job._output.shutil.copyfile", second_fails)
+    report = _run(job_file, tmp_path / "out", default_context(), fake_ncx.exe)
+    assert copied == ["a.h"]
     assert _errors(report) == ["JOB_OUTPUT_UNWRITABLE"]
     assert listing(tmp_path / "out") == ["RECT_FILLETS.ncx"]
+    assert report.nc_files == ()
+
+
+@pytest.mark.req("REQ-JOB-019")
+@pytest.mark.parametrize("entry", ["sub/", "RECT_FILLETS.ncx"])
+def test_a_folder_or_a_file_already_there_is_not_moved(
+    job_file: Path, tmp_path: Path, ctx: Context, fake_ncx: FakeRunNcx, entry: str
+) -> None:
+    fake_ncx.files = ("RECT_FILLETS.h", entry)  # "sub/": a folder in the staging folder
+    out = tmp_path / "out"
+    report = _run(job_file, out, ctx, fake_ncx.exe)
+    assert _errors(report) == ["JOB_OUTPUT_UNWRITABLE"]
+    assert listing(out) == ["RECT_FILLETS.ncx"]
+    assert (out / "RECT_FILLETS.ncx").read_text(encoding="ascii").startswith("FILE=BEGIN")
     assert report.nc_files == ()

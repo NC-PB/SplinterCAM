@@ -77,3 +77,48 @@
 - Why: research 27, test 5: a program with an error gives no NC file. Without staging, a `compile` killed by a cancel or a crash could leave half a program in the output folder, and a program `compile` warned about (but did not refuse without `--strict`) would look like a good one; either could reach the machine.
 - Rejected: compiling into the output folder and deleting on failure (a crash of the CAM itself leaves the file); marking failed files by name (an operator copying files to the control does not see the mark).
 - Where: REQ-JOB-019; `src/splintercam/ncx/SPEC.md`, REQ-NCX-022.
+
+## DEC-JOB-009: Stage 1's readings where the SPEC's words leave a choice
+
+- Date: 2026-10-30; decided by: ours (implementation, plan 0007 step 7)
+- Status: Accepted 2026-10-30 (box 2, listed in the pull request)
+- Decision: (1) `null` for a required object or array is `JOB_KEY_MISSING`, as an absent key, since `null` and absent mean the same for optional keys; a required value given as `null` is passed to `model` (or to `job`'s own check of REQ-JOB-007, 008), which names its type. (2) `JOB_INPUTS` is reported after stage 1's errors too, once the format and version are read, naming `none` for a machine file it could not resolve; it is never reported for `JOB_FILE_*` or `JOB_FORMAT_UNSUPPORTED`. (3) `machine_file` given and the job's `machine` not a non-empty string: `JOB_VALUE_INVALID` at `machine`, the file is still wrong. (4) `JOB_FILE_INVALID` is located `line <L>, column <C>`, 1-based as `json` counts; for `NaN`, an infinity or a number beyond the double range (`1e400`, an int over `json`'s digit limit), which `json` reports without a place, a second pass over the text finds the first such number outside a string. (5) Unknown and repeated keys of one object are one diagnostic per key name, unknown before repeated when both; the value used is the first. (6) A tool type that is not a string (`null`, `1`) is `JOB_TOOL_TYPE_UNSUPPORTED`, as any other type.
+- Why: each keeps one diagnostic per mistake at the key the user must change, and keeps the machine file and `ncx` visible in every report that got past the format (DEC-JOB-004). The second pass reads text `json` has already accepted up to that number, so strings are recognised exactly.
+- Rejected: `JOB_STRUCTURE_INVALID` for `null` (the user left it out in effect); no `JOB_INPUTS` after an error (the machine file is what a user checks first when the run fails); a hand-written JSON scanner with positions (more code than the second pass).
+- Where: REQ-JOB-002, 004, 005, 007 to 009, 020; `src/splintercam/job/_json.py`, `_layout.py`.
+
+## DEC-JOB-010: Paths made absolute without resolving links
+
+- Date: 2026-10-30; decided by: ours
+- Status: Accepted 2026-10-30 (box 2)
+- Decision: every path `job` passes on is the given path joined to the current folder (or to the job file's folder) with `.` and `..` taken out (`os.path.normpath` of `Path.absolute()`); links are not resolved.
+- Why: REQ-JOB-009 and 018 ask for absolute paths and `JOB_INPUTS` must name the file as the user knows it. `Path.resolve()` would replace a linked `ncx` (a launcher, a version link) by its target, which then runs with another name, and would print a path the user never wrote.
+- Rejected: `Path.resolve()`; `Path.absolute()` alone (keeps `..`, so `JOB_INPUTS` names `out/../jobs/a`).
+- Where: `absolute` in `src/splintercam/job/_layout.py`.
+
+## DEC-JOB-011: Stage 9's edges: all or none, cancel wins, a file at the output path
+
+- Date: 2026-10-30; decided by: ours
+- Status: Accepted 2026-10-30 (box 2)
+- Decision: (1) The compiled files are moved in code-point order; if one move fails, the files already moved are removed again and `JOB_OUTPUT_UNWRITABLE` is reported, so `nc_files` is empty. (2) A cancel seen after `run_ncx` returned clean moves nothing and reports `CANCELLED`. (3) A file (not a folder) at the output path is `JOB_OUTPUT_NOT_EMPTY` (it exists and is not an empty folder, REQ-JOB-010's words), and is left as it is.
+- Why: DEC-JOB-008 and the SPEC's second invariant: a report with an error or a cancel has no NC file, and no half set of files is left that looks like a program. A cancel is the user's "stop", which no later step overrides.
+- Rejected: leaving the files moved before a failure (half a program set); `JOB_OUTPUT_UNWRITABLE` for a file at the path (the file is there, nothing failed to write).
+- Where: REQ-JOB-010, 019, 021; `src/splintercam/job/_output.py`.
+
+## DEC-JOB-012: The tests' fake `ncx` replaces `run_ncx` where `job` calls it
+
+- Date: 2026-10-30; decided by: ours
+- Status: Accepted 2026-10-30 (box 2)
+- Decision: the integration and property tests put a fake `run_ncx` (`tests/support/job_files.py`, `FakeRunNcx`) in place of `splintercam.job._output.run_ncx`; it records the call and what the working and staging folders held, writes files into the staging folder, and returns clean, failed or cancelled. The real process is run by `ncx`'s own tests (`tests/ncx/integration/`) and by the golden case with the real `ncx`.
+- Why: `ncx`'s fake (`tests/support/ncx_fake.py`) is the Python interpreter run on a step folder inside the working folder, and REQ-JOB-018 makes that folder new and empty, so the fake's step folders cannot be there; an executable script would need a shebang, which Windows does not run, or a batch file, whose argument quoting differs. What REQ-JOB-017 to 019 and 021 test is `job`'s handling of the call and its outcome, which the in-process fake drives exactly on every platform.
+- Rejected: a script with a shebang (not on Windows); a `.cmd` wrapper (argument quoting through `cmd.exe`).
+- Where: `tests/job/conftest.py`, `tests/job/integration/`, `tests/job/property/`.
+
+## DEC-JOB-013: Files reach the output folder under a partial name, then are renamed
+
+- Date: 2026-10-30; decided by: ours (cnc review, must-fix M1)
+- Status: Accepted 2026-10-30 (box 2)
+- Decision: the NCX file and each compiled file are written into the output folder as `.<name>.partial` and then renamed to `<name>` (`Path.replace`, within one folder); the partial file is removed after a failure. A compiled file is copied from the staging folder, not moved. A staging entry that is a folder or a link, or whose name is already in the output folder (the NCX file), stops the move with `JOB_OUTPUT_UNWRITABLE`; files already placed are removed, and any that cannot be removed are named in the message.
+- Why: the staging folder is in the system's temporary folder, and the output folder is often another volume (a USB stick or a network share for the control). There a move is a copy and a delete, and a full disk, a pulled stick or a crash half-way would leave a cut-off program under its real name, which looks like a good one. A rename within one folder is atomic, so the real name only ever holds a whole file; a leftover `.partial` file has a name no control program list shows as `.h`.
+- Rejected: `shutil.move` (the cnc review's case); the staging folder inside the output folder (DEC-JOB-007: the CAM controls the working folder, not the user's); trusting the control to refuse a program without its end block (not checked against the iTNC 530 manuals).
+- Where: REQ-JOB-016, 019; `_place` and `_move` in `src/splintercam/job/_output.py`.

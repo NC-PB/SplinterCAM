@@ -63,9 +63,6 @@ class _Run:
             raise _Stopped
         return result.value
 
-    def report(self) -> JobReport:
-        return JobReport(tuple(self.found), self.cl_data, self.ncx_file, self.nc_files)
-
 
 def _plan_all(job: JobData, contour: CurveRows, ctx: Context) -> Result[tuple[ClOperation, ...]]:
     # Stage 5: every operation planned in the user's order before an error stops the run
@@ -89,18 +86,17 @@ def _plan_all(job: JobData, contour: CurveRows, ctx: Context) -> Result[tuple[Cl
 
 def _stages(run: _Run, job_file: Path, output_dir: Path, machine_file: Path | None,
             ncx_executable: Path | None) -> None:  # fmt: skip
-    ctx = run.ctx
     run.poll()
     read = run.take(read_job_file(job_file, machine_file, ncx_executable))
     output = run.take(prepare_output(absolute(output_dir)))
     declarations = {sid: strategy.declarations for sid, strategy in REGISTRY.items()}
-    job = run.take(check_job(read.data, declarations, ctx))
-    part = run.take(read_dxf_contour(read.dxf, read.layer, read.unit, ctx))
-    operations = run.take(_plan_all(job, part.loop, ctx))
-    run.cl_data = run.take(Result(make_cl_data(job.setup.work_offset, operations, ctx)))
-    program = run.take(write_ncx(run.cl_data, read.program, ctx))
+    job = run.take(check_job(read.data, declarations, run.ctx))
+    part = run.take(read_dxf_contour(read.dxf, read.layer, read.unit, run.ctx))
+    operations = run.take(_plan_all(job, part.loop, run.ctx))
+    run.cl_data = run.take(Result(make_cl_data(job.setup.work_offset, operations, run.ctx)))
+    program = run.take(write_ncx(run.cl_data, read.program, run.ctx))
     run.ncx_file = run.take(write_ncx_file(output, read.program.name, program))
-    run.nc_files = run.take(compile_ncx(read.ncx, run.ncx_file, read.machine, program, ctx))
+    run.nc_files = run.take(compile_ncx(read.ncx, run.ncx_file, read.machine, program, run.ctx))
 
 
 def run_job(job_file: Path, output_dir: Path, *, ncx_executable: Path | None = None,
@@ -113,4 +109,4 @@ def run_job(job_file: Path, output_dir: Path, *, ncx_executable: Path | None = N
     run = _Run(default_context() if ctx is None else ctx)
     with contextlib.suppress(_Stopped):
         _stages(run, job_file, output_dir, machine_file, ncx_executable)
-    return run.report()
+    return JobReport(tuple(run.found), run.cl_data, run.ncx_file, run.nc_files)

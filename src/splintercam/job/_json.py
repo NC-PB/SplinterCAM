@@ -17,25 +17,15 @@ class JsonObject:
 
     pairs: tuple[tuple[str, object], ...]
 
-    def keys(self) -> list[str]:
-        return [key for key, _ in self.pairs]
-
     def get(self, key: str) -> object:
         """The first value of `key`; None when it is absent or null."""
         return next((value for name, value in self.pairs if name == key), None)
 
 
-class _NotFiniteError(ValueError):
-    pass
-
-
-def _refuse_constant(_name: str) -> float:
-    raise _NotFiniteError
-
-
 def _finite(text: str) -> float:
-    if math.isinf(value := float(text)):
-        raise _NotFiniteError
+    # The hook of NaN, the infinities and every float: one beyond the double range reads as inf.
+    if not math.isfinite(value := float(text)):
+        raise ValueError(text)
     return value
 
 
@@ -61,8 +51,8 @@ def _kind(value: object) -> str:
     return next((name for kind, name in kinds if isinstance(value, kind)), "a number")
 
 
-def _invalid(where: str, message: str) -> Result[JsonObject]:
-    return Result(None, (Diagnostic("JOB_FILE_INVALID", Severity.ERROR, message, where),))
+def _invalid(where: str, message: str, code: str = "JOB_FILE_INVALID") -> Result[JsonObject]:
+    return Result(None, (Diagnostic(code, Severity.ERROR, message, where),))
 
 
 def read_json(path: Path) -> Result[JsonObject]:
@@ -73,8 +63,7 @@ def read_json(path: Path) -> Result[JsonObject]:
         data = path.read_bytes()
     except OSError as error:
         message = f"cannot read the job file: {error.strerror or error}"
-        return Result(None, (Diagnostic("JOB_FILE_UNREADABLE", Severity.ERROR, message,
-                                        str(path)),))  # fmt: skip
+        return _invalid(str(path), message, "JOB_FILE_UNREADABLE")
     try:
         text = data.decode("utf-8-sig")  # a byte-order mark is accepted (DEC-JOB-003)
     except UnicodeDecodeError as error:
@@ -82,10 +71,10 @@ def read_json(path: Path) -> Result[JsonObject]:
         return _invalid(_where(head, len(head)), "the job file is not UTF-8")
     try:
         value = json.loads(text, object_pairs_hook=lambda pairs: JsonObject(tuple(pairs)),
-                           parse_constant=_refuse_constant, parse_float=_finite)  # fmt: skip
+                           parse_constant=_finite, parse_float=_finite)  # fmt: skip
     except json.JSONDecodeError as error:
         return _invalid(f"line {error.lineno}, column {error.colno}", f"not JSON: {error.msg}")
-    except ValueError:  # _NotFiniteError, or an int beyond the digit limit of Python's json
+    except ValueError:  # from _finite, or an int beyond the digit limit of Python's json
         message = "NaN and infinite numbers are not JSON (RFC 8259)"
         return _invalid(_where(text, _not_finite_at(text)), message)
     if not isinstance(value, JsonObject):

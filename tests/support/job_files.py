@@ -99,8 +99,11 @@ class FakeRunNcx:
         del program
         self.calls.append(call)
         self.seen.append((listing(call.work_dir), listing(call.output_dir)))
-        for name in self.files:
-            (call.output_dir / name).write_text("; fake\n", encoding="ascii")
+        for name in self.files:  # a name ending in "/" is a folder
+            if name.endswith("/"):
+                (call.output_dir / name).mkdir()
+            else:
+                (call.output_dir / name).write_text("; fake\n", encoding="ascii")
         if self.cancel:
             ctx.cancel.cancel()
             return Result(None, (*self.diagnostics, CANCELLED))

@@ -125,7 +125,7 @@ class _Walk:
                 self.container(item, layout[0], f"{path}[{index}]", kind)
 
     def fields(self, value: JsonObject, layout: Fields, path: str, kind: str) -> None:
-        names = value.keys()
+        names = [key for key, _ in value.pairs]
         for key, spec in layout.keys:
             here, generic = (f"{path}.{key}", f"{kind}.{key}") if path else (key, key)
             given = value.get(key)
@@ -157,16 +157,12 @@ def _get(owner: JsonObject, key: str) -> Any:
     return _plain(owner.get(key))
 
 
-def _objects(value: object) -> list[JsonObject]:
-    return cast("list[JsonObject]", value)  # an array of objects, as the walk found it
-
-
 def _tool(tool: JsonObject) -> FlatEndMill:
     number, diameter, flutes = (_get(tool, k) for k in ("number", "diameter_mm", "flute_length_mm"))
     if (points := tool.get("points")) is None:
         return FlatEndMill(number, diameter, flutes)  # the tip alone, model.TIP
     taken = tuple(MeasurementPoint(k, _get(p, "axial_offset_mm"), _get(p, "register_radius_mm"))
-                  for k, p in enumerate(_objects(points), 1))  # fmt: skip
+                  for k, p in enumerate(cast("list[JsonObject]", points), 1))  # fmt: skip
     return FlatEndMill(number, diameter, flutes, taken)
 
 
@@ -181,24 +177,20 @@ def _operation(op: JsonObject) -> Operation:
 
 def _job_file(top: JsonObject, folder: Path, machine: Path, ncx: Path | None) -> JobFile:
     part, stock, program = (cast("JsonObject", top.get(k)) for k in ("part", "stock", "program"))
-    operations = tuple(_operation(op) for op in _objects(top.get("operations")))
+    operations = tuple(_operation(op) for op in cast("list[JsonObject]", top.get("operations")))
     stock_box = StockBox(_get(stock, "min_mm"), _get(stock, "max_mm"))
     setup = Setup(_get(cast("JsonObject", top.get("setup")), "work_offset"), stock_box, operations)
-    data = JobData(tuple(_tool(tool) for tool in _objects(top.get("tools"))), setup)
+    data = JobData(tuple(_tool(tool) for tool in cast("list[JsonObject]", top.get("tools"))), setup)
     unit = None if (given := part.get("unit")) is None else _UNITS[cast("str", given)]
     program_info = ProgramInfo(_get(program, "name"), _get(program, "number"))
     dxf = absolute(folder / _get(part, "dxf"))
     return JobFile(data, dxf, _get(part, "layer"), unit, program_info, machine, ncx)
 
 
-def _ncx(given: Path | None) -> tuple[Path | None, str]:
-    # REQ-JOB-009, 017: the executable and how JOB_INPUTS names it.
-    if given is None:
-        found = shutil.which("ncx")
-        path = None if found is None else absolute(Path(found))
-        return path, "no ncx on the PATH" if path is None else f"ncx {path}"
-    path = absolute(given)
-    return path, f"ncx {path}" + ("" if path.is_file() else ", which does not exist")
+def _ncx(given: Path | None) -> Path | None:
+    # REQ-JOB-009, 017: the executable given, else `ncx` on the PATH; None when there is none.
+    found = shutil.which("ncx") if given is None else given
+    return None if found is None else absolute(Path(found))
 
 
 def read_job_file(job_file: Path, machine_file: Path | None, ncx_executable: Path | None
@@ -219,10 +211,12 @@ def read_job_file(job_file: Path, machine_file: Path | None, ncx_executable: Pat
     if given is None and _named(machine):
         given = folder / cast("str", machine)
     machine_path = None if given is None else absolute(given)
-    ncx, ncx_text = _ncx(ncx_executable)
+    ncx = _ncx(ncx_executable)
     walk = _Walk(_checks(machine_path))
     walk.fields(top, _LAYOUT, "", "")
-    inputs = f"machine file {machine_path or 'none'}; {ncx_text}"
+    inputs = (
+        f"machine file {machine_path or 'none'}; {f'ncx {ncx}' if ncx else 'no ncx on the PATH'}"
+    )
     diagnostics = (*walk.out, Diagnostic("JOB_INPUTS", Severity.INFO, inputs))
     if walk.out or machine_path is None:
         return Result(None, diagnostics)

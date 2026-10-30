@@ -3,14 +3,14 @@
 after a clean run (REQ-JOB-010, 016 to 019; research 27, traps 3, 4, 6, test 5; DEC-JOB-005, 007,
 008)."""
 
+import functools
 import shutil
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
-from splintercam.foundation import CANCELLED, Context, Diagnostic, Result, Severity
+from splintercam.foundation import Context, Diagnostic, Result, Severity
 from splintercam.ncx import NcxCall, NcxProgram, run_ncx
-
-type Found = list[Diagnostic]
 
 
 def _error(code: str, message: str, where: Path) -> Diagnostic:
@@ -43,24 +43,38 @@ def write_ncx_file(output: Path, name: str, program: NcxProgram) -> Result[Path]
     Implements: REQ-JOB-016."""
     path = output / f"{name}.ncx"  # research 27, trap 6: the stem is the program name
     try:
-        path.write_bytes(program.text.encode("ascii"))
+        _place(path, lambda partial: partial.write_bytes(program.text.encode("ascii")))
     except OSError as error:
-        path.unlink(missing_ok=True)
         text = f"cannot write {path}: {error.strerror or error}"
         return _refused("JOB_OUTPUT_UNWRITABLE", text, path)
     return Result(path)
 
 
-def _move(staging: Path, output: Path, found: Found) -> tuple[Path, ...]:
-    # REQ-JOB-019: all or none; a file moved before a failure is removed again.
+def _place(target: Path, write: Callable[[Path], object]) -> None:
+    # DEC-JOB-013: written under a name no control loads, then renamed within its folder, which
+    # is atomic: a crash or a full disk never leaves part of a file under the real name.
+    partial = target.with_name(f".{target.name}.partial")
+    try:
+        write(partial)
+        partial.replace(target)
+    finally:
+        partial.unlink(missing_ok=True)
+
+
+def _move(staging: Path, output: Path, found: list[Diagnostic]) -> tuple[Path, ...]:
+    # REQ-JOB-019: all or none; a file placed before a failure is removed again (DEC-JOB-011).
     moved: list[Path] = []
     try:
         for entry in sorted(staging.iterdir(), key=lambda p: p.name):  # by code point
-            moved.append(Path(shutil.move(entry, output / entry.name)))
+            target = output / entry.name
+            if entry.is_symlink() or not entry.is_file() or target.exists():
+                raise OSError(f"{entry.name} is not a regular file, or is there already")
+            _place(target, functools.partial(shutil.copyfile, entry))
+            moved.append(target)
     except OSError as error:
-        for path in moved:
-            path.unlink(missing_ok=True)
-        text = f"cannot move the NC files into {output}: {error}"
+        left = [path.name for path in moved if not _removed(path)]
+        kept = f"; left there, remove by hand: {', '.join(left)}" if left else ""
+        text = f"cannot move the NC files into {output}: {error}{kept}"
         found.append(_error("JOB_OUTPUT_UNWRITABLE", text, output))
         return ()
     if not moved:
@@ -68,16 +82,12 @@ def _move(staging: Path, output: Path, found: Found) -> tuple[Path, ...]:
     return tuple(moved)
 
 
-def _call_ncx(call: NcxCall, program: NcxProgram, output: Path, ctx: Context,
-              found: Found) -> tuple[Path, ...]:  # fmt: skip
-    ran = run_ncx(call, program, ctx)
-    found += ran.diagnostics
-    if not ran.ok:
-        return ()
-    if ctx.cancel.is_cancelled:  # set after the last step: move nothing (REQ-JOB-021)
-        found.append(CANCELLED)
-        return ()
-    return _move(call.output_dir, output, found)
+def _removed(path: Path) -> bool:
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        return False
+    return True
 
 
 def compile_ncx(executable: Path | None, ncx_file: Path, machine: Path, program: NcxProgram,
@@ -91,14 +101,19 @@ def compile_ncx(executable: Path | None, ncx_file: Path, machine: Path, program:
         what = "no ncx on the PATH" if executable is None else f"{executable} does not exist"
         text = f"{what}: the NCX file is written, no NC program"  # plan 0007, question 3
         return Result(None, (Diagnostic("JOB_NCX_NOT_FOUND", Severity.ERROR, text),))
-    found: Found = []
-    temporary = Path(tempfile.mkdtemp(prefix="splintercam-job-")).absolute()
+    found: list[Diagnostic] = []
+    nc_files: tuple[Path, ...] = ()
+    temporary = Path(tempfile.mkdtemp(prefix="splintercam-job-"))
     try:
         work, staging = temporary / "work", temporary / "staging"
         work.mkdir()
         staging.mkdir()
-        call = NcxCall(executable, work, ncx_file, machine, staging)
-        nc_files = _call_ncx(call, program, ncx_file.parent, ctx, found)
+        ran = run_ncx(NcxCall(executable, work, ncx_file, machine, staging), program, ctx)
+        found += ran.diagnostics
+        if (
+            ran.ok and not ctx.cancel.is_cancelled
+        ):  # a cancel after the last step: none (DEC-JOB-011)
+            nc_files = _move(staging, ncx_file.parent, found)
     finally:
         try:
             shutil.rmtree(temporary)
