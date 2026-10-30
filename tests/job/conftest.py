@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """The job tests' fixtures: a job folder, an `ncx` executable that exists, and the fake `run_ncx`
-of tests/support/job_files.py put where `job` calls it (DEC-JOB-009)."""
+of tests/support/job_files.py put where `job` calls it (DEC-JOB-012)."""
 
 from pathlib import Path
 

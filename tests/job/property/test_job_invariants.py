@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 from hypothesis import HealthCheck, given, settings
+from hypothesis import example as case
 from hypothesis import strategies as st
 
 from job_files import FakeRunNcx, example, job_folder, listing, operation
@@ -75,6 +76,7 @@ def _check(report: JobReport, out: Path, stage: str, fake: FakeRunNcx) -> None:
         nc = [path.name for path in report.nc_files]
         assert listing(out) == sorted(["RECT_FILLETS.ncx", *nc])
         assert report.ok == (stage == "none" and fake.ok and not fake.cancel and bool(fake.files))
+    assert len(fake.calls) == (stage == "none")  # REQ-JOB-017: no step without ncx
     for call in fake.calls:  # REQ-JOB-018: the working folder never outlives the run
         assert not call.work_dir.parent.exists()
 
@@ -83,6 +85,10 @@ def _check(report: JobReport, out: Path, stage: str, fake: FakeRunNcx) -> None:
                  "REQ-JOB-019", "REQ-JOB-021")  # fmt: skip
 @settings(max_examples=40, suppress_health_check=[HealthCheck.function_scoped_fixture])
 @given(stage=st.sampled_from(_STAGES), outcome=_OUTCOMES)
+@case(stage="none", outcome="clean")
+@case(stage="none", outcome="failed")
+@case(stage="none", outcome="cancelled")
+@case(stage="none", outcome="no_file")
 def test_files_match_the_stage_reached(tmp_path: Path, stage: str, outcome: str) -> None:
     base = Path(tempfile.mkdtemp(dir=tmp_path))
     job_file, out = _folder(base, stage)
@@ -91,6 +97,7 @@ def test_files_match_the_stage_reached(tmp_path: Path, stage: str, outcome: str)
     exe = base / ("no-ncx" if stage == "no_ncx" else "ncx")
     if stage != "no_ncx":
         exe.write_bytes(b"")
+    before = {p.name: p.read_bytes() for p in (base / "job").iterdir()}
     registry = {STRATEGY_ID: Strategy(DECLARATIONS, profile_input, _plan(stage == "plan"))}
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr("splintercam.job._output.run_ncx", fake)
@@ -99,6 +106,9 @@ def test_files_match_the_stage_reached(tmp_path: Path, stage: str, outcome: str)
             patch.setattr(Path, "write_bytes", _refuse_write)
         report = run_job(job_file, out, ncx_executable=exe, ctx=make_context())
     _check(report, out, stage, fake)
+    # Invariant 1: nothing written but the output folder (and the working folder, gone).
+    assert {p.name: p.read_bytes() for p in (base / "job").iterdir()} == before
+    assert set(listing(base)) <= {"job", "out", exe.name}
 
 
 def _refuse_write(self: Path, data: bytes) -> int:

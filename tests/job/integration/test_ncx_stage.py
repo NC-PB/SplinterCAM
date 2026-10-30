@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Stage 9, `ncx` and the compiled files (src/splintercam/job/SPEC.md, REQ-JOB-017 to 019, 021),
-with the fake `run_ncx` of tests/support/job_files.py in place of the real call (DEC-JOB-009)."""
+with the fake `run_ncx` of tests/support/job_files.py in place of the real call (DEC-JOB-012)."""
 
 import shutil
 import tempfile
@@ -83,6 +83,25 @@ def test_ncx_runs_in_a_new_folder_outside_the_output(
     assert not temporary.exists()
 
 
+@pytest.mark.req("REQ-JOB-009", "REQ-JOB-018")
+def test_relative_paths_reach_ncx_absolute(
+    job_file: Path, tmp_path: Path, fake_ncx: FakeRunNcx, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "machine.toml").write_bytes(b"")
+    monkeypatch.chdir(tmp_path)
+    report = run_job(Path("job") / "job.json", Path("out"), ncx_executable=Path("bin") / "ncx",
+                     machine_file=Path("machine.toml"), ctx=default_context())  # fmt: skip
+    assert report.ok, report.diagnostics
+    [call] = fake_ncx.calls
+    assert call.executable == tmp_path / "bin" / "ncx"
+    assert call.ncx_file == tmp_path / "out" / "RECT_FILLETS.ncx"
+    assert call.machine_file == tmp_path / "machine.toml"
+    assert call.work_dir.is_absolute()
+    assert call.output_dir.is_absolute()
+    assert report.nc_files == (tmp_path / "out" / "RECT_FILLETS.h",)
+    assert job_file == tmp_path / "job" / "job.json"
+
+
 @pytest.mark.req("REQ-JOB-018", "REQ-JOB-021")
 @pytest.mark.parametrize("outcome", ["failed", "cancelled"])
 def test_the_temporary_folder_is_removed_after_an_error_or_a_cancel(
@@ -115,11 +134,13 @@ def test_a_folder_that_cannot_be_removed_is_named(
     left = report.diagnostics[-1]
     assert (left.code, left.severity) == ("JOB_WORK_DIR_LEFT", Severity.WARNING)
     temporary = fake_ncx.calls[0].work_dir.parent
-    assert left.location == str(temporary)
-    assert report.ok  # a warning: the program is good
-    assert report.nc_files == (tmp_path / "out" / "RECT_FILLETS.h",)
     monkeypatch.undo()
-    shutil.rmtree(temporary)
+    try:
+        assert left.location == str(temporary)
+        assert report.ok  # a warning: the program is good
+        assert report.nc_files == (tmp_path / "out" / "RECT_FILLETS.h",)
+    finally:
+        shutil.rmtree(temporary)
 
 
 # --- REQ-JOB-019: the compiled files reach the output only after a clean run ----------------------
@@ -141,7 +162,8 @@ def test_a_clean_run_moves_every_file_sorted(
     assert report.nc_files == (out / "B.i", out / "a.h", out / "b.h")
     assert listing(out) == ["B.i", "RECT_FILLETS.ncx", "a.h", "b.h"]
     assert codes(report.diagnostics)[-1] == "NCX_ROUNDED"
-    assert not any(fake_ncx.calls[0].output_dir.parent.glob("*"))
+    assert all(path.read_text(encoding="ascii") == "; fake\n" for path in report.nc_files)
+    assert not fake_ncx.calls[0].output_dir.parent.exists()
 
 
 @pytest.mark.req("REQ-JOB-019", "REQ-JOB-021")
@@ -220,6 +242,7 @@ def test_a_failed_move_leaves_no_nc_file(
             if fails == "half-way":
                 Path(target).write_bytes(Path(source).read_bytes()[:3])
             raise OSError(28, "No space left on device")
+        assert Path(target).name == f".{Path(source).name}.partial"  # DEC-JOB-013
         copied.append(Path(source).name)
         return real_copy(source, target)
 

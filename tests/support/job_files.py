@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Job folders for the job tests (src/splintercam/job/SPEC.md, Test plan): the golden case's job
 file as a dict to change, written with its DXF and a stand-in machine file into a folder, and a
-fake `run_ncx` that `job` calls instead of the real one (DEC-JOB-009)."""
+fake `run_ncx` that `job` calls instead of the real one (DEC-JOB-012)."""
 
 import copy
 import importlib.util

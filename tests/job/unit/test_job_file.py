@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from job_files import CASE, MACHINE, Job, codes, example, job_folder, listing, operation
+from job_files import CASE, MACHINE, FakeRunNcx, Job, codes, example, job_folder, listing, operation
 from splintercam.foundation import Context, Diagnostic, Severity
 from splintercam.job import JobReport, run_job
 from splintercam.job._layout import read_job_file
@@ -362,8 +362,9 @@ def test_a_missing_machine_file_stops_the_run(tmp_path: Path, ctx: Context, give
 
 @pytest.mark.req("REQ-JOB-009", "REQ-JOB-017")
 def test_job_inputs_names_the_executable_or_that_none_was_found(
-    tmp_path: Path, ctx: Context, monkeypatch: pytest.MonkeyPatch, ncx_exe: Path
+    tmp_path: Path, ctx: Context, monkeypatch: pytest.MonkeyPatch, fake_ncx: FakeRunNcx
 ) -> None:
+    ncx_exe = fake_ncx.exe  # the fake run_ncx: no process starts
     job_file = job_folder(tmp_path / "job")
     empty = tmp_path / "empty-path"
     empty.mkdir()

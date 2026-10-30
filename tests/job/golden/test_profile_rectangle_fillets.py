@@ -19,7 +19,7 @@ from offset2d_oracles import true_curve_band_mm
 from profile_checks import cut_points, distance_to_box, pass_moves, rounded_rect_distances
 from profile_checks import signed_area as polyline_area
 from splintercam.cl import ClOperation, MoveKind, Role
-from splintercam.foundation import Context
+from splintercam.foundation import ToleranceSet
 from splintercam.job import default_context, run_job
 from splintercam.model import StockBox
 
@@ -64,15 +64,16 @@ def test_three_passes_at_their_levels(tmp_path: Path) -> None:
 
 
 @pytest.mark.req("REQ-JOB-023")
-def test_each_pass_is_the_sides_offset_and_the_fillets_in_the_band(
-    tmp_path: Path, ctx: Context
-) -> None:
+def test_each_pass_is_the_sides_offset_and_the_fillets_in_the_band(tmp_path: Path) -> None:
     op = _record_run(tmp_path)
     fillets = _CHECKS["fillets"]
-    band = true_curve_band_mm(ctx.tolerances)  # the tol 0.01 of the case, as ctx's
+    tolerances = ToleranceSet.for_operation(_CASE["tolerance"]["chord_mm"]).value
+    assert tolerances is not None
+    band = true_curve_band_mm(tolerances)  # the case's tol
     for _, rows in pass_moves(op):
         assert set(op.moves.kind[rows[op.moves.role[rows] == Role.CUT]].tolist()) == {MoveKind.LINE}
         cut = _cut(op, rows)
+        assert np.abs(cut[0] - cut[-1]).max() <= _COMPARE_MM  # a closed loop, S to S
         smallest, largest = rounded_rect_distances(cut, tuple(fillets["part_box_mm"]),
                                                    fillets["part_radius_mm"])  # fmt: skip
         assert smallest.min() >= fillets["offset_mm"] - _COMPARE_MM
@@ -98,7 +99,8 @@ def test_the_start_and_the_approach_point(tmp_path: Path) -> None:
         s = _cut(op, rows)[0]
         assert abs(s[0] - start["x_mm"]) <= _COMPARE_MM
         assert min(abs(s[1] - y) for y in start["y_mm"]) <= _COMPARE_MM
-    p = (float(op.moves.end_mm[1, 0]), float(op.moves.end_mm[1, 1]))  # the rapid over P
+    assert op.moves.kind[1] == MoveKind.RAPID  # move 1: the rapid over P (REQ-CL, research 10)
+    p = (float(op.moves.end_mm[1, 0]), float(op.moves.end_mm[1, 1]))
     job = json.loads((CASE / "job.json").read_text(encoding="utf-8"))
     stock = StockBox(tuple(job["stock"]["min_mm"]), tuple(job["stock"]["max_mm"]))
     assert distance_to_box(p, stock) >= _CHECKS["approach_clear_of_stock_mm"] - _COMPARE_MM

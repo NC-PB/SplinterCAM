@@ -6,11 +6,21 @@ and determinism. The `ncx` stage has its own tests (tests/job/integration/)."""
 import dataclasses
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from job_files import FakeRunNcx, codes, example, job_folder, listing, operation
 from splintercam.cl import ClOperation
-from splintercam.foundation import CANCELLED, Context, Diagnostic, Result, Severity, ToleranceSet
+from splintercam.foundation import (
+    CANCELLED,
+    TOLERANCE_DEFAULTS,
+    Context,
+    Diagnostic,
+    Result,
+    Severity,
+    ToleranceSet,
+)
+from splintercam.io import read_dxf_contour
 from splintercam.job import JobReport, default_context, run_job
 from splintercam.job._layout import read_job_file
 from splintercam.job._registry import REGISTRY, Strategy, profile_input, relocate
@@ -220,7 +230,12 @@ def test_the_golden_jobs_profile_input_field_by_field(
     assert task.stock == checked.setup.stock
     assert task.operation == checked.setup.operations[0]
     assert [name for name, _ in task.operation.parameters] == [d.name for d in DECLARATIONS]
-    assert task.contour.rows.shape == (8, 7)  # research 21 test 1: the 8 rows io read
+    part = read_dxf_contour(job_file.parent / "part.dxf", None, None, ctx).value
+    assert part is not None
+    assert np.array_equal(
+        task.contour.rows, part.loop.rows, equal_nan=True
+    )  # io's loop, as read (REQ-JOB-012)
+    assert np.array_equal(task.contour.ids, part.loop.ids)
     assert op_ctx.tolerances == ToleranceSet.for_operation(0.01).value
     assert op_ctx.cancel is ctx.cancel
     assert (op_ctx.logger, op_ctx.debug, op_ctx.seed) == (ctx.logger, ctx.debug, ctx.seed)
@@ -340,6 +355,7 @@ def test_a_failed_write_removes_the_partial_file(
     job_file: Path, tmp_path: Path, ctx: Context, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def broken(self: Path, data: bytes) -> int:
+        assert self.name == ".RECT_FILLETS.ncx.partial"  # never the real name (DEC-JOB-013)
         with self.open("wb") as partial:
             partial.write(data[:10])
         raise OSError(28, "No space left on device")
@@ -424,7 +440,8 @@ def test_two_runs_write_the_same_bytes(job_file: Path, tmp_path: Path) -> None:
 @pytest.mark.req("REQ-JOB-001")
 def test_the_default_context(job_file: Path, tmp_path: Path) -> None:
     ctx = default_context()
-    assert ctx.tolerances == ToleranceSet.for_operation(0.01).value
+    default_tol = TOLERANCE_DEFAULTS["chord_tol_finishing_mm"].default
+    assert ctx.tolerances == ToleranceSet.for_operation(default_tol).value
     assert not ctx.cancel.is_cancelled
     assert default_context().cancel is not ctx.cancel
     assert ctx.logger.name == "splintercam.job"
