@@ -1,0 +1,28 @@
+{
+  "id": "profile-rectangle-fillets",
+  "input": { "job": "job.json", "part": "part.dxf", "units": "mm" },
+  "operation": { "strategy": "profile", "name": "PROFILE_1" },
+  "tool": { "type": "flat_end_mill", "diameter_mm": 10.0 },
+  "tolerance": { "chord_mm": 0.01, "compare_mm": 0.001 },
+  "checks": {
+    "pass_levels_mm": [-3.333333, -6.666667, -10.0],
+    "sides": [
+      { "axis": "y", "at_mm": -5.0, "length_mm": 90.0 },
+      { "axis": "y", "at_mm": 65.0, "length_mm": 90.0 },
+      { "axis": "x", "at_mm": -5.0, "length_mm": 50.0 },
+      { "axis": "x", "at_mm": 105.0, "length_mm": 50.0 }
+    ],
+    "fillets": { "part_box_mm": [5.0, 5.0, 95.0, 55.0], "part_radius_mm": 5.0, "offset_mm": 5.0 },
+    "direction": "clockwise",
+    "start": { "x_mm": 50.0, "y_mm": [-5.0, 65.0] },
+    "approach_clear_of_stock_mm": 6.0,
+    "ncx": {
+      "machine": "heidenhain-itnc530.toml",
+      "codes": ["JOB_INPUTS", "DXF_PART_SIZE", "NCX_ROUNDED"],
+      "files": ["RECT_FILLETS.h", "RECT_FILLETS.ncx"]
+    }
+  },
+  "golden": null,
+  "source": "drawn for this project; Apache-2.0",
+  "research": ["21", "22", "27"]
+}
