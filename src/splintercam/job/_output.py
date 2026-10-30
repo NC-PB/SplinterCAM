@@ -10,7 +10,9 @@ from collections.abc import Callable
 from pathlib import Path
 
 from splintercam.foundation import CANCELLED, Context, Diagnostic, Result, Severity
-from splintercam.ncx import NcxCall, NcxProgram, run_ncx
+from splintercam.ncx import NcxCall, NcxProgram, NcxStep, run_ncx
+
+from ._layout import JobFile
 
 
 def _error(code: str, message: str, where: Path) -> Diagnostic:
@@ -90,13 +92,34 @@ def _removed(path: Path) -> bool:
     return True
 
 
-def compile_ncx(executable: Path | None, ncx_file: Path, machine: Path, program: NcxProgram,
-                ctx: Context) -> Result[tuple[Path, ...]]:  # fmt: skip
+def _after_ncx(ran: Result[tuple[NcxStep, ...]], staging: Path, output: Path, warned: int | None,
+               ctx: Context) -> Result[tuple[Path, ...]]:  # fmt: skip
+    # What a run of ncx leaves: nothing after a failure or a late cancel (DEC-JOB-011); with
+    # strict nothing after any warning so far or from ncx (AQ-040 (b), DEC-JOB-016); else the move.
+    if not ran.ok:
+        return Result(())
+    if ctx.cancel.is_cancelled:
+        return Result((), (CANCELLED,))
+    if warned is not None:
+        warned += sum(d.severity is Severity.WARNING for d in ran.diagnostics)
+        if warned:  # INFO: the warnings say what is wrong, this says the files are held back
+            text = f"strict: {warned} warning(s) in the run; the compiled files are not moved"
+            return Result(
+                (), (Diagnostic("JOB_STRICT_WITHHELD", Severity.INFO, text, str(output)),)
+            )
+    found: list[Diagnostic] = []
+    return Result(_move(staging, output, found), tuple(found))
+
+
+def compile_ncx(read: JobFile, ncx_file: Path, program: NcxProgram, ctx: Context,
+                warned: int | None = None) -> Result[tuple[Path, ...]]:  # fmt: skip
     """Stage 9: `ncx` in a new temporary folder holding the working and the staging folder,
     removed afterwards whatever happened; the compiled files moved into the NCX file's folder
-    only after a clean run (DEC-JOB-007, 008).
+    only after a clean run (DEC-JOB-007, 008). `warned` None: not strict; else the run's warnings
+    so far, which with `ncx`'s own withhold the files (AQ-040 (b), DEC-JOB-016).
 
     Implements: REQ-JOB-017, REQ-JOB-018, REQ-JOB-019."""
+    executable = read.ncx
     if executable is None or not executable.is_file():
         what = "no ncx on the PATH" if executable is None else f"{executable} does not exist"
         text = f"{what}: the NCX file is written, no NC program"  # plan 0007, question 3
@@ -118,12 +141,10 @@ def compile_ncx(executable: Path | None, ncx_file: Path, machine: Path, program:
         text = f"cannot make the working folders for ncx: {error}"
         found.append(_error("JOB_WORK_DIR_UNWRITABLE", text, temporary))  # DEC-JOB-014
     else:
-        ran = run_ncx(NcxCall(executable, work, ncx_file, machine, staging), program, ctx)
-        found += ran.diagnostics
-        if ran.ok and ctx.cancel.is_cancelled:  # a late cancel moves none (DEC-JOB-011)
-            found.append(CANCELLED)
-        elif ran.ok:
-            nc_files = _move(staging, ncx_file.parent, found)
+        ran = run_ncx(NcxCall(executable, work, ncx_file, read.machine, staging), program, ctx)
+        done = _after_ncx(ran, staging, ncx_file.parent, warned, ctx)
+        found += (*ran.diagnostics, *done.diagnostics)
+        nc_files = done.value or ()
     finally:
         try:
             shutil.rmtree(temporary)

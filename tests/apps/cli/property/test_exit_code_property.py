@@ -57,16 +57,23 @@ def test_the_exit_code_is_a_function_of_the_report_and_strict(
     expected = _expected(diagnostics, strict)
     code, out, err = _run(report(*diagnostics, ncx_file=_FILES[0], nc_files=_FILES[1]), argv)
     assert code == expected
+    files = [str(_FILES[0]), str(_FILES[1][0])]
     if as_json:
         assert err == ""
         parsed = json.loads(out)
         assert parsed["exit_code"] == expected
         named = [parsed["ncx_file"], *parsed["nc_files"]]
-        assert named == ([str(_FILES[0]), str(_FILES[1][0])] if expected == 0 else [None])
+        assert named == (files if expected == 0 else [None])
+        # Every file of the report is named: as the result or as left (AQ-040 (c)).
+        assert parsed["files_left"] == ([] if expected == 0 else files)
         assert [d["message"] for d in parsed["diagnostics"]] == [d.message for d in diagnostics]
     else:
-        assert (out != "") == (expected == 0)
-        # One line per diagnostic, whatever the generated text holds (REQ-CLI-003).
-        assert len(err.splitlines()) == len(diagnostics)
-        assert [line.split(" ", 2)[1].rstrip(":") for line in err.splitlines()] == [
-            d.code for d in diagnostics]  # fmt: skip
+        assert out.splitlines() == (files if expected == 0 else [])
+        # One line per diagnostic, whatever the generated text holds (REQ-CLI-003), and the
+        # closing FILES_LEFT line only after a failed run.
+        lines = err.splitlines()
+        closing = [] if expected == 0 else ["FILES_LEFT"]
+        assert [line.split(" ", 2)[1].rstrip(":") for line in lines] == [
+            *(d.code for d in diagnostics), *closing]  # fmt: skip
+        if closing:
+            assert lines[-1].endswith(", ".join(files))

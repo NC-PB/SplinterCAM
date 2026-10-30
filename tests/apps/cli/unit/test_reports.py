@@ -87,31 +87,65 @@ def test_backslashes_and_every_other_line_break_are_escaped(
     assert len(err.splitlines()) == 1
 
 
+def _left(*paths: Path) -> str:
+    return f"INFO FILES_LEFT: left on disk, not for the machine: {', '.join(map(str, paths))}\n"
+
+
 @pytest.mark.req("REQ-CLI-003")
-def test_a_failed_run_prints_nothing_on_stdout(
+def test_a_failed_run_prints_nothing_on_stdout_and_names_the_files_left(
     fake_run_job: FakeRunJob, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # The NCX file is written before `ncx` fails (REQ-JOB-001); a script must not take it.
+    # The NCX file is written before `ncx` fails (REQ-JOB-001); a script must not take it, and
+    # the closing line says it is there (AQ-040 (c)).
     fake_run_job.report = report(
         diagnostic("NCX_STEP_FAILED", location="ncx check", message="exited with 1"),
         ncx_file=tmp_path / "A.ncx")  # fmt: skip
     assert main(_RUN) == 1
     out, err = capsys.readouterr()
     assert out == ""
-    assert err == "ERROR NCX_STEP_FAILED ncx check: exited with 1\n"
+    assert err == "ERROR NCX_STEP_FAILED ncx check: exited with 1\n" + _left(tmp_path / "A.ncx")
 
 
 @pytest.mark.req("REQ-CLI-003")
-def test_a_warned_run_under_strict_prints_nothing_on_stdout(
+def test_a_warned_run_under_strict_prints_nothing_on_stdout_and_names_the_files_left(
     fake_run_job: FakeRunJob, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # The compiled file is in the folder: a warning does not stop `run_job` (AQ-040).
+    # A report naming an NC file under --strict (a `job` without AQ-040 (b), or a warning after
+    # the move): the file is named as left, never on stdout.
     warning = diagnostic("JOB_MACHINE_OVERRIDDEN", Severity.WARNING, "machine")
     fake_run_job.report = report(warning, ncx_file=tmp_path / "A.ncx", nc_files=(tmp_path / "A.h",))
     assert main([*_RUN, "--strict"]) == 1
     out, err = capsys.readouterr()
     assert out == ""
-    assert err == "WARNING JOB_MACHINE_OVERRIDDEN machine: what happened\n"
+    assert err == ("WARNING JOB_MACHINE_OVERRIDDEN machine: what happened\n"
+                   + _left(tmp_path / "A.ncx", tmp_path / "A.h"))  # fmt: skip
+
+
+@pytest.mark.req("REQ-CLI-003")
+@pytest.mark.req("REQ-CLI-004")
+def test_no_files_left_line_without_files_or_for_a_usable_run(
+    golden: FakeRunJob, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(_RUN) == 0
+    assert "FILES_LEFT" not in capsys.readouterr().err
+    assert main([*_RUN, "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["files_left"] == []
+    golden.report = report(diagnostic("JOB_FILE_UNREADABLE"))
+    assert main(_RUN) == 2
+    assert "FILES_LEFT" not in capsys.readouterr().err
+    assert main([*_RUN, "--json"]) == 2
+    assert json.loads(capsys.readouterr().out)["files_left"] == []
+
+
+@pytest.mark.req("REQ-CLI-003")
+def test_a_path_left_is_escaped_as_a_message(
+    fake_run_job: FakeRunJob, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = Path("o\nut", "A.ncx")
+    fake_run_job.report = report(diagnostic("NCX_STEP_FAILED"), ncx_file=path)
+    assert main(_RUN) == 1
+    escaped = str(path.absolute()).replace("\\", "\\\\").replace("\n", "\\n")
+    assert capsys.readouterr().err.splitlines()[-1].endswith(f": {escaped}")
 
 
 @pytest.mark.req("REQ-CLI-004")
@@ -124,7 +158,7 @@ def test_the_golden_case_json_report(
     assert out.endswith("}\n")
     assert out.count("\n") == 1
     parsed = json.loads(out)
-    assert list(parsed) == ["diagnostics", "exit_code", "nc_files", "ncx_file"]
+    assert list(parsed) == ["diagnostics", "exit_code", "files_left", "nc_files", "ncx_file"]
     assert parsed["exit_code"] == 0
     assert parsed["ncx_file"] == str(tmp_path / "out" / "RECT_FILLETS.ncx")
     assert parsed["nc_files"] == [str(tmp_path / "out" / "RECT_FILLETS.h")]
@@ -155,7 +189,7 @@ def test_the_json_report_is_ascii_and_keeps_the_text(
 
 @pytest.mark.req("REQ-CLI-004")
 @pytest.mark.parametrize(("error", "code"), [("NCX_STEP_FAILED", 1), ("DXF_UNREADABLE", 2)])
-def test_a_failed_json_run_names_no_files(
+def test_a_failed_json_run_names_its_files_only_as_left(
     error: str, code: int, fake_run_job: FakeRunJob, tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:  # fmt: skip
@@ -166,4 +200,5 @@ def test_a_failed_json_run_names_no_files(
     assert err == ""
     parsed = json.loads(out)
     assert (parsed["ncx_file"], parsed["nc_files"], parsed["exit_code"]) == (None, [], code)
+    assert parsed["files_left"] == [str(tmp_path / "A.ncx"), str(tmp_path / "A.h")]
     assert parsed["diagnostics"][0]["severity"] == "ERROR"

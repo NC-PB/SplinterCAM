@@ -21,9 +21,15 @@ def test_the_options_reach_run_job(fake_run_job: FakeRunJob) -> None:
     code = main(["run", "a/job.json", "--output", "out", "--ncx", "bin/ncx",
                  "--machine", "m.toml", "--strict", "--json"])  # fmt: skip
     assert code == 0
-    assert fake_run_job.calls == [{"job_file": Path("a/job.json"), "output_dir": Path("out"),
-                                   "ncx_executable": Path("bin/ncx"),
-                                   "machine_file": Path("m.toml")}]  # fmt: skip
+    assert fake_run_job.calls == [
+        {
+            "job_file": Path("a/job.json"),
+            "output_dir": Path("out"),
+            "ncx_executable": Path("bin/ncx"),
+            "machine_file": Path("m.toml"),
+            "strict": True,
+        }
+    ]  # fmt: skip  (AQ-040 (b))
 
 
 @pytest.mark.req("REQ-CLI-001")
@@ -32,6 +38,7 @@ def test_the_optional_paths_default_to_none(fake_run_job: FakeRunJob) -> None:
     [call] = fake_run_job.calls
     assert call["ncx_executable"] is None
     assert call["machine_file"] is None
+    assert call["strict"] is False
 
 
 @pytest.mark.req("REQ-CLI-002")
