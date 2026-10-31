@@ -4,6 +4,7 @@ and `model`'s types built from it with every value as read (REQ-JOB-006; DEC-JOB
 
 import os
 import shutil
+from collections import Counter
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,7 +15,7 @@ from splintercam.io import DrawingUnit
 from splintercam.model import FlatEndMill, JobData, MeasurementPoint, Operation, Setup, StockBox
 from splintercam.ncx import ProgramInfo
 
-from ._json import JsonObject, read_json
+from ._json import JsonObject, depth, read_json
 
 # A key's layout: a value, an array of values, `parameters` (an object passed as read), an
 # object of `Fields`, or an array of such objects, `(Fields,)`.
@@ -44,6 +45,17 @@ _LAYOUT = Fields((
     ("program", Fields((("name", LEAF), ("number", LEAF)))), ("machine", LEAF),
 ))  # fmt: skip
 _UNITS = {"mm": DrawingUnit.MILLIMETRE, "inch": DrawingUnit.INCH}
+
+
+def _layout_depth(layout: "Fields | tuple[Fields] | str") -> int:
+    if isinstance(layout, Fields):
+        return 1 + max(_layout_depth(spec) for _, spec in layout.keys)
+    return 1 + _layout_depth(layout[0]) if isinstance(layout, tuple) else int(layout != LEAF)
+
+
+# DEC-JOB-009 (7): one level more than the layout holds still reaches model as a wrong type;
+# deeper is refused before any recursion over values (Python's limit is about 1000 frames).
+_MAX_DEPTH = _layout_depth(_LAYOUT) + 1
 
 type Check = Callable[[object, JsonObject], tuple[str, str] | None]
 
@@ -125,11 +137,11 @@ class _Walk:
                 self.container(item, layout[0], f"{path}[{index}]", kind)
 
     def fields(self, value: JsonObject, layout: Fields, path: str, kind: str) -> None:
-        names = [key for key, _ in value.pairs]
+        names = Counter(key for key, _ in value.pairs)  # linear in the keys (spec review)
         for key, spec in layout.keys:
             here, generic = (f"{path}.{key}", f"{kind}.{key}") if path else (key, key)
             given = value.get(key)
-            if names.count(key) > 1:
+            if names[key] > 1:
                 continue  # one diagnostic per key: JOB_KEY_REPEATED below (DEC-JOB-009)
             if key in layout.optional and given is None:
                 continue  # absent and null mean the same (DEC-JOB-003)
@@ -140,12 +152,12 @@ class _Walk:
             elif (check := self.checks.get(generic)) and (found := check(given, value)):
                 self.error(*found, here)
         known = {key for key, _ in layout.keys}
-        for key in sorted({n for n in names if n not in known or names.count(n) > 1}):
+        for key in sorted({n for n in names if n not in known or names[n] > 1}):
             here = f"{path}.{key}" if path else key
             if key not in known:
                 self.error("JOB_KEY_UNKNOWN", "is not a key of the job file, version 1", here)
             else:
-                self.error("JOB_KEY_REPEATED", f"is given {names.count(key)} times", here)
+                self.error("JOB_KEY_REPEATED", f"is given {names[key]} times", here)
 
 
 def _plain(value: object) -> Any:
@@ -216,6 +228,10 @@ def read_job_file(job_file: Path, machine_file: Path | None, ncx_executable: Pat
     read = read_json(job_file)
     if (top := read.value) is None:
         return Result(None, read.diagnostics)
+    if depth(top) > _MAX_DEPTH:
+        message = f"arrays or objects nested deeper than {_MAX_DEPTH} levels, the layout's"
+        return Result(None, (Diagnostic("JOB_FILE_INVALID", Severity.ERROR, message,
+                                        "line 1, column 1"),))  # fmt: skip
     form, version = top.get("format"), top.get("version")
     if form != "splintercam-job" or not _is_int(version) or version != 1:
         message = (f"format {form!r}, version {version!r}: this SplinterCAM reads format "

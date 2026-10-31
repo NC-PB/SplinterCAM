@@ -60,8 +60,8 @@ class _Run:
     def take[T](self, result: Result[T]) -> T:
         self.found += result.diagnostics
         self.poll()
-        if result.value is None:
-            raise _Stopped
+        if result.value is None:  # no value, no error, no cancel: the producer's bug
+            raise ValueError(f"a stage gave no value and no error: {result.diagnostics}")
         return result.value
 
 
@@ -82,7 +82,9 @@ def _plan_all(job: JobData, contour: CurveRows, ctx: Context) -> Result[tuple[Cl
         found += (relocate(d, index, operation.name) for d in result.diagnostics)
         if result.value is not None:
             planned.append(result.value)
-        elif not ctx.cancel.is_cancelled and all(d.severity is not Severity.ERROR for d in found):
+        elif not ctx.cancel.is_cancelled and all(
+            d.severity is not Severity.ERROR for d in result.diagnostics
+        ):
             raise ValueError(f"operation {index}: the strategy gave no value and no error")
     return Result(tuple(planned), tuple(found))
 

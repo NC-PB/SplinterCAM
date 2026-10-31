@@ -5,9 +5,9 @@ infinite number (REQ-JOB-002; DEC-JOB-003)."""
 import json
 import math
 import re
-import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 from splintercam.foundation import Diagnostic, Result, Severity
 
@@ -31,10 +31,27 @@ def _finite(text: str) -> float:
 
 
 def _finite_int(text: str) -> int:
-    # An int beyond the double range is no number model can take (REQ-JOB-002: reads as inf).
-    if abs(value := int(text)) > sys.float_info.max:
+    # An int that reads as an infinite double is no number model can take (REQ-JOB-002); the
+    # same rule as the second pass's, so both agree on the place.
+    if not math.isfinite(float(text)):
         raise ValueError(text)
-    return value
+    return int(text)
+
+
+def depth(value: object) -> int:
+    """How deeply arrays and objects nest in `value`, 0 for a plain value; without recursion."""
+    deepest, stack = 0, [(value, 1)]
+    while stack:
+        item, level = stack.pop()
+        if isinstance(item, JsonObject | list):
+            deepest = max(deepest, level)
+            items: list[object] = (
+                [v for _, v in item.pairs]
+                if isinstance(item, JsonObject)
+                else cast("list[object]", item)
+            )
+            stack += ((child, level + 1) for child in items)
+    return deepest
 
 
 # A JSON string, or a number or constant: a pass after Python's json stopped on one finds it

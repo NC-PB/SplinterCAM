@@ -7,6 +7,7 @@ import functools
 import shutil
 import tempfile
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 from pathlib import Path
 
 from splintercam.foundation import CANCELLED, Context, Diagnostic, Result, Severity
@@ -59,25 +60,36 @@ def _place(target: Path, write: Callable[[Path], object]) -> None:
     try:
         write(partial)
         partial.replace(target)
-    finally:
-        partial.unlink(missing_ok=True)
+    except OSError as error:  # the first reason kept; a partial file left is named
+        left = "" if _removed(partial) else f"; {partial.name} left there, remove it by hand"
+        raise OSError(f"{error.strerror or error}{left}") from error
 
 
-def _move(staging: Path, output: Path, found: list[Diagnostic]) -> tuple[Path, ...]:
-    # REQ-JOB-019: all or none; a file placed before a failure is removed again (DEC-JOB-011).
+def _roll_back(moved: list[Path]) -> str:
+    left = [str(path) for path in moved if not _removed(path)]  # absolute: copy-pasteable
+    return f"; left there, remove by hand: {', '.join(left)}" if left else ""
+
+
+def _move(staging: Path, output: Path, found: list[Diagnostic], ctx: Context
+          ) -> tuple[Path, ...]:  # fmt: skip
+    # REQ-JOB-019: all or none; a file placed before a failure or a cancel is removed again
+    # (DEC-JOB-011: a cancel wins, polled before each file and after the last).
     moved: list[Path] = []
     try:
         for entry in sorted(staging.iterdir(), key=lambda p: p.name):  # by code point
             target = output / entry.name
+            if ctx.cancel.is_cancelled:
+                break
             if entry.is_symlink() or not entry.is_file() or target.exists():
                 raise OSError(f"{entry.name} is not a regular file, or is there already")
             _place(target, functools.partial(shutil.copyfile, entry))
             moved.append(target)
     except OSError as error:
-        left = [str(path) for path in moved if not _removed(path)]  # absolute: copy-pasteable
-        kept = f"; left there, remove by hand: {', '.join(left)}" if left else ""
-        text = f"cannot move the NC files into {output}: {error}{kept}"
+        text = f"cannot move the NC files into {output}: {error}{_roll_back(moved)}"
         found.append(_error("JOB_OUTPUT_UNWRITABLE", text, output))
+        return ()
+    if ctx.cancel.is_cancelled:
+        found.append(replace(CANCELLED, message=CANCELLED.message + _roll_back(moved)))
         return ()
     if not moved:
         found.append(_error("JOB_NO_NC_FILE", "ncx compile passed but wrote no file", output))
@@ -90,6 +102,11 @@ def _removed(path: Path) -> bool:
     except OSError:
         return False
     return True
+
+
+def _within(path: Path, folder: Path) -> bool:
+    # `path` is `folder` or lies in it, links and case as the file system sees them (REQ-JOB-018).
+    return any(p.exists() and p.samefile(folder) for p in (path, *path.parents))
 
 
 def _withheld(output: Path, warned: int) -> Diagnostic:
@@ -111,7 +128,7 @@ def _after_ncx(ran: Result[tuple[NcxStep, ...]], staging: Path, output: Path, ct
     if prior is not None and warned and any(staging.iterdir()):
         return Result((), (_withheld(output, warned),))
     found: list[Diagnostic] = []
-    return Result(_move(staging, output, found), tuple(found))
+    return Result(_move(staging, output, found, ctx), tuple(found))
 
 
 def _clean_up(temporary: Path, moved: tuple[Path, ...], strict: bool,
@@ -142,6 +159,8 @@ def compile_ncx(read: JobFile, ncx_file: Path, program: NcxProgram, ctx: Context
         text = f"{what}: the NCX file is written, no NC program"  # plan 0007, question 3
         return Result(None, (Diagnostic("JOB_NCX_NOT_FOUND", Severity.ERROR, text),))
     try:
+        if _within(Path(tempfile.gettempdir()), ncx_file.parent):  # DEC-JOB-014
+            raise OSError(f"{tempfile.gettempdir()} lies in the output folder; set TMPDIR or TEMP")
         temporary = Path(tempfile.mkdtemp(prefix="splintercam-job-"))
     except OSError as error:
         text = f"cannot make a temporary folder for ncx: {error}"
@@ -149,8 +168,6 @@ def compile_ncx(read: JobFile, ncx_file: Path, program: NcxProgram, ctx: Context
     found: list[Diagnostic] = []
     nc_files: tuple[Path, ...] = ()
     try:
-        if ncx_file.parent in temporary.parents:  # REQ-JOB-018: never inside the output folder
-            raise OSError(f"{temporary} lies in the output folder; set TMPDIR or TEMP elsewhere")
         work, staging = temporary / "work", temporary / "staging"
         work.mkdir()
         staging.mkdir()
