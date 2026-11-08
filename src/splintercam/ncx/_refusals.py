@@ -77,7 +77,7 @@ def _short_arcs(operation: ClOperation, columns: Printed) -> NDArray[np.intp]:
 def operation_errors(
     where: str, operation: ClOperation, first: ClHeader, columns: Printed
 ) -> list[Diagnostic]:
-    """REQ-NCX-003, 010, 013 (k, then a), 015, 016 and 026 for one operation, in that order."""
+    """REQ-NCX-003 (tool, then point), 010, 015, 016 and 026 for one operation, in that order."""
     header = operation.header
     found: list[Diagnostic] = []
     if (header.tool_number, header.spindle_rpm) != (first.tool_number, first.spindle_rpm):
@@ -87,22 +87,23 @@ def operation_errors(
             "one speed per program (DEC-NCX-004)"
         )
         found.append(_error("NCX_TOOL_CHANGE_UNSUPPORTED", message, where))
+    point, offset = header.point_number, header.axial_offset_mm
+    if (point, offset) != (first.point_number, first.axial_offset_mm):  # exact (DEC-NCX-020)
+        message = (
+            f"point {point} at a = {offset!r} mm differs from the first operation's point "
+            f"{first.point_number} at a = {first.axial_offset_mm!r} mm; one point per program "
+            "(DEC-NCX-020)"
+        )
+        found.append(_error("NCX_POINT_CHANGE_UNSUPPORTED", message, where))
     if header.spindle_rpm >= VALUE_LIMIT:
         message = f"spindle speed {header.spindle_rpm} 1/min is 10^9 or more"
+        found.append(_error("NCX_VALUE_OUT_OF_RANGE", message, where))
+    if offset >= VALUE_LIMIT:  # written as TIP_OFFSET; cl keeps a finite (REQ-CL-017)
+        message = f"point {point}: axial offset a = {offset!r} mm is 10^9 or more"
         found.append(_error("NCX_VALUE_OUT_OF_RANGE", message, where))
     for move in np.flatnonzero(columns.too_large):
         message = f"move {move}: a coordinate or feed of 10^9 or more, or not finite"
         found.append(_error("NCX_VALUE_OUT_OF_RANGE", message, where))
-    if header.point_number != 1:
-        message = f"point {header.point_number}: only point 1 until NCX has point words (AQ-005)"
-        found.append(_error("NCX_POINT_UNSUPPORTED", message, where))
-    if header.axial_offset_mm != 0.0:  # exact (DEC-NCX-018)
-        message = (
-            f"point {header.point_number}: axial offset a = {header.axial_offset_mm!r} mm; every "
-            "Z would be output a above the tip with nothing in the program to say so; only "
-            "a = 0 until a setup sheet or NCX's point words exist (AQ-035)"
-        )
-        found.append(_error("NCX_POINT_OFFSET_UNSUPPORTED", message, where))
     for index, line in enumerate(header.note, start=1):
         character = _NOT_IN_NOTE.search(line)
         if character is not None:

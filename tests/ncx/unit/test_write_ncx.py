@@ -5,6 +5,7 @@ parts)."""
 import inspect
 import math
 from dataclasses import replace
+from importlib.metadata import version
 
 import pytest
 
@@ -19,8 +20,10 @@ _START = [
     'PROGRAM=BEGIN NAME="RECT_FILLETS" NUMBER=1001',
     "FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF",
     "ORIGIN=1",
+    f'COMMENT="SplinterCAM {version("splintercam")}: not yet tested on a machine, plan 0007 '
+    'step 8"',
     'SECTION="PROFILE_1"',
-    "TOOL=1 OFFSET:LEN=1 SPINDLE=CW RPM=8000.0",
+    "TOOL=1 TOOL_POINT=1 TIP_OFFSET=0.0 POINT_RADIUS=0.0 SPINDLE=CW RPM=8000.0",
     "COOLANT=ON",
     "RAPID Z=5.0",
     "RAPID X=50.0 Y=-15.0 Z=5.0",
@@ -40,7 +43,7 @@ _END = [
 ]
 
 
-@pytest.mark.req("REQ-NCX-001", "REQ-NCX-002", "REQ-NCX-005", "REQ-NCX-006")
+@pytest.mark.req("REQ-NCX-001", "REQ-NCX-002", "REQ-NCX-005", "REQ-NCX-006", "REQ-NCX-028")
 def test_research_22_test_1_in_order(ctx: Context) -> None:
     program = written(ctx)
     lines = program.text.split("\n")
@@ -48,6 +51,7 @@ def test_research_22_test_1_in_order(ctx: Context) -> None:
     assert lines[-len(_END) - 1 : -1] == _END
     assert lines[-1] == ""  # a final "\n"
     assert len(lines) == len(_START) - 7 + 44 + 4 + 1  # 44 moves
+    assert sum(line.startswith("COMMENT=") for line in lines) == 1  # REQ-NCX-028
     assert sum(line.startswith("ARC=CW ") for line in lines) == 12
     centres = {
         (words(line)["CENTER:X"], words(line)["CENTER:Y"]) for line in lines if "ARC" in line
@@ -67,11 +71,11 @@ def test_two_operations_of_one_tool_have_one_tool_block(ctx: Context) -> None:
     lines = written(ctx, noted, second).text.split("\n")
     assert sum(line.startswith("TOOL=") for line in lines) == 1
     assert sum(line == "COOLANT=ON" for line in lines) == 1
-    assert lines[4:8] == [
+    assert lines[5:9] == [
         'SECTION="PROFILE_1"',
         'COMMENT="Rohteil 105 x 65"',
         'COMMENT="Spannung oben"',
-        "TOOL=1 OFFSET:LEN=1 SPINDLE=CW RPM=8000.0",
+        "TOOL=1 TOOL_POINT=1 TIP_OFFSET=0.0 POINT_RADIUS=0.0 SPINDLE=CW RPM=8000.0",
     ]
     b = lines.index('SECTION="B"')
     assert lines[b + 1] == "RAPID Z=5.0"
@@ -118,11 +122,39 @@ def test_a_full_circle_ends_at_its_start(ctx: Context, sweep: float, word: str) 
     assert lines[arc - 1] == "LINE X=10.0 Y=0.0 Z=-1.0 F=300.0"
 
 
+@pytest.mark.req("REQ-NCX-002", "REQ-NCX-007", "REQ-NCX-013")
+@pytest.mark.parametrize(
+    ("point", "offset", "tip"),
+    [(1, 0.0, "0.0"), (2, 1.0, "1.0"), (3, 40.0, "40.0"), (2, 2.5e-7, "0.0")],
+)
+def test_the_point_is_written_and_every_z_raised(
+    ctx: Context, point: int, offset: float, tip: str
+) -> None:
+    # D-155 with the point words of NCXchange at 1e2fd00: k, a and r in the tool block, every Z
+    # of the written program a above the record's (D-154); k ≠ 1 and a ≠ 0 are no longer refused.
+    flat = written(ctx).text.split("\n")
+    lines = written(ctx, replace(PROFILE, point_number=point, axial_offset_mm=offset)).text.split(
+        "\n"
+    )
+    (tool,) = (line for line in lines if line.startswith("TOOL="))
+    point_words = f"TOOL_POINT={point} TIP_OFFSET={tip} POINT_RADIUS=0.0"
+    assert tool == f"TOOL=1 {point_words} SPINDLE=CW RPM=8000.0"
+    assert len(lines) == len(flat)
+    moved = 0
+    for before, after in zip(flat, lines, strict=True):
+        old, new = words(before), words(after)
+        if before.startswith(("RAPID", "LINE", "ARC=")):
+            assert float(new.pop("Z")) == pytest.approx(float(old.pop("Z")) + offset, abs=1e-6)
+            moved += 1
+            assert new == old
+    assert moved == 44
+
+
 @pytest.mark.req("REQ-NCX-007")
 @pytest.mark.parametrize("offset", [1.0, 40.0])
 def test_the_axial_offset_raises_every_z(ctx: Context, offset: float) -> None:
-    # write_ncx refuses a ≠ 0 in the slice (REQ-NCX-013, AQ-035); the shift is checked on the
-    # move blocks, where it stays for when a setup sheet or NCX's point words exist.
+    # The shift on the move blocks alone (DEC-NCX-018 (c)); the written program:
+    # test_the_point_is_written_and_every_z_raised.
     def blocks(axial_offset_mm: float) -> list[str]:
         (operation,) = record(ctx, replace(PROFILE, axial_offset_mm=axial_offset_mm)).operations
         return move_blocks(operation, printed(operation))
@@ -150,6 +182,24 @@ def test_the_work_offset_is_the_origin(ctx: Context) -> None:
     result = write_ncx(record(ctx, work_offset=5), RECT_FILLETS, ctx)
     assert result.value is not None
     assert result.value.text.split("\n")[3] == "ORIGIN=5"
+
+
+@pytest.mark.req("REQ-NCX-028")
+def test_the_program_says_it_is_untested_on_a_machine(ctx: Context) -> None:
+    # Peter, 2026-11-08: programs of the slice carry the note, before the first operation, so a
+    # message on it has the location `program`. No bracket: NCXchange D390 writes it as [ ] on
+    # Fanuc with a WARNING, which fails check closed (REQ-NCX-027; DEC-NCX-009).
+    program = written(ctx)
+    lines = program.text.split("\n")
+    note = lines[4]
+    assert note == (
+        f'COMMENT="SplinterCAM {version("splintercam")}: not yet tested on a machine, plan 0007 '
+        'step 8"'
+    )
+    assert program.sections[0].first_line == 6
+    assert not any(character in note for character in "()\\[]")
+    assert note.isascii()
+    assert note.isprintable()
 
 
 @pytest.mark.req("REQ-NCX-001")

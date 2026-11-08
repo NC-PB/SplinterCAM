@@ -29,7 +29,7 @@ D-020, D-021, D-024 (wear mode), D-028 (units at import), D-030, D-031 (NCX only
 
 ## The ncx call in plan 0007
 
-- **Which `ncx`** (Peter, 2026-10-11, plan 0007 question 3): NCXchange has no release tag yet (R1-01). CI builds `ncx` from a pinned commit of NCXchange `main` (f74559c on 2026-10-11) in one job with the .NET SDK; locally the end-to-end test runs when `ncx` is on the path and is skipped with a visible message otherwise. The pin moves to the tag when R1-01 ships.
+- **Which `ncx`** (Peter, 2026-10-11, plan 0007 question 3): NCXchange has no release tag yet (R1-01). CI builds `ncx` from a pinned commit of NCXchange `main` (f74559c on 2026-10-11; 1e2fd00 of `github.com/CNC-Master-xyz/NCXchange_`, NCXchange's new address, since 2026-11-08, with the point words of D-155: topic 26, The pin moved to 1e2fd00) in one job with the .NET SDK; locally the end-to-end test runs when `ncx` is on the path and is skipped with a visible message otherwise. The pin moves to the tag when R1-01 ships.
 - **The call** (the three steps of the method below), in a working folder the CAM creates for the run (traps 3 and 4): `ncx format --check`, then `ncx check --machine <file> --strict`, then `ncx compile --machine <file> --output <folder>`. `compile` runs without `--strict` until NCXchange implements its D363; the test accepts `CMP020` warnings and fails on any other warning or error. Then `--strict` everywhere.
 - **The machine** (plan 0007 question 2): all three shipped mill files compile the plan 0007 program cleanly (below). Peter picks one for the slice and for his dry run.
 
@@ -40,6 +40,8 @@ Our build of NCXchange `main` at commit f74559c (macOS, .NET 10) compiled plan 0
 1. **`TOOL=n` carries `OFFSET:LEN=n`.** Without it the Fanuc output has `T1 M6` but no `G43 H1`: the control never applies the tool length, and the tip runs one tool length below the programmed Z. That is a crash, not a warning. Heidenhain applies the length with `TOOL CALL` and Siemens with `D1` either way. Until the neutral point words of D-155 exist in NCX (R1-11), the writer always emits `OFFSET:LEN` with the tool number in the tool-change block (ours; reported to NCXchange, T-039).
 2. **The program `NAME` uses letters, digits and underscores only.** A space gives `CMP501` on Siemens, which fails `--strict`.
 3. **Coordinates with more decimals than the machine file's `[format]` decimals** give one `CMP020` warning per value (here X95.1234567 written as X95.123), which fails `--strict` on all three. NCXchange answered this on 2026-10-07 (its D363: rounding to the machine's decimals is silent, D-149) but has not implemented it yet. Until it does, `compile` runs without `--strict` and the test accepts `CMP020` and nothing else; `check --strict` already passes, because `check` does not round.
+
+At the 1e2fd00 pin (2026-11-08) condition 1 is met by the point words `TOOL_POINT`, `TIP_OFFSET` and `POINT_RADIUS` (NCXchange D372 to D376) in place of `OFFSET:LEN`: the machine file maps tool and point to `G43 H` on Fanuc, the cutting edge `D` on Siemens and the tool on Heidenhain (D-155), and a Fanuc tool change without a length register gets a WARNING (NCXchange D389), which fails `check --strict`. Conditions 2 and 3 are unchanged; topic 26, The pin moved to 1e2fd00, says what else changed.
 
 ## Method
 
@@ -98,7 +100,7 @@ The sidecar is versioned and validated strictly by the CAM: an unknown key or a 
 
 ### The release 1 NCX subset (Q-059)
 
-Proposal (ours), following the mapping of topic 26. Words release 1 writes: `FILE`, `PROGRAM` (`NAME`, `NUMBER`), `UNITS`, `FEED_MODE`, `WORKPLANE`, `ORIGIN`, `SECTION`, `COMMENT` (register note), `TOOL`, the point words of D-155 (requested, R1-11; until NCX has them, `OFFSET:LEN` and `OFFSET:RAD`, which are not neutral), `RPM`, `SPINDLE`, `COOLANT`, `TOLERANCE` with `TOLERANCE_MODE` and `TOLERANCE:ROTARY`, `RAPID`, `LINE`, `ARC` (`CENTER`, `ANGLE`, incremental `IZ`), `F`, `COMP`, `CYCLE` (DRILL, DRILL_DWELL, PECK, CHIP_BREAK, TAP) with `SURFACE`, `CLEARANCE`, `DEPTH`, `SAFE`, `CYCLE_RETRACT`, `PECK`, `CYCLE_DWELL`, `PITCH`, `CYCLE_F`, then `CYCLE_CALL` and `CYCLE=OFF`, `FUNC` (rigid tapping where the machine file has a `RIGID_TAP` function; a temporary workaround against D-031 until NCX has a neutral word), `DWELL`, `PROGRAM=END`, `FILE=END`. All exist in NCX today except the point words (SRC-112).
+Proposal (ours), following the mapping of topic 26. Words release 1 writes: `FILE`, `PROGRAM` (`NAME`, `NUMBER`), `UNITS`, `FEED_MODE`, `WORKPLANE`, `ORIGIN`, `SECTION`, `COMMENT` (register note), `TOOL`, the point words of D-155 (`TOOL_POINT`, `TIP_OFFSET`, `POINT_RADIUS`, at the 1e2fd00 pin since 2026-11-08; before, `OFFSET:LEN` and `OFFSET:RAD`, which are not neutral), `RPM`, `SPINDLE`, `COOLANT`, `TOLERANCE` with `TOLERANCE_MODE` and `TOLERANCE:ROTARY`, `RAPID`, `LINE`, `ARC` (`CENTER`, `ANGLE`, incremental `IZ`), `F`, `COMP`, `CYCLE` (DRILL, DRILL_DWELL, PECK, CHIP_BREAK, TAP) with `SURFACE`, `CLEARANCE`, `DEPTH`, `SAFE`, `CYCLE_RETRACT`, `PECK`, `CYCLE_DWELL`, `PITCH`, `CYCLE_F`, then `CYCLE_CALL` and `CYCLE=OFF`, `FUNC` (rigid tapping where the machine file has a `RIGID_TAP` function; a temporary workaround against D-031 until NCX has a neutral word), `DWELL`, `PROGRAM=END`, `FILE=END`. All exist in NCX at the 1e2fd00 pin (SRC-112).
 
 Still missing in NCX (D-080, T-039): an exact-stop or continuous-path mode word (only a per-machine named function is possible); a stock word (Heidenhain `BLK FORM` and Siemens `WORKPIECE` stay raw); the rule that `F` on a helix is the feed along the 3D path (D-096; NCXchange's runtime estimate already times helices that way, and each compiler must convert where a control means something else); the Siemens `PECK` mapping (`CMP571`, NCXchange D181); a neutral rigid-tap word; expansion at compile time of a cycle the machine lacks (D-030; the three shipped mills do not need it, user machine files may).
 
@@ -137,7 +139,7 @@ From the NCXchange compilers and machine files at commit 9a1fb19 (SRC-112):
 
 | Parameter | Unit | Default | Range | Source |
 | --- | --- | --- | --- | --- |
-| NCXchange version | commit | f74559c (2026-10-11; the facts of this topic were read at 9a1fb19) | pinned per CAM release | SRC-112, D-080 |
+| NCXchange version | commit | 1e2fd00 of `CNC-Master-xyz/NCXchange_` (2026-11-08; f74559c from 2026-10-11; the facts of this topic were read at 9a1fb19, the point words at 1e2fd00) | pinned per CAM release | SRC-112, D-080 |
 | Machine file | path | per job | | D-053 |
 | Strict mode for `ncx` | on or off | on once NCXchange rounds without a warning per value (D-149, T-039); off until then | | SRC-112 |
 | Sidecar keys | as in the sidecar table | as listed | declared per key | D-049, D-053, D-061, D-095 |
@@ -159,7 +161,7 @@ From the NCXchange compilers and machine files at commit 9a1fb19 (SRC-112):
 12. **Arc radius check**: NCXchange rejects an arc whose start and end radius differ by more than 0.01 mm (`VM230`); the record keeps them equal within 1e-6 mm, and rounding to 0.001 mm keeps them well inside.
 13. **Names with umlauts** are transliterated in comments and replaced in Siemens program names.
 14. **Plausible defaults** in the shipped machine files are not measured values (NCXchange D100); a time estimate built on them is an estimate.
-15. **Brackets in comments on Fanuc** (checked 2026-10-25 against NCXchange main f74559c, our build): a `SECTION` or `COMMENT` string holding `(` or `)` is written inside the Fanuc comment `( ... )` unchanged, so the first `)` ends the comment early and the rest of the line is read as code; `ncx check --strict` and `compile` give no message. NCX strings take `\"` for a quote, and the three compilers write it as a plain `"`; Heidenhain writes `SECTION` as `* - ...` and `COMMENT` as `; ...`, Siemens both as `; ...`. A string of 120 characters went through all three unchanged; neither NCX nor the machine files state a length limit. A `RAPID Z=` block without X and Y is valid NCX; on the Fanuc file it becomes the block that switches on `G43` (`G0 G17 G43 Z50. H1`). So the CAM refuses `(`, `)`, `"` and control characters in names and note lines until NCXchange escapes or refuses them (NCXchange request R1-14).
+15. **Brackets in comments on Fanuc** (checked 2026-10-25 against NCXchange main f74559c, our build): a `SECTION` or `COMMENT` string holding `(` or `)` is written inside the Fanuc comment `( ... )` unchanged, so the first `)` ends the comment early and the rest of the line is read as code; `ncx check --strict` and `compile` give no message. NCX strings take `\"` for a quote, and the three compilers write it as a plain `"`; Heidenhain writes `SECTION` as `* - ...` and `COMMENT` as `; ...`, Siemens both as `; ...`. A string of 120 characters went through all three unchanged; neither NCX nor the machine files state a length limit. A `RAPID Z=` block without X and Y is valid NCX; on the Fanuc file it becomes the block that switches on `G43` (`G0 G17 G43 Z50. H1`). So the CAM refuses `(`, `)`, `"` and control characters in names and note lines until NCXchange escapes or refuses them (NCXchange request R1-14). At the 1e2fd00 pin (2026-11-08) NCXchange writes a bracket in a Fanuc comment as `[ ]` with a WARNING (its D390), which fails `check --strict`; the refusal stays, and the CAM's own comments hold no bracket.
 
 ## Tests
 
@@ -256,7 +258,7 @@ _Generated by `tools/spike.py status` from QUESTIONS.md and ASSUMPTIONS.md. Do n
 - [ ] NCXchange: the Fanuc control tolerance (A-061, D-148).
 - [ ] The NCXchange items on T-039 that release 1 needs: the exact-stop and stock words (D-080); Siemens peck (D181); `TOLERANCE:ROTARY` (D151); the helix feed rule; a neutral rigid-tap word; machine-file keys for control-held values (D164 and the sidecar keys above); decimals keys for angles; cycle catalogs for the bundled binary; binaries, macOS CI and a tag. The helix form question D268 is avoided if the `ANGLE` proposal of topic 26 is kept.
 - [ ] The release 1 reference programs as golden files (with topics 24 and 26).
-- [ ] The point words of D-155 in NCX and their mapping per controller (T-039, R1-11).
+- [ ] The point words of D-155 in NCX and their mapping per controller (T-039, R1-11). The words are at the 1e2fd00 pin (NCXchange D372 to D376, 2026-11-08); the real-`ncx` test in CI checks the register each shipped mill file writes for points 1 and 2.
 - [ ] Later, P3: a machine key for the largest arc sweep per block, so NCXchange can split arcs on controls that take one quadrant per block (SRC-119, pp. 198–199).
 
 ---

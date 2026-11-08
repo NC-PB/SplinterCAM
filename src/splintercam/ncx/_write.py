@@ -3,6 +3,7 @@
 Mapping onto NCX)."""
 
 from dataclasses import replace
+from importlib.metadata import version
 
 import numpy as np
 
@@ -18,6 +19,7 @@ from ._types import NcxProgram, NcxSection, ProgramInfo
 _MODES = "FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF"
 # DEC-NCX-008: spindle and coolant off before the program end (AQ-010 item 2; RR-006).
 _END = ("COOLANT=OFF", "SPINDLE=OFF", "PROGRAM=END", "FILE=END")
+_UNTESTED = "not yet tested on a machine, plan 0007 step 8"
 
 
 def _round_limit(where: str, tol_mm: float) -> Result[float]:
@@ -28,12 +30,20 @@ def _round_limit(where: str, tol_mm: float) -> Result[float]:
     return Result(built.value.stage_tol_mm("reserve"))
 
 
+def _note() -> str:
+    # REQ-NCX-028 (Peter, 2026-11-08); no bracket: NCXchange D390 warns on one (DEC-NCX-021).
+    return f'COMMENT="SplinterCAM {version("splintercam")}: {_UNTESTED}"'
+
+
 def _tool_block(operation: ClOperation) -> str:
-    # Research 26, Checked condition 1: OFFSET:LEN with TOOL, or Fanuc never applies the length.
+    # D-155: the operation's point k, its axial offset a and register radius r, so the machine
+    # file maps tool and k to the control's register (NCXchange D372 to D376 at 1e2fd00). They
+    # replace OFFSET:LEN (research 26, Checked condition 1). r is 0: cl has no r yet and COMP is
+    # OFF (DEC-NCX-020, AQ-050).
     header = operation.header
-    rpm = to_text(to_steps(np.array([header.spindle_rpm])))[0]
-    tool = header.tool_number
-    return f"TOOL={tool} OFFSET:LEN={tool} SPINDLE=CW RPM={rpm}"
+    rpm, tip = to_text(to_steps(np.array([header.spindle_rpm, header.axial_offset_mm])))
+    point = f"TOOL_POINT={header.point_number} TIP_OFFSET={tip} POINT_RADIUS=0.0"
+    return f"TOOL={header.tool_number} {point} SPINDLE=CW RPM={rpm}"
 
 
 def _operation_blocks(index: int, operation: ClOperation, columns: Printed) -> list[str]:
@@ -62,6 +72,7 @@ def write_ncx(cl: ClData, program: ProgramInfo, ctx: Context) -> Result[NcxProgr
         f'PROGRAM=BEGIN NAME="{program.name}" NUMBER={program.number}',
         _MODES,
         f"ORIGIN={data.work_offset}",
+        _note(),
     ]
     sections: list[NcxSection] = []
     for index, operation in enumerate(data.operations, start=1):
