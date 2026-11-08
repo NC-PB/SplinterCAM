@@ -58,8 +58,9 @@ modules:
   # cycle, rounding rule and the control's virtual machine live in NCXchange (D-021, D-031, D-148, D-149).
   ncx:                    { layer: 4, kernel: false, depends_on: [foundation, model, cl], research: ["26", "27"], budget: 400 }
   simulation:             { layer: 4, kernel: true,  depends_on: [foundation, geometry3d, model, cl, stock], research: ["08"] }
+  setupsheet:             { layer: 4, kernel: false, depends_on: [foundation, geometry2d, model, cl], research: ["10", "26", "27", "22"], budget: 400 }
 
-  job:                    { layer: 5, kernel: false, depends_on: [foundation, geometry2d, io, model, cl, stock, features, toolpath, "strategies/*", kinematics, ncx, simulation], research: [], budget: 520 }
+  job:                    { layer: 5, kernel: false, depends_on: [foundation, geometry2d, io, model, cl, stock, features, toolpath, "strategies/*", kinematics, ncx, setupsheet, simulation], research: [], budget: 570 }
 
   apps/cli:               { layer: 6, kernel: false, depends_on: [job], budget: 90 }
   apps/desktop:           { layer: 6, kernel: false, depends_on: [job] }
