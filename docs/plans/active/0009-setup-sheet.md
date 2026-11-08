@@ -4,7 +4,7 @@
      The agent updates the progress log at the end of every session, before stopping: one new file per entry in
      docs/plans/active/0009-log/YYYY-MM-DD-<slug>.md, not an edit of this file. -->
 
-- **Status: draft for Peter's approval (2026-11-08).** Questions AQ-055 to AQ-059; nothing is coded before they are answered and the SPEC is Reviewed.
+- **Status: approved by Peter on 2026-11-08, AQ-055 to AQ-059 as recommended (AQ-059 item 2 superseded by AQ-051).** The SPEC draft is Reviewed with these answers.
 - Goal: every NC program SplinterCAM writes has a setup sheet next to it that states, with numbers computed from the job and the toolpath record, what the program does not say and the CAM does not check (AQ-035 notes 1 to 8), so a program can go to an operator other than Peter (AQ-035: "no program of the slice goes to an operator other than Peter until a setup sheet exists").
 - Why now: plan 0007's program reached Peter's dry run (step 8) with its setup notes held by hand in `testdata/zoo/profile-rectangle-fillets/README.md` and `docs/plans/active/0007-log/2026-10-31-step8-dry-run-checklist.md`. Peter, 2026-11-08: "setup sheet plan".
 - Specs: `src/splintercam/setupsheet/SPEC.md` (new, Draft); `src/splintercam/job/SPEC.md` (step 4: the sheet in stage 9); `src/splintercam/apps/cli/SPEC.md` (step 5: the sheet's file named).
@@ -53,6 +53,7 @@ Reviews per code step (CLAUDE.md): simplifier, test-auditor, spec-reviewer; cnc-
 
 ## Decisions
 
+- 2026-11-08: plan approved (Peter): HTML, English; the contents of AQ-056 with a 5 mm keep-clear margin; a new module `setupsheet` (budget 400) and `job` at 570 (AQ-057, applied); the sheet only together with the compiled files (AQ-058); programs to other operators only after Peter's dry run with a sheet (AQ-059 item 1). k ≠ 1 and a ≠ 0 are allowed with a comment in the program (AQ-051), so the sheet repeats the point and a.
 - 2026-11-08: content (step 2) and rendering (step 3) are separate steps and pull requests, because the computed values are tested as data and the HTML only as their printout, and a later PDF, template or translation replaces step 3 alone.
 - 2026-11-08: the `job` and `apps/cli` changes come after the module (steps 4, 5), one module per pull request (AGENTS.md, Done means).
 
