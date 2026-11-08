@@ -42,5 +42,5 @@ def test_the_golden_case_runs_clean_through_the_cli(strict: bool, tmp_path: Path
     assert [(s, code.rstrip(":")) for s, code in found] == [("INFO", c) for c in _NCX["codes"]], (
         run.stderr)  # fmt: skip
     # NCXchange 1e2fd00 rounds to the machine silently: no CMP020, so no NCX_ROUNDED (2026-11-08).
-    assert lines[-1].startswith("INFO DXF_PART_SIZE ")
+    assert lines[-1] == "INFO DXF_PART_SIZE: part size 100 x 60 mm"
     assert run.stdout.splitlines() == [str(out / "RECT_FILLETS.ncx"), str(out / "RECT_FILLETS.h")]

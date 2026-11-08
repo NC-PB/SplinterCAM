@@ -144,7 +144,8 @@ def test_a_centre_out_of_place_names_its_move(
 
 _HEADER_BREAKERS: tuple[tuple[str, object], ...] = (
     ("name", "a b"), ("note", ("\x00",)), ("tool_number", 0), ("point_number", -1),
-    ("axial_offset_mm", -1.0), ("spindle_rpm", math.nan), ("tol_mm", 0.0),
+    ("axial_offset_mm", -1.0), ("register_radius_mm", math.nan), ("spindle_rpm", math.nan),
+    ("tol_mm", 0.0),
     ("feed_classes", (("cut", -1.0),)), ("clearance_height_mm", math.inf),
     ("retract_height_mm", 6.0),
 )  # fmt: skip

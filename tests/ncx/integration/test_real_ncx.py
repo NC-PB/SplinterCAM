@@ -160,14 +160,34 @@ _Z = re.compile(r"(?<![A-Z_])Z=?([+-]?(?:\d+\.?\d*|\.\d+))")
 def test_the_axial_offset_is_applied_once(ctx: Context, tmp_path: Path, machine: str) -> None:
     # D-154: the writer adds a to every Z and the compilers write nothing for TIP_OFFSET (D-155),
     # so every compiled Z of a = 2 lies exactly 2 above a = 0's, never 0 or 4 (cnc review M1).
+    # Point 2 at a = 2 against point 1 at a = 0: the shipped Fanuc tool table holds point 1 at
+    # tip_offset 0 and warns on point 1 at a = 2 (CMP032, NCXchange D376; the test below), so
+    # the two programs may also differ in the register block, and only there.
     flat = _compile(ctx, tmp_path / "0", machine, PROFILE)
-    raised = _compile(ctx, tmp_path / "2", machine, replace(PROFILE, axial_offset_mm=2.0))
+    raised = _compile(ctx, tmp_path / "2", machine, _POINT_2)
     assert len(raised) == len(flat), "\n".join(raised)
     shifted = 0
+    registers = 0
     for before, after in zip(flat, raised, strict=True):
-        assert _Z.sub("Z#", after) == _Z.sub("Z#", before), (before, after)
+        if _Z.sub("Z#", after) != _Z.sub("Z#", before):
+            assert re.search(_REGISTER_2[machine], after), (before, after)
+            registers += 1
         for old, new in zip(_Z.findall(before), _Z.findall(after), strict=True):
             if old != new:
                 assert float(new) - float(old) == pytest.approx(2.0, abs=1e-9), (before, after)
                 shifted += 1
     assert shifted >= 10, "\n".join(raised)
+    assert registers <= 1, "\n".join(raised)
+
+
+@pytest.mark.req("REQ-NCX-013", "REQ-NCX-022")
+def test_an_offset_the_tool_table_contradicts_fails_closed(ctx: Context, tmp_path: Path) -> None:
+    # NCXchange D376 (seen in CI, 2026-11-08): the Fanuc file's tool table holds point 1 of T1 at
+    # tip_offset 0; a program for point 1 at a = 2 draws CMP032, a WARNING, and compile fails as
+    # under --strict, so the program does not reach the machine (REQ-NCX-022, DEC-NCX-014 (a)).
+    program = written(ctx, replace(PROFILE, axial_offset_mm=2.0))
+    result, _ = _run(ctx, tmp_path, "fanuc-mill-30i", program)
+    assert not result.ok
+    found = [(d.code, d.severity, d.location) for d in result.diagnostics]
+    assert ("CMP032", Severity.WARNING, "operation 1 (PROFILE_1)") in found, _told(result, program)
+    assert ("NCX_STRICT_FAILED", Severity.ERROR, "ncx compile") in found, _told(result, program)

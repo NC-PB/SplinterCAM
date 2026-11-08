@@ -24,6 +24,8 @@ _VALID: tuple[tuple[str, Callable[[ClHeader], bool]], ...] = (
     ("tool_number", lambda h: h.tool_number >= 1),
     ("point_number", lambda h: h.point_number >= 1),
     ("axial_offset_mm", lambda h: math.isfinite(h.axial_offset_mm) and h.axial_offset_mm >= 0),
+    ("register_radius_mm", lambda h: math.isfinite(h.register_radius_mm)
+     and h.register_radius_mm >= 0),
     ("spindle_rpm", lambda h: _positive(h.spindle_rpm)),
     ("tol_mm", lambda h: _positive(h.tol_mm)),
     ("feed_classes", lambda h: len({name for name, _ in h.feed_classes}) == len(h.feed_classes)

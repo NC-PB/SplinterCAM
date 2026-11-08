@@ -4,6 +4,7 @@ errors by requirement ID and, within one, by move index (D-055)."""
 
 import math
 import re
+from operator import attrgetter
 
 import numpy as np
 from numpy.typing import NDArray
@@ -74,11 +75,15 @@ def _short_arcs(operation: ClOperation, columns: Printed) -> NDArray[np.intp]:
     return arcs[partial & (chord < _MIN_ARC_CHORD_MM)]
 
 
-def operation_errors(
-    where: str, operation: ClOperation, first: ClHeader, columns: Printed
-) -> list[Diagnostic]:
-    """REQ-NCX-003 (tool, then point), 010, 015, 016 and 026 for one operation, in that order."""
-    header = operation.header
+# A header's point (k, a, r), and its text in the point-change message.
+POINT = attrgetter("point_number", "axial_offset_mm", "register_radius_mm")
+_POINT_TEXT = "point {} at a = {!r} mm, r = {!r} mm".format
+
+
+def _header_errors(where: str, header: ClHeader, first: ClHeader) -> list[Diagnostic]:
+    # REQ-NCX-003 (tool, then point, compared exactly, DEC-NCX-020), then REQ-NCX-010 for the
+    # header's printed values: the speed, then a and r (TIP_OFFSET, POINT_RADIUS; cl keeps them
+    # finite and not negative, REQ-CL-017).
     found: list[Diagnostic] = []
     if (header.tool_number, header.spindle_rpm) != (first.tool_number, first.spindle_rpm):
         message = (
@@ -87,20 +92,28 @@ def operation_errors(
             "one speed per program (DEC-NCX-004)"
         )
         found.append(_error("NCX_TOOL_CHANGE_UNSUPPORTED", message, where))
-    point, offset = header.point_number, header.axial_offset_mm
-    if (point, offset) != (first.point_number, first.axial_offset_mm):  # exact (DEC-NCX-020)
+    if POINT(header) != POINT(first):  # exact; -0.0 equals 0.0 (DEC-NCX-018 (b))
         message = (
-            f"point {point} at a = {offset!r} mm differs from the first operation's point "
-            f"{first.point_number} at a = {first.axial_offset_mm!r} mm; one point per program "
-            "(DEC-NCX-020)"
+            f"{_POINT_TEXT(*POINT(header))} differs from the first operation's "
+            f"{_POINT_TEXT(*POINT(first))}; one point per program (DEC-NCX-020)"
         )
         found.append(_error("NCX_POINT_CHANGE_UNSUPPORTED", message, where))
     if header.spindle_rpm >= VALUE_LIMIT:
         message = f"spindle speed {header.spindle_rpm} 1/min is 10^9 or more"
         found.append(_error("NCX_VALUE_OUT_OF_RANGE", message, where))
-    if offset >= VALUE_LIMIT:  # written as TIP_OFFSET; cl keeps a finite (REQ-CL-017)
-        message = f"point {point}: axial offset a = {offset!r} mm is 10^9 or more"
-        found.append(_error("NCX_VALUE_OUT_OF_RANGE", message, where))
+    for name, value in zip(("axial offset a", "register radius r"), POINT(header)[1:], strict=True):
+        if value >= VALUE_LIMIT:
+            message = f"point {header.point_number}: {name} = {value!r} mm is 10^9 or more"
+            found.append(_error("NCX_VALUE_OUT_OF_RANGE", message, where))
+    return found
+
+
+def operation_errors(
+    where: str, operation: ClOperation, first: ClHeader, columns: Printed
+) -> list[Diagnostic]:
+    """REQ-NCX-003 (tool, then point), 010, 015, 016 and 026 for one operation, in that order."""
+    header = operation.header
+    found = _header_errors(where, header, first)
     for move in np.flatnonzero(columns.too_large):
         message = f"move {move}: a coordinate or feed of 10^9 or more, or not finite"
         found.append(_error("NCX_VALUE_OUT_OF_RANGE", message, where))

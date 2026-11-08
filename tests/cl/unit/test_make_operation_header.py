@@ -28,6 +28,7 @@ def test_every_header_field_reads_back(ctx: Context) -> None:
         tool_number=12,
         point_number=2,  # held as given; a point other than k = 1 is the writer's (Scope)
         axial_offset_mm=0.5,
+        register_radius_mm=1.5,  # r, held for the writer's POINT_RADIUS (AQ-050)
         spindle_rpm=12000.0,
         tol_mm=0.02,
         feed_classes=(("plunge", 250.0), ("cut", 1200.0), ("lead", 600.0)),
@@ -37,6 +38,7 @@ def test_every_header_field_reads_back(ctx: Context) -> None:
     held = make_operation(header, columns(profile_moves()), ctx).header
     assert (held.name, held.note) == ("Outside_Profile_2", header.note)
     assert (held.tool_number, held.point_number, held.axial_offset_mm) == (12, 2, 0.5)
+    assert held.register_radius_mm == 1.5
     assert (held.spindle_rpm, held.tol_mm, held.clearance_height_mm) == (12000.0, 0.02, 4.5)
     assert held.feed_classes == (("plunge", 250.0), ("cut", 1200.0), ("lead", 600.0))
     assert held.retract_height_mm == 2.5
@@ -58,6 +60,9 @@ _BROKEN: list[tuple[str, object]] = [
     ("axial_offset_mm", -0.1),
     ("axial_offset_mm", NAN),
     ("axial_offset_mm", math.inf),
+    ("register_radius_mm", -0.1),
+    ("register_radius_mm", NAN),
+    ("register_radius_mm", math.inf),
     ("spindle_rpm", 0.0),
     ("spindle_rpm", math.inf),
     ("tol_mm", -0.01),

@@ -25,6 +25,7 @@ HEADER = ClHeader(
     tool_number=1,
     point_number=1,
     axial_offset_mm=0.0,
+    register_radius_mm=0.0,
     spindle_rpm=8000.0,
     tol_mm=0.01,
     feed_classes=(("plunge", 300.0), ("cut", 1000.0)),

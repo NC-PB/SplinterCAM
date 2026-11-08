@@ -62,6 +62,6 @@ def plan_profile(task: ProfileInput, ctx: Context) -> Result[ClOperation]:
     op, heights = task.operation, link_heights(task.stock)
     feeds = (("cut", values.cut_feed_mm_per_min), ("plunge", values.plunge_feed_mm_per_min))
     header = ClHeader(op.name, (), op.tool_number, op.point_number, point.axial_offset_mm,
-                      op.spindle_rpm, op.tol_mm, feeds, heights.clearance_mm,
-                      heights.retract_mm)  # fmt: skip
+                      point.register_radius_mm, op.spindle_rpm, op.tol_mm, feeds,
+                      heights.clearance_mm, heights.retract_mm)  # fmt: skip
     return Result(link_operation(header, plan, task.stock, ctx), offset.diagnostics)

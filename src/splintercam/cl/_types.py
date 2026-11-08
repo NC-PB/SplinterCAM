@@ -38,6 +38,7 @@ class ClHeader:
     tool_number: int  # NCX TOOL=
     point_number: int  # k (D-155)
     axial_offset_mm: float  # a; the writer shifts every Z by it (D-154)
+    register_radius_mm: float  # r; the writer's POINT_RADIUS (D-154, AQ-050)
     spindle_rpm: float  # CW (research 26 subset)
     tol_mm: float  # the operation tolerance (D-029); the writer's rounding allowance
     feed_classes: tuple[tuple[str, float], ...]  # (class name, mm/min), by ClMoves.feed_class

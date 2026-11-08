@@ -114,15 +114,35 @@ def test_an_axial_offset_other_than_0_is_written(ctx: Context, offset: float, ti
     assert words(tool)["TIP_OFFSET"] == tip
 
 
+@pytest.mark.req("REQ-NCX-002", "REQ-NCX-008")
+@pytest.mark.parametrize(("radius", "text"), [(0.0, "0.0"), (3.0, "3.0"), (2.5e-7, "0.0")])
+def test_the_register_radius_is_written(ctx: Context, radius: float, text: str) -> None:
+    # Peter, AQ-050: the job's r, from the record, as POINT_RADIUS; compensation stays off.
+    lines = written(ctx, replace(PROFILE, register_radius_mm=radius)).text.split("\n")
+    (tool,) = (line for line in lines if line.startswith("TOOL="))
+    assert words(tool)["POINT_RADIUS"] == text
+    assert "COMP=OFF" in lines[2]
+
+
+@pytest.mark.req("REQ-NCX-010")
+def test_a_register_radius_of_1e9_is_refused(ctx: Context) -> None:
+    found = refused(ctx, replace(PROFILE, register_radius_mm=1e9))
+    assert [(d.code, d.message) for d in found] == [
+        ("NCX_VALUE_OUT_OF_RANGE", "point 1: register radius r = 1000000000.0 mm is 10^9 or more")
+    ]
+
+
 @pytest.mark.req("REQ-NCX-003")
 @pytest.mark.parametrize(
     ("change", "named"),
     [
-        ({"point_number": 2}, "point 2 at a = 0.0 mm"),
-        ({"axial_offset_mm": 1.0}, "point 1 at a = 1.0 mm"),
+        ({"point_number": 2}, "point 2 at a = 0.0 mm, r = 0.0 mm"),
+        ({"axial_offset_mm": 1.0}, "point 1 at a = 1.0 mm, r = 0.0 mm"),
         # Compared exactly (DEC-NCX-020 (a)): both print TIP_OFFSET=0.0, yet the Z differ.
-        ({"axial_offset_mm": 5e-324}, "point 1 at a = 5e-324 mm"),
-        ({"axial_offset_mm": 2.5e-7}, "point 1 at a = 2.5e-07 mm"),
+        ({"axial_offset_mm": 5e-324}, "point 1 at a = 5e-324 mm, r = 0.0 mm"),
+        ({"axial_offset_mm": 2.5e-7}, "point 1 at a = 2.5e-07 mm, r = 0.0 mm"),
+        # AQ-050: r belongs to the point too.
+        ({"register_radius_mm": 3.0}, "point 1 at a = 0.0 mm, r = 3.0 mm"),
     ],
 )
 def test_a_change_of_point_is_refused(ctx: Context, change: dict[str, float], named: str) -> None:
@@ -133,10 +153,12 @@ def test_a_change_of_point_is_refused(ctx: Context, change: dict[str, float], na
         ("NCX_POINT_CHANGE_UNSUPPORTED", Severity.ERROR, "operation 2 (B)")
     ]
     assert found[0].message.startswith(named)
-    assert "first operation's point 1 at a = 0.0 mm" in found[0].message
+    assert "first operation's point 1 at a = 0.0 mm, r = 0.0 mm" in found[0].message
     # The same point in both operations, at any k and a, is written.
-    same = replace(PROFILE, point_number=2, axial_offset_mm=1.0)
+    same = replace(PROFILE, point_number=2, axial_offset_mm=1.0, register_radius_mm=3.0)
     written(ctx, same, replace(same, name="B"))
+    # -0.0 is the same point as 0.0: it moves no Z (DEC-NCX-018 (b)).
+    written(ctx, PROFILE, replace(PROFILE, name="B", axial_offset_mm=-0.0))
 
 
 @pytest.mark.req("REQ-NCX-003", "REQ-NCX-010", "REQ-NCX-017")

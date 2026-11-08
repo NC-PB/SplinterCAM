@@ -7,11 +7,12 @@ from importlib.metadata import version
 
 import numpy as np
 
-from splintercam.cl import ClData, ClOperation, make_cl_data
+from splintercam.cl import ClData, ClHeader, ClOperation, make_cl_data
 from splintercam.foundation import Context, Result, ToleranceSet
 
 from ._moves import Printed, move_blocks, printed
 from ._printer import to_steps, to_text
+from ._refusals import POINT as _POINT
 from ._refusals import operation_errors, program_errors
 from ._types import NcxProgram, NcxSection, ProgramInfo
 
@@ -19,7 +20,10 @@ from ._types import NcxProgram, NcxSection, ProgramInfo
 _MODES = "FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF"
 # DEC-NCX-008: spindle and coolant off before the program end (AQ-010 item 2; RR-006).
 _END = ("COOLANT=OFF", "SPINDLE=OFF", "PROGRAM=END", "FILE=END")
-_UNTESTED = "not yet tested on a machine, plan 0007 step 8"
+# REQ-NCX-028 (Peter, 2026-11-08); no bracket: NCXchange D390 warns on one (DEC-NCX-021).
+_UNTESTED = (
+    f'COMMENT="SplinterCAM {version("splintercam")}: not yet tested on a machine, plan 0007 step 8"'
+)
 
 
 def _round_limit(where: str, tol_mm: float) -> Result[float]:
@@ -30,24 +34,18 @@ def _round_limit(where: str, tol_mm: float) -> Result[float]:
     return Result(built.value.stage_tol_mm("reserve"))
 
 
-def _note() -> str:
-    # REQ-NCX-028 (Peter, 2026-11-08); no bracket: NCXchange D390 warns on one (DEC-NCX-021).
-    return f'COMMENT="SplinterCAM {version("splintercam")}: {_UNTESTED}"'
-
-
-def _tool_blocks(operation: ClOperation) -> list[str]:
+def _tool_blocks(header: ClHeader) -> list[str]:
     # D-155: the operation's point k, its axial offset a and register radius r, so the machine
     # file maps tool and k to the control's register (NCXchange D372 to D376 at 1e2fd00). They
-    # replace OFFSET:LEN (research 26, Checked condition 1). r is 0: cl has no r yet and COMP is
-    # OFF (DEC-NCX-020, AQ-050). The compilers write nothing for a, so a comment before the tool
-    # change says where the length was measured (REQ-NCX-029, DEC-NCX-022, AQ-051).
-    # Speed and a skip `printed`: REQ-NCX-010 checks them in `operation_errors`, and no block is
-    # built once there is an error (DEC-NCX-020 (b)).
-    header = operation.header
+    # replace OFFSET:LEN (research 26, Checked condition 1). r is the job's (Peter, AQ-050); COMP
+    # stays OFF. The compilers write nothing for a, so a comment before the tool change says
+    # where the length was measured (REQ-NCX-029, DEC-NCX-022, AQ-051).
+    # Speed, a and r skip `printed`: REQ-NCX-010 checks them in `operation_errors`, and no block
+    # is built once there is an error (DEC-NCX-020 (b)).
     tool, point = header.tool_number, header.point_number
-    rpm, tip = to_text(to_steps(np.array([header.spindle_rpm, header.axial_offset_mm])))
+    rpm, tip, radius = to_text(to_steps(np.array([header.spindle_rpm, *_POINT(header)[1:]])))
     note = f'COMMENT="T{tool} point {point}: tool length measured {tip} mm above the tip"'
-    words = f"TOOL_POINT={point} TIP_OFFSET={tip} POINT_RADIUS=0.0"
+    words = f"TOOL_POINT={point} TIP_OFFSET={tip} POINT_RADIUS={radius}"
     return [note, f"TOOL={tool} {words} SPINDLE=CW RPM={rpm}", "COOLANT=ON"]
 
 
@@ -56,7 +54,7 @@ def _operation_blocks(index: int, operation: ClOperation, columns: Printed) -> l
     header = operation.header
     blocks = [f'SECTION="{header.name}"', *(f'COMMENT="{line}"' for line in header.note)]
     if index == 1:
-        blocks += _tool_blocks(operation)
+        blocks += _tool_blocks(header)
     return blocks + move_blocks(operation, columns)
 
 
@@ -77,7 +75,7 @@ def write_ncx(cl: ClData, program: ProgramInfo, ctx: Context) -> Result[NcxProgr
         f'PROGRAM=BEGIN NAME="{program.name}" NUMBER={program.number}',
         _MODES,
         f"ORIGIN={data.work_offset}",
-        _note(),
+        _UNTESTED,
     ]
     sections: list[NcxSection] = []
     for index, operation in enumerate(data.operations, start=1):
