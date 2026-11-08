@@ -94,7 +94,9 @@ def test_a_file_name_empty_or_with_a_folder_is_refused(ctx: Context, field: str,
 
 @pytest.mark.req("REQ-SHT-002")
 def test_the_compiled_files_are_checked(ctx: Context) -> None:
-    for nc_files, where in (((), r"no compiled file"), (("A.h", "b/B.h"), r"\[1\]")):
+    cases = (((), r"no compiled file"), (("A.h", "b/B.h"), r"\[1\]"), (("",), r"\[0\]"),
+             (("A.h", "B.h", "c\\C.h"), r"\[2\]"))  # fmt: skip
+    for nc_files, where in cases:
         files = replace(FILES, nc_files=nc_files)
         with pytest.raises(ValueError, match=rf"^setup sheet: files\.nc_files.*{where}"):
             make_setup_sheet(golden_job(), record(ctx), part(ctx), files, ctx)

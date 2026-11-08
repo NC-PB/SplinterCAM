@@ -149,7 +149,7 @@ def test_minus_zero_is_the_same_xy_and_feeds_are_in_order_of_first_use(ctx: Cont
 
 
 @pytest.mark.req("REQ-SHT-010", "REQ-SHT-015")
-def test_points_and_marks_in_order_of_first_occurrence(ctx: Context) -> None:
+def test_points_in_order_and_an_oblique_approach_marks_the_same_point(ctx: Context) -> None:
     ps = ((50.0, -11.0), (40.0, -11.0), (50.0, -11.0))
     data = record(ctx, ((HEADER, profile_moves(per_pass=ps)),))
     op = make_setup_sheet(golden_job(), data, part(ctx), FILES, ctx).operations[0]
@@ -158,6 +158,25 @@ def test_points_and_marks_in_order_of_first_occurrence(ctx: Context) -> None:
     # wall Y 0 at the same point as the square one: one mark on all three passes.
     marks = [(m.contact_x_mm, m.contact_y_mm, m.passes) for m in op.witness_marks]
     assert marks == [(50.0, 0.0, 3)]
+
+
+@pytest.mark.req("REQ-SHT-015")
+def test_distinct_marks_in_order_of_first_occurrence_either_cut_direction(ctx: Context) -> None:
+    # Pass 1 at S (30, -5) cuts toward +X, so the line's normal (0, 10) already points the way
+    # the approach moves (not flipped); pass 2 at S (0, -5) cuts toward -X (flipped). Both touch
+    # the wall Y 0; first occurrence, not sorted order.
+    moves = [rapid(NAN, NAN, 5.0, 5.0)]
+    for x, cut_to in ((30.0, 40.0), (0.0, -10.0)):
+        moves += [rapid(x, -10.0, 5.0, 5.0), rapid(x, -10.0, H_R, H_R),
+                  line(x, -10.0, -1.0, Role.APPROACH, PLUNGE),
+                  line(x, -5.0, -1.0, Role.APPROACH), line(cut_to, -5.0, -1.0),
+                  rapid(cut_to, -5.0, 5.0, 5.0)]  # fmt: skip
+    low = StockBox((0.0, 0.0, -30.0), (100.0, 60.0, -11.0))
+    data = record(ctx, ((HEADER, moves),))
+    op = make_setup_sheet(golden_job(stock=low), data, part(ctx), FILES, ctx).operations[0]
+    marks = [(m.centre_x_mm, m.centre_y_mm, m.contact_x_mm, m.contact_y_mm, m.passes)
+             for m in op.witness_marks]  # fmt: skip
+    assert marks == [(30.0, -5.0, 30.0, 0.0, 1), (0.0, -5.0, 0.0, 0.0, 1)]
 
 
 @pytest.mark.req("REQ-SHT-015")

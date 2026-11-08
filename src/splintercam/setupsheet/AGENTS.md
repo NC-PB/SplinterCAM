@@ -20,7 +20,7 @@ does, AQ-058).
 - REQ-SHT-011: the within-R refusal is toolpath REQ-TP-012's expression in its order, in scalar
   Python floats, so a record toolpath accepted is never refused here by rounding.
 - D-055 tier 1: decisions use comparisons, sums and products; NumPy reductions only `min`, `max`,
-  `np.minimum.at` and counts; `sqrt` only for printed distances and u. No clock, locale or
+  `np.minimum.at` and counts; `sqrt` only for printed distances and the witness mark's n. No clock, locale or
   environment (a unit test greps the sources for the imports).
 - Values are unrounded; rounding for print is `render_html`'s alone (REQ-SHT-017).
 

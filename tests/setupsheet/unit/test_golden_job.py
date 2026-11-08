@@ -116,7 +116,7 @@ def test_the_operation_ends_over_p(ctx: Context) -> None:
     assert _sheet(ctx).operations[0].end_xy_mm == P
 
 
-@pytest.mark.req("REQ-SHT-005", "REQ-SHT-019")
+@pytest.mark.req("REQ-SHT-006", "REQ-SHT-019")
 def test_values_are_unrounded_copies(ctx: Context) -> None:
     stock = replace(STOCK, min_mm=(-5.0004, -5.0, -20.0))
     assert _sheet(ctx, stock).stock.min_mm == (-5.0004, -5.0, -20.0)
