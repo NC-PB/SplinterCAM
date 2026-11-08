@@ -16,7 +16,7 @@ KEEP_CLEAR_MARGIN_MM = 5.0
 
 
 def _tools(planned: tuple[Planned, ...]) -> tuple[SheetTool, ...]:
-    """REQ-SHT-008: each tool once, in the order of first use, with the points used, k ascending."""
+    # REQ-SHT-008: each tool once, in the order of first use, with the points used, k ascending.
     used: dict[int, tuple[FlatEndMill, dict[int, MeasurementPoint]]] = {}
     for _, tool, point in planned:  # dicts keep insertion order: the order of first use
         used.setdefault(tool.number, (tool, {}))[1][point.number] = point
@@ -30,23 +30,17 @@ def _tools(planned: tuple[Planned, ...]) -> tuple[SheetTool, ...]:
     return tuple(tools)
 
 
-def _union(boxes: list[Box3]) -> Box3 | None:
-    if not boxes:
-        return None
-    lo = [min(b.min_mm[i] for b in boxes) for i in range(3)]
-    hi = [max(b.max_mm[i] for b in boxes) for i in range(3)]
-    return Box3((lo[0], lo[1], lo[2]), (hi[0], hi[1], hi[2]))
-
-
 def _keep_out(
     operations: tuple[SheetOperation, ...], stock: Box3
 ) -> tuple[Box3 | None, Box3 | None, float | None]:
-    """REQ-SHT-012: the setup's reach, the keep-clear box, and the height the stock is gripped
-    below where the reach covers the stock box in XY (research 10, trap 1; DEC-SHT-002)."""
-    reach = _union([op.reach for op in operations if op.reach is not None])
-    if reach is None:
+    # REQ-SHT-012: the union of the reaches, the keep-clear box, and holds_below where the reach
+    # covers the stock box in XY (research 10, trap 1; DEC-SHT-002).
+    boxes = [op.reach for op in operations if op.reach is not None]
+    if not boxes:
         return None, None, None
-    (x0, y0, z0), (x1, y1, z1) = reach.min_mm, reach.max_mm
+    x0, y0, z0 = (min(b.min_mm[i] for b in boxes) for i in range(3))
+    x1, y1, z1 = (max(b.max_mm[i] for b in boxes) for i in range(3))
+    reach = Box3((x0, y0, z0), (x1, y1, z1))
     m = KEEP_CLEAR_MARGIN_MM
     keep_clear = Box3((x0 - m, y0 - m, z0), (x1 + m, y1 + m, z1))
     covers = x0 <= stock.min_mm[0] and y0 <= stock.min_mm[1]
@@ -72,16 +66,12 @@ def make_setup_sheet(
         for written, match in zip(cl.operations, planned, strict=True)
     )
     boxes = row_boxes(part.rows, ctx)  # REQ-SHT-005: the union of the rows' boxes
-    part_box = (boxes[:, 0].min(), boxes[:, 1].min(), boxes[:, 2].max(), boxes[:, 3].max())
+    x0, y0 = boxes[:, :2].min(axis=0).tolist()
+    x1, y1 = boxes[:, 2:].max(axis=0).tolist()
     reach, keep_clear, holds_below = _keep_out(operations, stock)
     return SetupSheet(
         files=files,
-        part_box_xy_mm=(
-            float(part_box[0]),
-            float(part_box[1]),
-            float(part_box[2]),
-            float(part_box[3]),
-        ),
+        part_box_xy_mm=(x0, y0, x1, y1),
         work_offset=setup.work_offset,
         stock=stock,
         tools=_tools(planned),

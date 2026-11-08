@@ -35,5 +35,10 @@ does, AQ-058).
   tool comes down below the top); toolpath still refuses it.
 - `register_radius_mm` comes from the job's tool point, not from `ClHeader`, until pull request
   97's header field is merged (DEC-SHT-011); then compare it in REQ-SHT-001 as a is compared.
+- An approach point needs a RAPID that goes down and ends below h_c (DEC-SHT-009). A descent at
+  feed from h_c with no rapid below it gets none, and no REQ-SHT-011 check (AQ-066, open):
+  harmless for `toolpath`'s records, not for a strategy that plunges at feed from h_c.
+- A witness mark's contact point is S + R·n along the cut's normal, not along the approach
+  (DEC-SHT-012); an approach along the wall gives none.
 - Test records live in `tests/support/setupsheet_cases.py`; its golden P is at Y −11 (air gap
   0.2·R), not the Y −15 of `cl_strategies.P`.

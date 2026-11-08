@@ -6,6 +6,7 @@ stock box (REQ-SHT-011)."""
 import math
 
 import numpy as np
+import pytest
 from hypothesis import assume, given
 from hypothesis import strategies as st
 
@@ -41,6 +42,7 @@ def _inside(box: Box3, x: float, y: float, radius: float, slack: float = 0.0) ->
     return lo_x <= x - radius and x + radius <= hi_x and lo_y <= y - radius and y + radius <= hi_y
 
 
+@pytest.mark.req("REQ-SHT-012")
 @given(operations(with_arc=True), _radius)
 def test_the_reach_holds_the_tool_below_h_c(moves: list[Move], radius: float) -> None:
     reach = _sheet_of(moves, radius, _LOW_STOCK).operations[0].reach
@@ -74,6 +76,7 @@ def _clearance(x: float, y: float) -> float:
     return math.sqrt(dx * dx + dy * dy)
 
 
+@pytest.mark.req("REQ-SHT-011")
 @given(_coord, _coord, _radius)
 def test_the_gap_is_the_clearance_to_the_stock_box(x: float, y: float, radius: float) -> None:
     lo, hi = STOCK.min_mm, STOCK.max_mm

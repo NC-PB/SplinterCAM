@@ -62,10 +62,10 @@ class ApproachPoint:
 
     x_mm: float
     y_mm: float
-    descents: int  # RAPIDs ending here below h_c
+    descents: int  # RAPIDs going down and ending here below h_c (DEC-SHT-009)
     rapid_to_mm: float  # the lowest end of those RAPIDs
-    lowest_mm: float  # the lowest end of those RAPIDs and the moves along Z alone (DEC-SHT-009)
-    feeds_mm_min: tuple[float, ...]  # LINEs along Z alone ending here, order of first use
+    lowest_mm: float  # the lowest end of the moves along Z alone ending here
+    feeds_mm_min: tuple[float, ...]  # LINEs down along Z alone ending here, order of first use
     side: Side | None  # None where lowest_mm is not below the stock top
     centre_distance_mm: float | None  # P to the stock box in XY
     gap_mm: float | None  # centre_distance_mm - R
@@ -77,7 +77,7 @@ class WitnessMark:
 
     centre_x_mm: float  # S, the tool centre
     centre_y_mm: float
-    contact_x_mm: float  # S + R·u
+    contact_x_mm: float  # S + R·n, n the cut's normal at S (DEC-SHT-012)
     contact_y_mm: float
     passes: int
 

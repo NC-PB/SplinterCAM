@@ -28,7 +28,7 @@ def reach_below(written: ClOperation, radius: float, ctx: Context) -> Box3 | Non
     rows = np.column_stack(
         (starts[arcs, :2], end[arcs, :2], moves.centre_mm[arcs], moves.sweep_rad[arcs])
     )
-    boxes = row_boxes(np.ascontiguousarray(rows, dtype=np.float64), ctx)
+    boxes = row_boxes(rows, ctx)
     xs = np.concatenate((end[low, 0], starts[low, 0], boxes[:, 0], boxes[:, 2]))
     ys = np.concatenate((end[low, 1], starts[low, 1], boxes[:, 1], boxes[:, 3]))
     return Box3(

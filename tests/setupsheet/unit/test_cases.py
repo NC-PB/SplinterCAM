@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from cl_strategies import CUT, H_R, NAN, PLUNGE, Move, line, rapid
+from cl_strategies import CUT, H_R, NAN, PLUNGE, Move, arc, line, rapid
 from setupsheet_cases import (
     FILES,
     HEADER,
@@ -97,6 +97,7 @@ def test_two_operations_with_two_tools(ctx: Context) -> None:
     assert sheet.reach == Box3((-10.0, -16.0, -10.0), (123.0, 70.0, 8.0))
     assert sheet.keep_clear == Box3((-15.0, -21.0, -10.0), (128.0, 75.0, 8.0))
     assert sheet.rapid_floor_mm == 5.0
+    assert sheet.holds_below_mm == -10.0  # the union covers the stock box in XY
     (point,) = sheet.operations[1].approach_points
     assert (point.side, point.centre_distance_mm, point.gap_mm) == (Side.PLUS_X, 15.0, 12.0)
 
@@ -113,9 +114,9 @@ def test_an_approach_within_r_of_the_stock_box_is_refused(ctx: Context, y: float
 @pytest.mark.req("REQ-SHT-011")
 def test_just_beyond_r_passes_and_a_point_above_the_stock_is_not_refused(ctx: Context) -> None:
     beyond = record(ctx, ((HEADER, profile_moves((50.0, -10.0 - 2.0**-10))),))
-    (point,) = make_setup_sheet(golden_job(), beyond, part(ctx), FILES, ctx).operations[
-        0
-    ].approach_points
+    (point,) = (
+        make_setup_sheet(golden_job(), beyond, part(ctx), FILES, ctx).operations[0].approach_points
+    )
     assert point.gap_mm == pytest.approx(2.0**-10, abs=1e-12)
     inside = record(ctx, ((HEADER, profile_moves((50.0, -9.0))),))
     low = replace(STOCK, max_mm=(105.0, 65.0, -10.0))  # the lowest end -10 is not below the top
@@ -126,9 +127,9 @@ def test_just_beyond_r_passes_and_a_point_above_the_stock_is_not_refused(ctx: Co
 @pytest.mark.req("REQ-SHT-011")
 def test_a_point_off_a_corner(ctx: Context) -> None:
     data = record(ctx, ((HEADER, profile_moves((-9.0, -9.0))),))
-    (point,) = make_setup_sheet(golden_job(), data, part(ctx), FILES, ctx).operations[
-        0
-    ].approach_points
+    (point,) = (
+        make_setup_sheet(golden_job(), data, part(ctx), FILES, ctx).operations[0].approach_points
+    )
     assert point.side is Side.CORNER
     assert point.centre_distance_mm == pytest.approx(math.sqrt(32.0), abs=1e-12)
     assert point.gap_mm == pytest.approx(math.sqrt(32.0) - 5.0, abs=1e-12)
@@ -139,9 +140,9 @@ def test_minus_zero_is_the_same_xy_and_feeds_are_in_order_of_first_use(ctx: Cont
     moves = profile_moves(per_pass=((0.0, -11.0), (-0.0, -11.0), (0.0, -11.0)),
                           plunge_feeds=(PLUNGE, CUT, PLUNGE))  # fmt: skip
     data = record(ctx, ((HEADER, moves),))
-    (point,) = make_setup_sheet(golden_job(), data, part(ctx), FILES, ctx).operations[
-        0
-    ].approach_points
+    (point,) = (
+        make_setup_sheet(golden_job(), data, part(ctx), FILES, ctx).operations[0].approach_points
+    )
     assert point.descents == 3
     assert math.copysign(1.0, point.x_mm) == 1.0  # the first value met
     assert point.feeds_mm_min == (300.0, 1200.0)
@@ -153,12 +154,81 @@ def test_points_and_marks_in_order_of_first_occurrence(ctx: Context) -> None:
     data = record(ctx, ((HEADER, profile_moves(per_pass=ps)),))
     op = make_setup_sheet(golden_job(), data, part(ctx), FILES, ctx).operations[0]
     assert [(p.x_mm, p.descents) for p in op.approach_points] == [(50.0, 2), (40.0, 1)]
+    # DEC-SHT-012: the oblique approach from (40, -11) stops at S too, so the tool touches the
+    # wall Y 0 at the same point as the square one: one mark on all three passes.
     marks = [(m.contact_x_mm, m.contact_y_mm, m.passes) for m in op.witness_marks]
-    u = (10.0 / math.sqrt(136.0), 6.0 / math.sqrt(136.0))  # from (40, -11) to (50, -5)
-    assert marks[0] == (50.0, 0.0, 2)
-    assert marks[1][0] == pytest.approx(50.0 + 5.0 * u[0], abs=1e-12)
-    assert marks[1][1] == pytest.approx(-5.0 + 5.0 * u[1], abs=1e-12)
-    assert marks[1][2] == 1
+    assert marks == [(50.0, 0.0, 3)]
+
+
+@pytest.mark.req("REQ-SHT-015")
+def test_an_approach_along_the_wall_leaves_no_mark(ctx: Context) -> None:
+    # P on the line of the first cut's wall, approached along it: no contact across the wall.
+    data = record(ctx, ((HEADER, profile_moves((60.0, -5.0))),))
+    low = StockBox((0.0, 0.0, -30.0), (100.0, 60.0, -11.0))
+    sheet = make_setup_sheet(golden_job(stock=low), data, part(ctx), FILES, ctx)
+    assert sheet.operations[0].witness_marks == ()
+
+
+@pytest.mark.req("REQ-SHT-012", "REQ-SHT-015")
+def test_a_mark_on_an_arc_lies_along_its_radius(ctx: Context) -> None:
+    # From X 20 to S (10, 0), then a full circle CW about the origin: the boss of radius 5 is
+    # touched at (5, 0), toward the centre, the side the approach moves to.
+    moves = [rapid(NAN, NAN, 5.0, 5.0), rapid(20.0, 0.0, 5.0, 5.0), rapid(20.0, 0.0, H_R, H_R),
+             line(20.0, 0.0, -1.0, Role.APPROACH, PLUNGE), line(10.0, 0.0, -1.0, Role.APPROACH),
+             arc((10.0, 0.0, -1.0), (0.0, 0.0), -math.tau), rapid(10.0, 0.0, 5.0, 5.0)]  # fmt: skip
+    low = StockBox((-5.0, -5.0, -30.0), (5.0, 5.0, -11.0))
+    data = record(ctx, ((HEADER, moves),))
+    op = make_setup_sheet(golden_job(stock=low), data, part(ctx), FILES, ctx).operations[0]
+    (mark,) = op.witness_marks
+    contact = (mark.centre_x_mm, mark.centre_y_mm, mark.contact_x_mm, mark.contact_y_mm)
+    assert contact == (10.0, 0.0, 5.0, 0.0)
+    # REQ-SHT-012: the circle bulges past its ends; the reach holds its extremes, grown by 5.
+    assert op.reach == Box3((-15.0, -15.0, -1.0), (25.0, 15.0, 5.0))
+
+
+@pytest.mark.req("REQ-SHT-011")
+def test_the_corner_boundary_at_r_is_refused(ctx: Context) -> None:
+    # dx 3, dy 4 off the corner (-5, -5): exactly R = 5, touching counts (REQ-TP-012).
+    data = record(ctx, ((HEADER, profile_moves((-8.0, -9.0))),))
+    with pytest.raises(ValueError, match=r"REQ-SHT-011: approach point X -8.0 Y -9.0"):
+        make_setup_sheet(golden_job(), data, part(ctx), FILES, ctx)
+
+
+def _with_upward_moves(p: tuple[float, float]) -> list[Move]:
+    """The golden record with, after each pass's S -> P, a feed retract along Z at P to Z -1 and
+    a RAPID up to h_r: both end below h_c at P and go up."""
+    moves: list[Move] = []
+    for move in profile_moves(p):
+        moves.append(move)
+        if move.role is Role.RETRACT:
+            moves += [line(*p, -1.0, Role.RETRACT, CUT), rapid(*p, H_R, H_R)]
+    return moves
+
+
+@pytest.mark.req("REQ-SHT-010")
+def test_moves_going_up_are_no_descents_and_no_plunge_feeds(ctx: Context) -> None:
+    data = record(ctx, ((HEADER, _with_upward_moves((50.0, -11.0))),))
+    (point,) = (
+        make_setup_sheet(golden_job(), data, part(ctx), FILES, ctx).operations[0].approach_points
+    )
+    assert (point.descents, point.rapid_to_mm, point.lowest_mm) == (3, 3.0, -10.0)
+    assert point.feeds_mm_min == (300.0,)
+
+
+@pytest.mark.req("REQ-SHT-010")
+def test_a_rapid_descent_with_a_ramp_has_no_plunge_feed(ctx: Context) -> None:
+    # Down at P to h_r, then a ramp (not along Z alone) to S at Z -1: P's lowest end is h_r.
+    moves = [rapid(NAN, NAN, 5.0, 5.0), rapid(50.0, -11.0, 5.0, 5.0),
+             rapid(50.0, -11.0, H_R, H_R), line(50.0, -5.0, -1.0, Role.APPROACH, PLUNGE),
+             line(5.0, -5.0, -1.0), line(5.0, -5.0, -3.0), rapid(5.0, -5.0, 5.0, 5.0)]  # fmt: skip
+    data = record(ctx, ((HEADER, moves),))
+    op = make_setup_sheet(golden_job(), data, part(ctx), FILES, ctx).operations[0]
+    # (5, -5) has a LINE along Z alone but no RAPID descent: no approach point.
+    assert [(p.x_mm, p.y_mm, p.descents, p.lowest_mm) for p in op.approach_points] == [
+        (50.0, -11.0, 1, 3.0)
+    ]
+    assert op.approach_points[0].feeds_mm_min == ()
+    assert op.approach_points[0].side is None
 
 
 @pytest.mark.req("REQ-SHT-019")
