@@ -78,3 +78,30 @@
 - Why: the operator checks clamps against the printed number. A reach maximum of 110.0004 printed as 110 would place a clamp at 110 inside the tool's reach by 0.0004 mm; outward rounding cannot do that. Three decimals are far finer than a clamp or a blank is placed by hand, and match the 0.001 mm the dry-run checklist and the golden case's notes use.
 - Rejected: one rounding rule for all (unsafe at limits); more decimals (noise on paper).
 - Where: REQ-SHT-017.
+
+## DEC-SHT-009: An approach point's lowest end counts its own RAPIDs
+
+- Date: 2026-11-08; decided by: ours (plan 0009, step 2)
+- Status: Active
+- Decision: an approach point's `lowest_mm` is the lowest end of the RAPIDs counted at it and of the moves along Z alone ending there (REQ-SHT-010).
+- Why: the Reviewed wording took the moves along Z alone only, which leaves the value undefined where a RAPID below h_c ends at P after a move that is not along Z alone (`cl` accepts such a record; `toolpath` writes none). Counting the RAPIDs keeps the value defined for every record `cl` accepts and can only lower it, the safe side for the stock-top test of REQ-SHT-011 and the printed floor. On every record `toolpath` writes the two readings give the same number (the RAPID to h_r at P is along Z alone).
+- Rejected: `lowest_mm` optional (a third state for the renderer and the operator with no case that needs it); the RAPIDs only (misses the plunge, the point of the value).
+- Where: REQ-SHT-010; `src/splintercam/setupsheet/_approach.py`.
+
+## DEC-SHT-010: An operation of one RAPID ends at no known XY
+
+- Date: 2026-11-08; decided by: ours (plan 0009, step 2)
+- Status: Active
+- Decision: `SheetOperation.end_xy_mm` is None where the last move's end has no XY, which happens only for an operation of one RAPID (move 0, `cl` REQ-CL-006: (NaN, NaN, z)).
+- Why: `cl` accepts that operation (SPEC, Example parts); it stays at the tool-change position, whose XY the record does not know. None says so; NaN would reach the renderer as "nan".
+- Rejected: NaN in the tuple (prints as text an operator cannot use); refusing the operation (`cl` accepts it, and the sheet is no second check of the record, SPEC Non-goals).
+- Where: Public interface; REQ-SHT-016.
+
+## DEC-SHT-011: Each operation names its point k, a and r (AQ-051)
+
+- Date: 2026-11-08; decided by: Peter (AQ-051, superseding AQ-059 item 2), applied by us in step 2
+- Status: Active
+- Decision: `SheetOperation` carries the operation's point number k, its axial offset a and its register radius r, as the program's comment before the tool change names them; a and r come from the job's tool point k, after REQ-SHT-001 checked that the header's k and a equal the job's. REQ-SHT-008's sentence says the program names k and a only in a comment.
+- Why: AQ-051 allows k ≠ 1 and a ≠ 0 with a comment in the program; a length measured to another point moves every Z by the difference, so the operator must read the same k and a on the sheet next to each operation, not only in the tool list. r is not in the header today (pull request 97 adds the register radius to `ClHeader` in a parallel lane), so it is read from the job.
+- Rejected: k and a in the tool list only (the operator reads an operation's line at the tool change); r from the header (not there yet; when it is, REQ-SHT-001 can compare it as it compares a).
+- Where: REQ-SHT-008, 009; Public interface.
