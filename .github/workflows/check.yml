@@ -81,6 +81,7 @@ jobs:
           ln -s "$RUNNER_TEMP/ncx/Ncx.Cli" "$RUNNER_TEMP/ncx/ncx"
           echo "$RUNNER_TEMP/ncx" >> "$GITHUB_PATH"
           echo "SPLINTERCAM_NCXCHANGE=$GITHUB_WORKSPACE/ncxchange" >> "$GITHUB_ENV"
+          echo "SPLINTERCAM_REQUIRE_NCX=1" >> "$GITHUB_ENV"   # the real-ncx tests fail instead of skip here (AQ-052)
           "$RUNNER_TEMP/ncx/ncx" --version || true
           echo "| build pinned ncx | $((SECONDS - start)) s |" >> "$RUNNER_TEMP/timings.md"
       - name: bootstrap
