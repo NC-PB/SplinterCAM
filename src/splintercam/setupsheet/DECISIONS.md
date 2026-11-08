@@ -9,7 +9,7 @@
 ## DEC-SHT-001: A new module at layer 4 writes the sheet's content and HTML; `job` writes the file
 
 - Date: 2026-11-08; decided by: proposed (ours), for Peter (AQ-057: a new module and `architecture/modules.yaml` are his)
-- Status: Proposed
+- Status: Active (Peter, AQ-057, 2026-11-08; `architecture/modules.yaml` applied)
 - Decision: a new module `setupsheet`, layer 4, depends on foundation, geometry2d, model and cl. It computes a `SetupSheet` value and renders it as HTML; it writes no file. `job` gains it in `depends_on`, calls it after a clean `ncx` run and writes the file (AQ-058).
 - Why: the sheet needs the checked job (tools, stock, work offset) and the record (approach points, heights, feeds), both layer 2, so layer 3 or 4 fits; it does not plan, and it sits beside `ncx` as the second output of a program, so layer 4. docs/dev/03, rule 5: only `job` reads and writes files. `job` is at 518 of its 520 NLOC (AQ-039), and the sheet is about 390 by the 1.5 rule.
 - Rejected: inside `job` (budget; `job` runs the chain and computes nothing of its own, its SPEC's non-goal); inside `ncx` (`ncx` writes NCX and runs the binary, `architecture/modules.yaml`'s comment; the sheet is not NCX and must not depend on whether `ncx` is present); layer 3 (it plans nothing; a strategy must never import it).
@@ -27,7 +27,7 @@
 ## DEC-SHT-003: A witness mark where a straight approach meets the cut
 
 - Date: 2026-11-08; decided by: ours
-- Status: Active (draft)
+- Status: Active; its contact point S + R·u superseded by DEC-SHT-012
 - Decision: a witness mark is stated where a CUT follows a LINE of role APPROACH that moves in XY, at the CUT's start S and at S + R·u, on the wall or on the allowance left on it, distinct by S and u, with the number of passes (REQ-SHT-015).
 - Why: AQ-016 item 7: with no lead arc the part shows a mark at S on every pass. Reading it from the roles keeps it strategy-neutral: a later strategy with a tangent lead arc has an ARC approach and gets no such line, and the profile with P equal to S (REQ-PRF-017, d = 0) has no approach LINE and no mark at that point, which is right: it goes down beside the stock onto the path.
 - Rejected: a flag from the strategy (a new `cl` field for one line of text); a mark at every pass start whatever the approach (wrong for lead arcs).
@@ -78,3 +78,41 @@
 - Why: the operator checks clamps against the printed number. A reach maximum of 110.0004 printed as 110 would place a clamp at 110 inside the tool's reach by 0.0004 mm; outward rounding cannot do that. Three decimals are far finer than a clamp or a blank is placed by hand, and match the 0.001 mm the dry-run checklist and the golden case's notes use.
 - Rejected: one rounding rule for all (unsafe at limits); more decimals (noise on paper).
 - Where: REQ-SHT-017.
+
+## DEC-SHT-009: Descents and plunge feeds count only moves going down
+
+- Date: 2026-11-08; decided by: ours (plan 0009, step 2; spec and cnc review rounds)
+- Status: Active
+- Decision: an approach point comes from a RAPID that ends below h_c and below its known start z; its feeds come from the LINEs along Z alone that go down and end there (REQ-SHT-010). The lowest end still takes every move along Z alone ending there.
+- Why: `cl` accepts a RAPID up from a cut level to h_r and a feed retract along Z at P (REQ-CL-011, 022 allow both); counted, the golden pattern with such retracts would read 6 descents instead of 3 and "comes down at F 300, 1200" with the retract's feed. The sheet's sentence is about where and how the tool comes down. The test is one comparison per move (D-055 tier 1). `toolpath` writes neither move today, so the golden values do not change.
+- Rejected: every RAPID ending below h_c (the Reviewed wording; miscounts the records above); a separate field for moves going up (nothing on the sheet needs it).
+- Note: every RAPID ending below h_c is along Z alone (`cl` REQ-CL-022), so the lowest end of the moves along Z alone always includes the counted RAPIDs; a first draft of this entry wrongly said otherwise.
+- Where: REQ-SHT-010; `src/splintercam/setupsheet/_approach.py`.
+
+## DEC-SHT-010: An operation of one RAPID ends at no known XY
+
+- Date: 2026-11-08; decided by: ours (plan 0009, step 2)
+- Status: Active
+- Decision: `SheetOperation.end_xy_mm` is None where the last move's end has no XY, which happens only for an operation of one RAPID (move 0, `cl` REQ-CL-006: (NaN, NaN, z)).
+- Why: `cl` accepts that operation (SPEC, Example parts); it stays at the tool-change position, whose XY the record does not know. None says so; NaN would reach the renderer as "nan".
+- Rejected: NaN in the tuple (prints as text an operator cannot use); refusing the operation (`cl` accepts it, and the sheet is no second check of the record, SPEC Non-goals).
+- Where: Public interface; REQ-SHT-016.
+
+## DEC-SHT-011: Each operation names its point k, a and r (AQ-051)
+
+- Date: 2026-11-08; decided by: Peter (AQ-051, superseding AQ-059 item 2), applied by us in step 2
+- Status: Active
+- Decision: `SheetOperation` carries the operation's point number k, its axial offset a and its register radius r, as the program's comment before the tool change names them; a and r come from the job's tool point k, after REQ-SHT-001 checked that the header's k and a equal the job's. REQ-SHT-008's sentence says the program names k and a only in a comment.
+- Why: AQ-051 allows k ≠ 1 and a ≠ 0 with a comment in the program; a length measured to another point moves every Z by the difference, so the operator must read the same k and a on the sheet next to each operation, not only in the tool list. r is not in the header today (pull request 97 adds the register radius to `ClHeader` in a parallel lane), so it is read from the job.
+- Rejected: k and a in the tool list only (the operator reads an operation's line at the tool change); r from the header (not there yet; when it is, REQ-SHT-001 can compare it as it compares a).
+- Where: REQ-SHT-008, 009; Public interface.
+- Spec review: `ncx` does not write the point comment yet (`src/splintercam/ncx/_write.py`; it still refuses k ≠ 1 and a ≠ 0, REQ-NCX-013); REQ-SHT-008 therefore names the comment only once `ncx` writes it, so the golden job's sheet never points to a comment that is not in the program.
+
+## DEC-SHT-012: A witness mark's contact point lies along the cut's normal
+
+- Date: 2026-11-08; decided by: ours (plan 0009, step 2; cnc review), superseding the "S + R·u" of DEC-SHT-003
+- Status: Active
+- Decision: the contact point is S + R·n, n the unit normal of the CUT at S (across a LINE, along the radius of an ARC), on the side the approach moves to (n · step > 0); no mark where the approach runs along the CUT (n · step = 0). Marks are distinct by S and the computed contact point (REQ-SHT-015).
+- Why: with the tool centre at S, the tool touches the wall at S + R·n, whatever the direction it came from. S + R·u is on the wall only for an approach square to it: from P (40, −11) to S (50, −5) it gives X 54.29, Y −2.43, 2.43 mm off the wall at Y 0 (the cnc review), so a setter would look in the wrong place. The approach comes from the air, so the material lies on the side it moves to; the sign is a product and a sum (D-055 tier 1). The profile approaches square to the wall (strategies/profile REQ-PRF-014), so the golden values do not change. Grouping by the contact point merges the oblique and the square approach of one S into one mark, as on the part; two directions that round to contact points one ulp apart give two marks at the same printed point (harmless, deterministic).
+- Rejected: S + R·u (wrong for oblique approaches); no contact point at all (the operator needs the place on the wall); grouping by u (one mark printed twice for two approach directions).
+- Where: REQ-SHT-015; `src/splintercam/setupsheet/_approach.py`, `witness_marks`.

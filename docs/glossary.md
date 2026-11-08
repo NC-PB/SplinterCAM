@@ -69,6 +69,9 @@
 | parameter declaration | `ParameterDeclaration` | Parameterdeklaration | A strategy's declared input: name, unit, default or none, range, source; operation panels and job checks come from it (D-018, D-049) | dev/03 |
 | work frame | `work_frame` | Werkstücknullpunkt | Coordinate frame the program refers to (G54 and similar) | 19 |
 | setup | `Setup` | Aufspannung | One clamping of the part, with stock, fixtures and origin | 19 |
+| setup sheet | `SetupSheet` | Einrichteblatt | What the operator needs before the first run and the NC program does not say, computed from the job and the toolpath record: tools and their measurement points, datum and work offset, blank, approach points, the reach below h_c and the keep-clear box, heights, feeds, the dry-run notes (plan 0009; feature map, section 8) | 10, 26 |
+| approach point | `ApproachPoint` | Anfahrpunkt | Where the tool comes down beside the stock below h_c, P of research 10, Method 2; on the setup sheet with its side, distance and gap to the stock box | 10 |
+| reach below h_c | `reach` | Reichweite unter h_c | The box the tool's edge can come to below the clearance height: the tool centre's XY box over those moves grown by R, from the lowest end to h_c (DEC-SHT-002) | 10 |
 | fixture | `fixture` | Spannmittel | Clamping device; a keep-out zone | 10, 19 |
 | insert | `insert` | Wendeschneidplatte | Replaceable cutting tip of a turning or milling tool | 14 |
 | nose radius | `nose_radius` | Eckenradius | Corner radius of a turning insert | 14 |
