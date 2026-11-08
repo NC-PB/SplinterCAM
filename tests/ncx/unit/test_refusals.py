@@ -115,27 +115,51 @@ def test_an_axial_offset_other_than_0_is_written(ctx: Context, offset: float, ti
 
 
 @pytest.mark.req("REQ-NCX-003")
-@pytest.mark.parametrize("change", [{"point_number": 2}, {"axial_offset_mm": 1.0}])
-def test_a_change_of_point_is_refused(ctx: Context, change: dict[str, float]) -> None:
+@pytest.mark.parametrize(
+    ("change", "named"),
+    [
+        ({"point_number": 2}, "point 2 at a = 0.0 mm"),
+        ({"axial_offset_mm": 1.0}, "point 1 at a = 1.0 mm"),
+        # Compared exactly (DEC-NCX-020 (a)): both print TIP_OFFSET=0.0, yet the Z differ.
+        ({"axial_offset_mm": 5e-324}, "point 1 at a = 5e-324 mm"),
+        ({"axial_offset_mm": 2.5e-7}, "point 1 at a = 2.5e-07 mm"),
+    ],
+)
+def test_a_change_of_point_is_refused(ctx: Context, change: dict[str, float], named: str) -> None:
     # DEC-NCX-020: one tool block holds the point; a point block without TOOL is unchecked.
     second = replace(PROFILE, name="B", **change)
     found = refused(ctx, PROFILE, second)
     assert [(d.code, d.severity, d.location) for d in found] == [
         ("NCX_POINT_CHANGE_UNSUPPORTED", Severity.ERROR, "operation 2 (B)")
     ]
-    assert "point 1 at a = 0.0 mm" in found[0].message
+    assert found[0].message.startswith(named)
+    assert "first operation's point 1 at a = 0.0 mm" in found[0].message
     # The same point in both operations, at any k and a, is written.
     same = replace(PROFILE, point_number=2, axial_offset_mm=1.0)
     written(ctx, same, replace(same, name="B"))
+
+
+@pytest.mark.req("REQ-NCX-003", "REQ-NCX-010", "REQ-NCX-017")
+def test_the_point_change_comes_before_the_speed_and_the_offset_out_of_range(
+    ctx: Context,
+) -> None:
+    second = replace(PROFILE, name="B", point_number=2, spindle_rpm=1e9, axial_offset_mm=1e9)
+    found = refused(ctx, PROFILE, second)
+    above = [index for index, move in enumerate(profile_moves()) if move.end[2] >= 0.0]
+    assert [(d.code, d.message.split(":")[0].split(" ")[0]) for d in found] == [
+        ("NCX_TOOL_CHANGE_UNSUPPORTED", "tool"),  # the speed differs too
+        ("NCX_POINT_CHANGE_UNSUPPORTED", "point"),
+        ("NCX_VALUE_OUT_OF_RANGE", "spindle"),
+        ("NCX_VALUE_OUT_OF_RANGE", "point"),
+        *(("NCX_VALUE_OUT_OF_RANGE", "move") for _ in above),
+    ]
 
 
 @pytest.mark.req("REQ-NCX-003", "REQ-NCX-017")
 def test_the_point_change_comes_after_the_tool_change_and_before_the_note_and_the_tol(
     ctx: Context,
 ) -> None:
-    second = replace(
-        PROFILE, name="B", tool_number=2, point_number=2, note=("(a)",), tol_mm=0.001
-    )
+    second = replace(PROFILE, name="B", tool_number=2, point_number=2, note=("(a)",), tol_mm=0.001)
     assert [d.code for d in refused(ctx, PROFILE, second)] == [
         "NCX_TOOL_CHANGE_UNSUPPORTED",
         "NCX_POINT_CHANGE_UNSUPPORTED",
@@ -247,7 +271,7 @@ def test_a_full_circle_has_no_chord_to_refuse(ctx: Context) -> None:
     written(ctx, PROFILE, moves=full_circle(math.tau))
 
 
-@pytest.mark.req("REQ-NCX-017", "REQ-NCX-026")
+@pytest.mark.req("REQ-NCX-013", "REQ-NCX-017", "REQ-NCX-026")
 def test_the_arc_errors_come_by_id_and_the_tol_last(ctx: Context) -> None:
     header = replace(PROFILE, point_number=2, tol_mm=0.001)
     start, end, centre = (-4.9e-7, -4.9e-7), (4.9e-7, 4.9e-7), (10.0, -10.0)
@@ -263,7 +287,7 @@ def test_the_arc_errors_come_by_id_and_the_tol_last(ctx: Context) -> None:
     ]
 
 
-@pytest.mark.req("REQ-NCX-017")
+@pytest.mark.req("REQ-NCX-003", "REQ-NCX-017")
 def test_every_error_is_reported_in_order(ctx: Context) -> None:
     first = replace(PROFILE, point_number=3, note=("(a)",))
     second = replace(PROFILE, name="B", tool_number=2, point_number=2, note=("\\",))
@@ -289,3 +313,4 @@ def test_moves_out_of_range_are_named_by_index(ctx: Context) -> None:
         f"move {index}" for index in above
     ]
     assert {d.code for d in found} == {"NCX_VALUE_OUT_OF_RANGE"}
+    assert found[0].message == "point 1: axial offset a = 1000000000.0 mm is 10^9 or more"

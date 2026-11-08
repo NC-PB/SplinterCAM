@@ -73,7 +73,7 @@ No algorithms.
 
 ## Example parts
 
-- The golden case with `ncx` and `--machine`: stderr `INFO JOB_INPUTS …`, `INFO DXF_PART_SIZE …`, `INFO NCX_ROUNDED operation 1 (PROFILE_1): …`; stdout the two paths; exit 0, also with `--strict`.
+- The golden case with `ncx` and `--machine`: stderr `INFO JOB_INPUTS …`, `INFO DXF_PART_SIZE …` (no `NCX_ROUNDED` at NCXchange 1e2fd00, which rounds without `CMP020`, 2026-11-08); stdout the two paths; exit 0, also with `--strict`.
 - The same without `ncx`: stderr `ERROR JOB_NCX_NOT_FOUND …`, nothing on stdout, exit 1. Without `--machine`: `ERROR JOB_MACHINE_NOT_FOUND …`, exit 2.
 - `splintercam run missing.json --output out`: `ERROR JOB_FILE_UNREADABLE …`, exit 2.
 

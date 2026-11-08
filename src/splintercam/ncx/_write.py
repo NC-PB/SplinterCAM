@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`write_ncx`: the record as one program of canonical NCX (REQ-NCX-001 to 017; research 26,
-Mapping onto NCX)."""
+"""`write_ncx`: the record as one program of canonical NCX (REQ-NCX-001 to 017, 026, 028, 029;
+research 26, Mapping onto NCX)."""
 
 from dataclasses import replace
 from importlib.metadata import version
@@ -35,23 +35,28 @@ def _note() -> str:
     return f'COMMENT="SplinterCAM {version("splintercam")}: {_UNTESTED}"'
 
 
-def _tool_block(operation: ClOperation) -> str:
+def _tool_blocks(operation: ClOperation) -> list[str]:
     # D-155: the operation's point k, its axial offset a and register radius r, so the machine
     # file maps tool and k to the control's register (NCXchange D372 to D376 at 1e2fd00). They
     # replace OFFSET:LEN (research 26, Checked condition 1). r is 0: cl has no r yet and COMP is
-    # OFF (DEC-NCX-020, AQ-050).
+    # OFF (DEC-NCX-020, AQ-050). The compilers write nothing for a, so a comment before the tool
+    # change says where the length was measured (REQ-NCX-029, DEC-NCX-022, AQ-051).
+    # Speed and a skip `printed`: REQ-NCX-010 checks them in `operation_errors`, and no block is
+    # built once there is an error (DEC-NCX-020 (b)).
     header = operation.header
+    tool, point = header.tool_number, header.point_number
     rpm, tip = to_text(to_steps(np.array([header.spindle_rpm, header.axial_offset_mm])))
-    point = f"TOOL_POINT={header.point_number} TIP_OFFSET={tip} POINT_RADIUS=0.0"
-    return f"TOOL={header.tool_number} {point} SPINDLE=CW RPM={rpm}"
+    note = f'COMMENT="T{tool} point {point}: tool length measured {tip} mm above the tip"'
+    words = f"TOOL_POINT={point} TIP_OFFSET={tip} POINT_RADIUS=0.0"
+    return [note, f"TOOL={tool} {words} SPINDLE=CW RPM={rpm}", "COOLANT=ON"]
 
 
 def _operation_blocks(index: int, operation: ClOperation, columns: Printed) -> list[str]:
-    # REQ-NCX-002: SECTION, the note, the tool block in the first operation only, the moves.
+    # REQ-NCX-002: SECTION, the note, the tool blocks in the first operation only, the moves.
     header = operation.header
     blocks = [f'SECTION="{header.name}"', *(f'COMMENT="{line}"' for line in header.note)]
     if index == 1:
-        blocks += [_tool_block(operation), "COOLANT=ON"]
+        blocks += _tool_blocks(operation)
     return blocks + move_blocks(operation, columns)
 
 
@@ -62,7 +67,7 @@ def write_ncx(cl: ClData, program: ProgramInfo, ctx: Context) -> Result[NcxProgr
     Rebuilds `cl` with `make_cl_data` first; a broken record raises its `ValueError`. Writes no
     file, starts no process and does not poll `ctx.cancel` (DEC-CL-002).
 
-    Implements: REQ-NCX-001 to 017.
+    Implements: REQ-NCX-001 to 017, 026, 028, 029.
     """
     data = make_cl_data(cl.work_offset, cl.operations, ctx)
     first = data.operations[0].header

@@ -18,7 +18,7 @@
     "approach_clear_of_stock_mm": 6.0,
     "ncx": {
       "machine": "heidenhain-itnc530.toml",
-      "codes": ["JOB_INPUTS", "DXF_PART_SIZE", "NCX_ROUNDED"],
+      "codes": ["JOB_INPUTS", "DXF_PART_SIZE"],
       "files": ["RECT_FILLETS.h", "RECT_FILLETS.ncx"]
     }
   },

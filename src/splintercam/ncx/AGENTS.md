@@ -28,9 +28,8 @@ are NumPy over the record's columns. Depends on: foundation, cl.
 
 ## Known pitfalls
 
-- The canonical layout `ncx format --check` wants is not known at the f74559c pin (RR-006); only
-  the real-`ncx` test checks it, and `SPINDLE=OFF` (DEC-NCX-008) with it. CI has no job that
-  builds `ncx` yet (AQ-025), so the test is skipped there too.
+- The canonical layout `ncx format --check` wants is not written down here (RR-006); only the
+  real-`ncx` test checks it, and `SPINDLE=OFF` (DEC-NCX-008) and the point words' order with it.
 - `np.strings` arrays have a fixed width: assigning a longer string into an element truncates it
   silently. Build a new array with `+` or `np.where`, never assign into one.
 - The fake `ncx` (`tests/support/ncx_fake.py`) is the real Python interpreter run on a folder per
@@ -40,7 +39,13 @@ are NumPy over the record's columns. Depends on: foundation, cl.
 - REQ-NCX-026's 0.001 mm (`_MIN_ARC_CHORD_MM`, DEC-NCX-016) is the shipped mills' step, not a
   tolerance: it goes when NCXchange checks arcs at the machine's step (D363), not when tol
   changes. A test arc for another rule needs a chord of 0.001 mm or more, or it is refused too.
-- `write_ncx` refuses an axial offset a ≠ 0 (REQ-NCX-013, DEC-NCX-018). A test of the Z shift
-  (REQ-NCX-007) checks `move_blocks`; one that reaches 10^9 through a also gets that refusal.
+- The pin is NCXchange 1e2fd00 (2026-11-08). The tool block carries the point words, not
+  `OFFSET:LEN` (DEC-NCX-020); a second operation with another k or a is refused. A test with
+  a ≥ 10^9 also gets a's own `NCX_VALUE_OUT_OF_RANGE`, before the moves'.
+- Every program has the untested-on-machine `COMMENT` after `ORIGIN` (REQ-NCX-028), so the
+  first `SECTION` is line 6, and the point `COMMENT` before the tool block (REQ-NCX-029).
+- At 1e2fd00 `compile` gives no `CMP020` for the slice's programs: a real-`ncx` test that needs
+  a message to map must make one (a bracket in a note on Fanuc warns, NCXchange D390). Never put a bracket in a comment the writer makes: NCXchange D390
+  warns on it for Fanuc, and every step fails closed on a warning.
 - Every `ncx` step fails on a WARNING or an unread stderr line (REQ-NCX-027); only `compile`'s
   `CMP020` is accepted. A fake `ncx` step meant to pass prints no warning.
