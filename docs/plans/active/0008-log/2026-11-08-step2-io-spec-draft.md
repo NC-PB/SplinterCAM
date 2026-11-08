@@ -1,0 +1,27 @@
+# 2026-11-08, step 2 (`io` SPEC draft, for Peter's review)
+
+- Lane IO, branch `io/region-0008-step2`. Documents only, no code before the answers.
+- `src/splintercam/io/SPEC.md`: REQ-IO-031 to 036, Draft, add a new entry point `read_dxf_region` with `DxfRegion(loops, part_size)` beside `read_dxf_contour`, which stays for the profile.
+  - It reads and chains by REQ-IO-001 to 030, and hands every closed chain on as one loop of one `CurveRows`, ordered by smallest source ID.
+  - "No closed chain" is `DXF_CONTOUR_COUNT`. Open chains still stop the import (`DXF_OPEN_CHAIN`).
+  - io does not nest, orient or judge the loops. geometry2d's loop tree and the pocket's `POCKET_REGION` do that (research 04, Method 1).
+  - Loops meeting at a row end stay `DXF_BRANCH`, provisionally.
+  - A skipped entity that could be a wall stops the region with `DXF_REGION_INCOMPLETE`, provisionally (AQ-063).
+  - `DXF_PART_SIZE` names the number of loops.
+  - Research 04 is added to the SPEC's research line.
+- `src/splintercam/io/DECISIONS.md`: DEC-IO-006, provisional. It covers the loop order, the reused code, the loop count, the selection moved to `_region.py`, the branch limitation, the skipped walls and the recorded cross-loop gap risk.
+- Review: one `spec-reviewer` round, with 1 blocker, 4 major and 7 minor findings, all folded in.
+  - The blocker, a skipped island that the pocket would mill through, became REQ-IO-036 and AQ-063.
+  - Majors:
+    - The property test now compares the loops as a set.
+    - Touching loops are named as `DXF_BRANCH`.
+    - REQ-IO-031's test now allows the loop count.
+    - AQ-060 now says honestly that `DxfRegion` carries no handles.
+  - Minors: REQ-IO-032 is conditioned on no branch or refused gap; the circle test is fixed; the failure row now names `LOOPS_CROSS`; research 21 tests 8 and 9 are included; research 04 Test 9 is cited; the selection moves out of `_chain.py`; wording fixes in REQ-IO-035, AQ-061 and AQ-062.
+- Size: first count about 50 NLOC, so about 75 NLOC and 150 lines of tests. io is at 795 of 820, so about 870 after the step. The new code and the moved selection go into `src/splintercam/io/_region.py`; tests go into `tests/io/unit/test_dxf_region.py`.
+- Questions:
+  - AQ-060: the entry point and who judges the region.
+  - AQ-061: a CIRCLE on the pocket's layer is a wall (D-027).
+  - AQ-062: io's budget of 900, with the exact `architecture/modules.yaml` line.
+  - AQ-063: a skipped entity stops the region.
+- Next: once the answers are in, the implementation on this lane's next branch, tests first.

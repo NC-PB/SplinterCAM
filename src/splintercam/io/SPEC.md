@@ -4,22 +4,22 @@
 
 | | |
 | --- | --- |
-| Status | Reviewed (2026-10-13, Peter: the five open questions answered; plan 0007, Decisions; DEC-IO-001 to 004; ADR 0011 accepted). Nothing is implemented; the geometry2d array entries of answer 5 come first, in their own pull request (DEC-G2D, plan 0007 step 2). Choices marked "(ours)" stand as the contract |
+| Status | REQ-IO-001 to 030 Reviewed (2026-10-13, Peter: the five open questions answered; plan 0007, Decisions; DEC-IO-001 to 004; ADR 0011 accepted), implemented in plan 0007, step 2. REQ-IO-031 to 036 Draft (2026-11-08, plan 0008, step 2: the region of several loops; AQ-060 to AQ-063 open). Choices marked "(ours)" stand as the contract |
 | Layer | 1 (see architecture/modules.yaml) |
 | Depends on | foundation, geometry2d (Python API only: `curve_rows`, `CurveRows`, `Box`, and the array entries of answer 5); external ezdxf (MIT, `architecture/modules.yaml`; ADR 0011, proposed) |
-| Research | [21][r21]: DXF import of plan 0007, normative. Through it [01][r01], sections Tolerances, Curves (Arc form, Bulge) |
+| Research | [21][r21]: DXF import of plan 0007, normative. Through it [01][r01], sections Tolerances, Curves (Arc form, Bulge). For REQ-IO-031 to 036, [04][r04], Scope, Method 1 and Test 9 (the region a pocket takes: one outer loop and its islands, judged by the loop tree and the operation) |
 | Decisions | D-027 (holes and outlines; circles not yet holes), D-028 (mm inside, converted once at import), D-033 (files without units), D-034 and D-092 (splines and ellipses later; ezdxf as the reader), D-049 (declared parameters), D-055 (determinism), D-057 (arc form, bulge only at DXF); DEC-G2D-016 and 019 (coordinate and radius limits); text in [docs/spike/decisions-snapshot.md](../../../docs/spike/decisions-snapshot.md) |
 | Owner | Peter Burgener |
 
 ## Purpose
 
-Reads a DXF drawing and hands one closed contour of lines and arcs, in millimetres, to geometry2d as curve rows, each row with a source ID that names its entity and segment. It reports the part size, converts the unit once and never guesses one, and names every repair, skipped entity and ambiguity. Its first user is the outside profile of plan 0007, through the job (step 7).
+Reads a DXF drawing and hands one closed contour of lines and arcs, in millimetres, to geometry2d as curve rows, each row with a source ID that names its entity and segment. It reports the part size, converts the unit once and never guesses one, and names every repair, skipped entity and ambiguity. Its first user is the outside profile of plan 0007, through the job (step 7). A second entry point hands on every closed chain of the selection as the loops of one region, for the pocket of plan 0008 (an outer loop and its islands, which geometry2d's loop tree and the pocket judge).
 
 ## Scope
 
-- In: [research 21][r21], sections Scope, Method, Parameters, Traps: LINE, ARC, CIRCLE, LWPOLYLINE and 2D POLYLINE in model space; `$INSUNITS`; the OCS with extrusion ±z; chaining with eps_len joins and gap closing; one closed contour chosen by layer or by being the only one.
+- In: [research 21][r21], sections Scope, Method, Parameters, Traps: LINE, ARC, CIRCLE, LWPOLYLINE and 2D POLYLINE in model space; `$INSUNITS`; the OCS with extrusion ±z; chaining with eps_len joins and gap closing; one closed contour chosen by layer or by being the only one; for a pocket, every closed chain of the selection as one region's loops (plan 0008, step 2; research 04, Method 1).
 - Out, handled elsewhere: validating rows and building the region (geometry2d: `curve_rows`, `build_region`); the job file and its `units` and `layer` fields (job, plan 0007 step 7); showing diagnostics to the user (apps).
-- Later parts (research 21, Out): SPLINE and ELLIPSE, spline-fit and curve-fit polylines, INSERT and blocks, 3D entities, HATCH, TEXT as geometry, open chains for profiles, layers as hole or outline hints, circles as holes, several contours, drawings far from the origin (national grid coordinates), STEP, meshes, topic 25's chaining tolerance.
+- Later parts (research 21, Out): SPLINE and ELLIPSE, spline-fit and curve-fit polylines, INSERT and blocks, 3D entities, HATCH, TEXT as geometry, open chains for profiles, layers as hole or outline hints, circles as drilled holes (D-027: grouped by diameter for a drilling dialog; on a pocket's layer a circle is a loop like any other, AQ-061), several contours for one profile, several pockets in one selection, drawings far from the origin (national grid coordinates), STEP, meshes, topic 25's chaining tolerance.
 - Non-goals: guessing a unit from the part size (D-033: a suggestion at most, and that belongs to the UI); repairing damaged DXF files (ezdxf's recover mode); writing DXF.
 
 ## Public interface
@@ -41,12 +41,21 @@ class DxfContour:
 
 def read_dxf_contour(path: Path, layer: str | None, unit: DrawingUnit | None, ctx: Context) -> Result[DxfContour]: ...
 
+# Plan 0008, step 2 (Draft, AQ-060)
+@dataclass(frozen=True, slots=True)
+class DxfRegion:
+    loops: CurveRows                                 # every closed chain, one loop each, mm, in the drawing's direction, ordered by smallest source ID
+    part_size: Box                                   # bounding box of all `loops`, mm (D-033)
+
+def read_dxf_region(path: Path, layer: str | None, unit: DrawingUnit | None, ctx: Context) -> Result[DxfRegion]: ...
+
 def decode_source_id(source_id: int) -> tuple[int, int]: ...   # (entity index in model space, segment index)
 ```
 
 - A source ID is entity index × 2^16 + segment index (research 21, Method 4, ours). The entity index counts every entity of model space in ezdxf's order, skipped ones included; diagnostics add the DXF handle, which is what a CAD system shows (REQ-IO-028).
 - `layer` selects the entities of one layer; `None` reads the whole drawing (research 21, Method 6).
 - `unit` is used only when the file has no unit (REQ-IO-006 to 008).
+- `read_dxf_region` takes the same arguments as `read_dxf_contour` and reads the drawing by the same rules; it differs only in what it hands on and in refusing skipped walls (REQ-IO-031 to 036). `read_dxf_contour` stays as it is, for the profile. io does not decide which loop is the outer loop and does not nest or orient the loops: geometry2d's `loop_tree` does that for the caller, and the pocket refuses a region that is not one outer loop with islands (`POCKET_REGION`, research 04, Method 1) (AQ-060). `DxfRegion` carries no entity types or DXF handles: a diagnostic of the loop tree or the pocket names a position in mm, and a row's entity index through `decode_source_id` (AQ-060).
 - The value is present only when the result is `ok` (REQ-FND-004): any error diagnostic, `DXF_BRANCH` included, means no value for the whole import. Warnings and info diagnostics come with the value.
 - Split rule (docs/dev/03) and determinism (D-055): the loop over ezdxf entities is Python, since ezdxf yields Python objects; polyline vertices are taken as arrays; the end matching and the move checks (sqrt and products only) run in NumPy over all rows. Arc rows (from bulges, and after an end moves) and the bounding box of the contour need transcendental functions over every segment, which must run in C++ with libm, never in NumPy ufuncs (`src/splintercam/geometry2d/AGENTS.md`, Local rules). geometry2d has them only per curve (`arc_from_bulge`, `bounding_box`), so io needs array forms of them in geometry2d's kernel (answer 5). An ARC or CIRCLE entity's end points from its angles use Python's `math` (libm) once per entity.
 
@@ -87,9 +96,20 @@ Rows are [x0, y0, x1, y1, cx, cy, sweep] (REQ-G2D-188). Every length below is in
 | REQ-IO-029 | THE io module SHALL return the same rows, IDs and diagnostics, in the same order, for the same file and arguments, in these groups: file (`DXF_UNREADABLE`, `DXF_NO_UNITS`, `DXF_UNIT_UNSUPPORTED`, `DXF_UNIT_CONFLICT`, `DXF_LAYER_EMPTY`); `DXF_SKIPPED` by type name; entity diagnostics by entity index, segment, then code; junction diagnostics (`DXF_BRANCH`, `DXF_GAP_CLOSED`, `DXF_GAP_NOT_CLOSED`) by position, x then y, then code; `DXF_OPEN_CHAIN` by its chain's smallest source ID; `DXF_CONTOUR_COUNT`; `curve_rows`' diagnostics in its order; `DXF_PART_SIZE` (ours, D-055). `CANCELLED` comes alone. | unit, property | Reviewed |
 | REQ-IO-030 | WHEN `ctx.cancel` is set, THE io module SHALL return no value and `CANCELLED` (REQ-FND-013). | unit | Reviewed |
 
+### The region of several loops (plan 0008, step 2)
+
+| ID | Requirement (EARS) | Verified by | Status |
+| --- | --- | --- | --- |
+| REQ-IO-031 | THE `read_dxf_region` function SHALL read, convert, check and chain the drawing by REQ-IO-001 to 025 and 028 to 030, as `read_dxf_contour` does, with `read_dxf_region` in place of `read_dxf_contour` in them, and SHALL differ from it only by REQ-IO-032 to 036 (plan 0008, step 2). | unit: research 21 tests 1 to 6, 8 and 9 through both entry points give the same rows, IDs, diagnostic codes, severities and order, the `DXF_PART_SIZE` message of `read_dxf_region` adding the loop count; test 7 without a layer gives two loops and a value | Draft |
+| REQ-IO-032 | WHEN REQ-IO-019 and 022 reported no error, IF no closed chain remains, THEN `read_dxf_region` SHALL return no value and `DXF_CONTOUR_COUNT` (error) saying that there is none; IF open chains remain, THEN it SHALL return no value and `DXF_OPEN_CHAIN` (error) per open chain, with its two end points, whatever closed chains remain (DEC-IO-001; plan 0008, step 2). | unit: a layer holding one open polyline (both codes); an outer loop with a gap of 0.02 mm and a closed island (`DXF_OPEN_CHAIN`, no value) | Draft |
+| REQ-IO-033 | WHEN one or more closed chains remain and no open chain, THE `read_dxf_region` function SHALL hand every closed chain to `curve_rows` as one loop, all in one call, the loops ordered by their smallest source ID and each starting at that row in its direction (REQ-IO-024), and return `curve_rows`' diagnostics with its own; IF `curve_rows` returns no value, THEN `read_dxf_region` SHALL return no value (ours, D-055). | unit: research 04 test 1's drawing, the LWPOLYLINE written first: two loops, `row_starts` [0, 8]; the CIRCLE written first and the polyline reversed: `row_starts` [0, 1], the same loops as point sets; property: generated drawings of up to four loops, entities shuffled and polylines reversed, the same set of loops as point sets | Draft |
+| REQ-IO-034 | THE `read_dxf_region` function SHALL not choose an outer loop, nest, orient or merge the closed chains, and SHALL lose no closed chain other than by REQ-IO-003, 010, 011 and 016, which stop the region by REQ-IO-036, and by REQ-IO-015 (a loop shorter than eps_len) and 017 (a duplicate), so a loop inside an island, a loop beside the outer loop and two loops whose rows cross away from their ends reach the caller as loops (research 04, Method 1 and Test 9: the loop tree, `LOOPS_CROSS` and `POCKET_REGION` judge them; AQ-060). Loops that meet at a row end, or share an edge, stop the import with `DXF_BRANCH` by REQ-IO-018 and 019 (provisional, ours, DEC-IO-003 and 006: the chaining cannot tell two loops meeting from a T; geometry2d accepts touching loops, REQ-G2D-163). | unit: an island inside an island, two squares side by side, two squares crossing in their edges' interiors: each returned, no io error; an island square sharing a corner vertex with the wall, and one sharing an edge: `DXF_BRANCH` | Draft |
+| REQ-IO-035 | WHEN `read_dxf_region` succeeds, THE `read_dxf_region` function SHALL return the bounding box of all loops as `part_size` and report it as `DXF_PART_SIZE` (info), naming the number of loops handed on (D-033; the count ours, so a user sees a missing island; the loop tree may still drop a loop by `LOOP_DUPLICATE` or `LOOP_DEGENERATE`). | unit: research 04 test 1's drawing: 80 × 50 mm, 2 loops | Draft |
+| REQ-IO-036 | IF an entity of the selection that may carry a wall is skipped (`DXF_NOT_PLANAR`, `DXF_ENTITY_INVALID`, `DXF_ENTITY_TOO_LARGE`, or `DXF_SKIPPED` for any type other than TEXT, MTEXT, DIMENSION, LEADER, MULTILEADER, TOLERANCE and POINT), THEN `read_dxf_region` SHALL return no value and report `DXF_REGION_INCOMPLETE` (error) per such entity, naming it by REQ-IO-028, beside the entity's own diagnostic (provisional, ours, AQ-063: a closed island the import skips would leave one loop fewer and the pocket would mill through it; for the profile the same skip leaves an open chain, REQ-IO-026). | unit: the golden drawing plus a closed SPLINE, an ELLIPSE, an INSERT, a spline-fit POLYLINE, and the CIRCLE at another z: each no value with `DXF_REGION_INCOMPLETE`; plus a TEXT and a DIMENSION: a value, `DXF_SKIPPED` (info) | Draft |
+
 ## Invariants
 
-- The returned loop is closed: each row's end equals the next row's start bit for bit, and the last row's end the first row's start (REQ-IO-020). Property test over generated contours with jittered ends.
+- The returned loop is closed: each row's end equals the next row's start bit for bit, and the last row's end the first row's start (REQ-IO-020). Property test over generated contours with jittered ends. The same holds for every loop of a `DxfRegion`, and no source ID appears in two loops (REQ-IO-033).
 - No point of a returned row lies further than its B from the drawn row, and B is at most max(3·eps_len, gap limit) (REQ-IO-021, 022). Property test, sampling points along each row.
 - Every returned source ID decodes to an entity of a read type on the selected layer (REQ-IO-016, 025). Property test over generated drawings with mixed types and layers.
 - Mirroring a drawing by extrusion −z mirrors the loop and keeps |area| (REQ-IO-009). Property test over all four OCS types.
@@ -118,7 +138,11 @@ io spends at most the snapping share 3·eps_len of research 01's flattening allo
 | T or crossing of row ends, or an end with two gap candidates | no value | `DXF_BRANCH` (error) |
 | Layer given, nothing read on it | no value | `DXF_LAYER_EMPTY` (error) |
 | Open chain | no value | `DXF_OPEN_CHAIN` (error) |
-| Zero or several closed chains | no value | `DXF_CONTOUR_COUNT` (error) |
+| Zero or several closed chains (`read_dxf_contour`) | no value | `DXF_CONTOUR_COUNT` (error) |
+| No closed chain (`read_dxf_region`) | no value | `DXF_CONTOUR_COUNT` (error), "none" |
+| A skipped entity that may carry a wall (`read_dxf_region`) | no value | `DXF_REGION_INCOMPLETE` (error), per entity |
+| Loops that meet at a row end or share an edge (`read_dxf_region`) | no value | `DXF_BRANCH` (error), provisional |
+| Loops that do not form one outer loop with islands (`read_dxf_region`) | value | none in io; geometry2d's `LOOPS_CROSS` for crossing loops, the pocket's `POCKET_REGION` for the rest (research 04, Method 1) |
 | Invalid row in the contour | as `curve_rows` | geometry2d's codes, such as `ARC_INCONSISTENT` |
 | Success | value | `DXF_PART_SIZE` (info) |
 | Cancelled | no value | `CANCELLED` (warning) |
@@ -133,6 +157,7 @@ io spends at most the snapping share 3·eps_len of research 01's flattening allo
 | Chaining, joins and gap closing | research 21, Method 5, a fixed rule (ours) until topic 25 releases its chaining; the two-stage matching, the junction rule and the move bound B ours (B derived in REQ-IO-021), 2026-10-12 |
 | Source ID encoding | research 21, Method 4 (ours) |
 | Reference z, duplicates, chain start, diagnostic order | ours, 2026-10-12 |
+| Every closed chain as one region's loops, loop order by smallest source ID | research 04, Method 1 (the loops come from io as curve rows); the order ours, 2026-11-08 |
 
 ## Example parts
 
@@ -141,6 +166,8 @@ io spends at most the snapping share 3·eps_len of research 01's flattening allo
 - A part mirrored with the CAD's mirror command, its arcs and polylines stored with extrusion −z: read as the mirror image, not as the original (test 3).
 - A drawing with dimensions and text and the part on its own layer: text and dimensions skipped and listed; with the layer named, the outline is read (tests 6, 7). Without a layer, a title block's cells form T joints and the import stops with `DXF_BRANCH`.
 - A plate with drilled holes drawn as circles on the same layer: several closed chains, `DXF_CONTOUR_COUNT`; the slice reads only the outline, on its own layer (circles as holes are D-027, later).
+- A pocket drawn on its own layer: the rounded rectangle of the outer wall as one closed LWPOLYLINE, a round island as a CIRCLE (research 04, test 1). `read_dxf_region` returns two loops and "part size 80 x 50 mm, 2 loops"; `read_dxf_contour` on the same layer stops with `DXF_CONTOUR_COUNT`.
+- The same pocket with the outer wall drawn as lines and arcs whose last end misses its start by 0.02 mm: `DXF_OPEN_CHAIN` at that place and no value, although the island alone is a closed chain, so the island is never taken for the pocket.
 - A drawing from a CAD that writes `$INSUNITS` = 0: stops with `DXF_NO_UNITS` and the size in drawing units, so a 100-unit part can be told from a 4-unit one (test 4).
 - An outline closed by a near-full arc whose ends miss their neighbouring arcs by 0.008 mm: not closed, since the arc would move by far more: the import stops with `DXF_GAP_NOT_CLOSED` at that place. Where the neighbour is a line, the line's end moves instead and the gap closes.
 
@@ -149,6 +176,7 @@ io spends at most the snapping share 3·eps_len of research 01's flattening allo
 - Unit: research 21 tests 1 to 7, test 3 for ARC, CIRCLE, LWPOLYLINE and 2D POLYLINE, and one test per requirement above, tagged with its ID. The DXF files are written by ezdxf inside the tests (`tests/io/`), not committed as binaries, so each case shows its geometry in code.
 - Property: generated closed contours of lines and arcs, written as separate entities in random order and direction, with end jitter below eps_len and between eps_len and the gap limit: one loop, within the gap limit of the drawing, closed bit for bit (REQ-IO-018 to 024, 029). Mirrored copies (REQ-IO-009).
 - Golden cases: none in step 2; the DXF of `profile-rectangle-fillets` comes with step 7.
+- Region (plan 0008, step 2): one test per REQ-IO-031 to 036 in a new file `tests/io/unit/test_dxf_region.py` (`tests/io/unit/test_dxf_import.py` is over 400 lines), research 04 test 1's drawing written by ezdxf in the test; a property test over generated drawings of one outer loop and up to three islands, entities shuffled and polylines reversed: the same set of loops as point sets (the order follows the source IDs, so it is pinned only for a fixed file, REQ-IO-029).
 - Differential: none. ezdxf is the reference reader (D-092).
 
 ## Performance budget
@@ -159,9 +187,13 @@ None set: research 21 gives none, and the slice's drawings hold tens of entities
 
 About 300 NLOC of Python and 350 of tests in io, plus about 80 NLOC of C++ and bindings and 100 of tests in geometry2d for answer 5, in its own pull request. Plan 0007 estimated 200 + 250; the POLYLINE modes, the two-stage matching and the move bound of the reviews add to it. That is 50 % over the plan's code estimate, so it went to Peter with the draft (docs/dev/12, section 3); accepted on 2026-10-13 with a module budget of 360 (answer 4).
 
+REQ-IO-031 to 036 (plan 0008, step 2): first count about 50 NLOC (the closed-chain selection returning every closed chain, about 15; `read_dxf_region` and `DxfRegion`, about 20; the part-size report with the loop count, about 5; `DXF_REGION_INCOMPLETE`, about 10), so about 75 NLOC. `src/splintercam/io/_chain.py` is already 428 lines, so the selection (`_select`, `_order_closed`, `_assemble`, `box_of_rows`) moves with the new code into a new file `src/splintercam/io/_region.py` (a move, no NLOC added). That is about 75 NLOC and 150 lines of tests by the 1.5 rule. io stands at 795 NLOC of its budget of 820 in `architecture/modules.yaml`, so about 870 after the step: a budget of 900 is asked in AQ-062.
+
 ## Open questions
 
-None open. Peter's answers of 2026-10-13 to the draft's five questions (plan 0007, Decisions):
+Open for REQ-IO-031 to 036 (plan 0008, step 2): AQ-060 (the new entry point `read_dxf_region` and what it refuses), AQ-061 (a circle on the pocket's layer is a wall), AQ-062 (io's budget 900), AQ-063 (a skipped entity stops the region), each in `docs/agents/questions/`. No code before the answers.
+
+Answered for REQ-IO-001 to 030. Peter's answers of 2026-10-13 to the draft's five questions (plan 0007, Decisions):
 
 1. Gap closing at 0.01 mm accepted: repaired with a warning naming the place; larger gaps stop the import naming the place (REQ-IO-022, 026; DEC-IO-001). The limit is the declared parameter `dxf_gap_close_mm` in `tolerance_defaults.toml`, with one foundation requirement in the implementation pull request.
 2. A job unit that differs from the file's stops the import; a file without a unit (`$INSUNITS` 0 or missing) follows research 21, Method 2: the job's unit is used, and without one the import stops with `DXF_NO_UNITS` (REQ-IO-005 to 008; DEC-IO-002).
@@ -175,6 +207,8 @@ Box 2 choices of this SPEC are in `src/splintercam/io/DECISIONS.md`.
 
 - 2026-10-12: drafted from research 21 (plan 0007, step 2); revised after the first and second spec reviews.
 - 2026-10-13: Reviewed: Peter's answers 1 to 5; open chains and refused gaps stop the import, unsupported `$INSUNITS` values stop it.
+- 2026-11-08: plan 0008, step 2: REQ-IO-031 to 036 drafted (`read_dxf_region`, `DxfRegion`), research 04 added; revised after the spec review (skipped walls stop the region, loops meeting at row ends, test wording); AQ-060 to AQ-063.
 
 [r01]: ../../../docs/research/01-foundations.md
+[r04]: ../../../docs/research/04-pocketing.md
 [r21]: ../../../docs/research/21-geometry-input.md
