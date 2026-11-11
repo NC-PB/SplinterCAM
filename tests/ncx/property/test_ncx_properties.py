@@ -45,18 +45,19 @@ def test_the_axial_offset(ctx: Context, passes: list[list[Move]], offset: float)
     blocks = [b for op in data.operations for b in move_blocks(op, printed_columns(op))]
     written_z = [float(words(block)["Z"]) for block in blocks]
     np.testing.assert_allclose(written_z, expected_z, rtol=0.0, atol=1e-6)
-    # REQ-NCX-013 (AQ-035): the program is written exactly when a = 0.
+    # REQ-NCX-013: the program is written at every a, and its tool block says a (D-155).
     result = write_ncx(data, RECT_FILLETS, ctx)
-    refusals = ["NCX_POINT_OFFSET_UNSUPPORTED"] * len(passes) if offset else []
-    assert [d.code for d in result.diagnostics] == refusals
-    assert (result.value is None) == bool(offset)
+    assert result.value is not None, result.diagnostics
+    (tool,) = (line for line in result.value.text.split("\n") if line.startswith("TOOL="))
+    assert words(tool)["TIP_OFFSET"] == exact_text(offset)
 
 
-@pytest.mark.req("REQ-NCX-001", "REQ-NCX-002", "REQ-NCX-004", "REQ-NCX-005", "REQ-NCX-007")
+@pytest.mark.req(
+    "REQ-NCX-001", "REQ-NCX-002", "REQ-NCX-004", "REQ-NCX-005", "REQ-NCX-007", "REQ-NCX-013"
+)
 @_SETTINGS
-@given(st.lists(operations(), min_size=1, max_size=3))
-def test_the_program_invariants(ctx: Context, passes: list[list[Move]]) -> None:
-    offset = 0.0  # the slice writes a = 0 only (REQ-NCX-013); the shift: test_the_axial_offset
+@given(st.lists(operations(), min_size=1, max_size=3), _offset)
+def test_the_program_invariants(ctx: Context, passes: list[list[Move]], offset: float) -> None:
     result = write_ncx(_record(ctx, passes, offset), RECT_FILLETS, ctx)
     assert result.value is not None, result.diagnostics
     lines = result.value.text.split("\n")

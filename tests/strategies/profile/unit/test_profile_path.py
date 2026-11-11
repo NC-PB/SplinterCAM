@@ -3,6 +3,7 @@
 and approach points, the passes, the header and the links (REQ-PRF-011 to 019, 022; research 22,
 Method and tests 1, 2 and 5)."""
 
+import dataclasses
 import math
 from dataclasses import fields
 
@@ -15,6 +16,7 @@ from offset2d_oracles import distance_to_curves, offset_band_mm, polygon_rows, t
 from offset2d_strategies import bulge_row, circle, to_curve_rows
 from profile_checks import (
     STOCK,
+    TOOL,
     cut_points,
     distance_to_box,
     make_context,
@@ -28,7 +30,7 @@ from profile_checks import (
 from splintercam.cl import ClHeader, ClMoves, ClOperation, MoveKind, Role, make_operation
 from splintercam.foundation import Context
 from splintercam.geometry2d import CurveRows, PolygonRegion, RegionKind, flatten_loops, loop_tree
-from splintercam.model import StockBox
+from splintercam.model import MeasurementPoint, StockBox
 from splintercam.offset2d import EdgeClass, SourceClasses, offset_region
 from splintercam.strategies.profile import plan_profile
 from splintercam.strategies.profile._approach import approach_point
@@ -278,8 +280,23 @@ def test_a_start_already_clear_gives_the_loop_alone() -> None:
 @pytest.mark.req("REQ-PRF-018")
 def test_the_header_of_the_example_job() -> None:
     header = _op(make_context()).header
-    assert header == ClHeader("PROFILE_1", (), 1, 1, 0.0, 8000.0, 0.01,
+    assert header == ClHeader("PROFILE_1", (), 1, 1, 0.0, 0.0, 8000.0, 0.01,
                               (("cut", 1200.0), ("plunge", 300.0)), H_C, H_R)  # fmt: skip
+
+
+@pytest.mark.req("REQ-PRF-018")
+def test_the_header_holds_the_points_a_and_r() -> None:
+    # AQ-050 (Peter, 2026-11-08): r reaches the record from the model's point, for POINT_RADIUS.
+    ctx = make_context()
+    tool = dataclasses.replace(TOOL, points=(TOOL.points[0], MeasurementPoint(2, 1.5, 3.0)))
+    given = task(ctx, tool=tool)
+    given = dataclasses.replace(
+        given, operation=dataclasses.replace(given.operation, point_number=2)
+    )
+    planned = plan_profile(given, ctx).value
+    assert planned is not None
+    assert (planned.header.point_number, planned.header.axial_offset_mm) == (2, 1.5)
+    assert planned.header.register_radius_mm == 3.0
 
 
 @pytest.mark.req("REQ-PRF-019")

@@ -79,3 +79,12 @@
 - Rejected: leaving it to step 5 alone (AQ-018 (a): one bug in the producer would reach the writer unchecked); a link height restricted to {h_c, h_r} (the same protection with a rule on a value instead of on the move, and no protection for a RAPID whose link height is right but whose z is not).
 - Consequence: a later plan with rapids in the plane below h_c (D-087) replaces REQ-CL-022 by a new SPEC entry. `strategies/profile` passes h_r into the header.
 - Where: REQ-CL-017, 020, 022; `_types.py`, `_header.py`, `_moves.py`.
+
+## DEC-CL-009: The point's register radius r in the header, without a default
+
+- Date: 2026-11-08; decided by: Peter (AQ-050: write the job's r; the field without a default); its range ours
+- Status: Accepted 2026-11-08
+- Decision: `ClHeader.register_radius_mm` holds the operation's point's r, right after `axial_offset_mm`, so k, a and r stand together. It has no default: the producer (`strategies/profile`) passes the model point's r. REQ-CL-017 refuses r not finite or below 0, checked in field order (REQ-CL-020); the bound r ≤ R is `model`'s (REQ-MDL-006), as a's flute bound is.
+- Why: the NCX tool block says the point's r (`POINT_RADIUS`, D-155), and writing 0 for a point whose r the job gives was a false statement in the program (AQ-050, CNC review). A default would let a producer forget r silently. `cl` checks ranges only, the user's bounds are `model`'s (DEC-CL-007).
+- Rejected: a default of 0 (silent); the field at the end of the header (k, a and r belong together, and every construction is by keyword but the producer's).
+- Where: REQ-CL-017, 020; `_types.py`, `_header.py`.
